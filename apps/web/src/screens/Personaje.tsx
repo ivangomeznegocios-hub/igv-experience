@@ -9,12 +9,14 @@ import { Bar, PageHeader, confirmAction } from '../ui/kit';
 import { Avatar, topAttribute } from '../ui/Avatar';
 import { Icon } from '../ui/icons';
 import { updateSettings } from '../lib/actions';
+import { CharacterCard } from '../ui/CharacterCard';
 
 export default function Personaje() {
   const { state } = useGame();
   return (
     <>
       <PageHeader title="Perfil" eyebrow="Atributos" />
+      <CharacterCard />
       <Hero compact />
       <AvatarCard />
       {state.attributes.rated ? <Attributes /> : <RateAttributes />}

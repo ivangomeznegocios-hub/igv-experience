@@ -532,16 +532,30 @@ function BodyForm({ date, setDate, today, onDone }: DateProps & { onDone: () => 
   const { state } = useGame();
   const [weight, setWeight] = useState(state.body.lastWeight ? String(state.body.lastWeight.kg) : '');
   const [workout, setWorkout] = useState('');
+  const [fat, setFat] = useState('');
+  const [waist, setWaist] = useState('');
   const recent = [...new Set(state.body.entries.map((e) => e.workout?.trim()).filter(Boolean) as string[])].reverse().slice(0, 6);
-  const ok = Number(weight) > 0 || !!workout.trim();
+  const fatN = Number(fat);
+  const waistN = Number(waist);
+  const fatOk = !fat || (fatN >= 2 && fatN <= 70);
+  const waistOk = !waist || (waistN > 0 && waistN <= 300);
+  const ok = (Number(weight) > 0 || !!workout.trim() || (!!fat && fatOk) || (!!waist && waistOk)) && fatOk && waistOk;
   return (
     <>
       <p className="tiny muted" style={{ marginTop: 0 }}>
-        Registro de cuerpo (no da XP; la XP viene de tus misiones de Fuerza).
+        Registro de cuerpo (no da XP; la XP viene de tus misiones de Fuerza). Tus medidas le dan forma a tu personaje en Perfil.
       </p>
       <Field label="Peso (kg)">
         <input className="input" type="number" inputMode="decimal" step="0.1" value={weight} onChange={(e) => setWeight(e.target.value)} />
       </Field>
+      <div className="grid2" style={{ gap: 10 }}>
+        <Field label="Grasa corporal (%) · opcional">
+          <input className="input" type="number" inputMode="decimal" step="0.1" value={fat} onChange={(e) => setFat(e.target.value)} placeholder={state.body.latest.bodyFatPct ? `Último: ${state.body.latest.bodyFatPct}` : ''} />
+        </Field>
+        <Field label="Cintura (cm) · opcional">
+          <input className="input" type="number" inputMode="decimal" step="0.1" value={waist} onChange={(e) => setWaist(e.target.value)} placeholder={state.body.latest.waistCm ? `Último: ${state.body.latest.waistCm}` : ''} />
+        </Field>
+      </div>
       <Field label="Entrenamiento">
         <input className="input" value={workout} onChange={(e) => setWorkout(e.target.value)} placeholder="Pierna, correr 5 km…" />
       </Field>
@@ -557,7 +571,11 @@ function BodyForm({ date, setDate, today, onDone }: DateProps & { onDone: () => 
         className="btn primary block"
         disabled={!ok}
         onClick={() => {
-          addEvent('body.logged', { weightKg: Number(weight) > 0 ? Number(weight) : undefined, workout: workout.trim() || undefined }, { localDate: date });
+          addEvent(
+            'body.logged',
+            { weightKg: Number(weight) > 0 ? Number(weight) : undefined, bodyFatPct: fat ? fatN : undefined, waistCm: waist ? waistN : undefined, workout: workout.trim() || undefined },
+            { localDate: date },
+          );
           toast('Registro guardado');
           onDone();
         }}

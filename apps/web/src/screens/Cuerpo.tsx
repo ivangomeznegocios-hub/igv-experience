@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
-import { addDays } from '@igv/core';
+import { Link } from 'react-router-dom';
+import { BODY_MEASURE_KEYS, BODY_MEASURE_LABELS, BODY_MEASURE_UNITS, addDays, describeMeasures, measuresAsOf } from '@igv/core';
 import { useGame, voidEvent } from '../data/store';
 import { fmtDate } from '../lib/time';
 import { Empty, PageHeader, confirmAction } from '../ui/kit';
@@ -23,6 +24,9 @@ export default function Cuerpo() {
   const avgSleep = b.sleep.slice(-14).reduce((s, x) => s + x.hours, 0) / Math.max(1, b.sleep.slice(-14).length);
   const workouts = [...b.entries].filter((e) => e.workout?.trim()).reverse();
   const diff = b.lastWeight && b.firstWeight ? b.lastWeight.kg - b.firstWeight.kg : null;
+  const firstMeasures = b.measureDates.length ? measuresAsOf(b.entries, b.measureDates[0]!) : {};
+  const measured = BODY_MEASURE_KEYS.filter((k) => k !== 'weightKg' && b.latest[k] !== undefined);
+  const measureLogs = [...b.entries].filter((e) => describeMeasures(e)).reverse();
   return (
     <>
       <PageHeader
@@ -53,6 +57,52 @@ export default function Cuerpo() {
       <div className="card">
         <h2>Peso</h2>
         <LineChart points={weights.slice(-40)} format={(n) => `${n.toFixed(1)} kg`} />
+      </div>
+      <div className="card">
+        <div className="card-head">
+          <h2>Medidas</h2>
+          <Link to="/personaje" className="btn sm ghost">
+            <Icon name="user" /> Ver mi personaje
+          </Link>
+        </div>
+        {measured.length === 0 && <Empty>Registra tu % de grasa y tus contornos en Perfil: le dan forma a tu personaje y aquí ves cómo cambian.</Empty>}
+        {measured.map((k) => {
+          const now = b.latest[k]!;
+          const start = firstMeasures[k];
+          const d = start !== undefined ? now - start : 0;
+          return (
+            <div key={k} className="item" style={{ padding: '7px 0' }}>
+              <div className="grow small">{BODY_MEASURE_LABELS[k]}</div>
+              {Math.abs(d) >= 0.05 && (
+                <span className="tiny muted num">
+                  {d > 0 ? '+' : '−'}
+                  {Math.abs(d).toFixed(1)}
+                </span>
+              )}
+              <b className="num">
+                {now} <span className="tiny muted">{BODY_MEASURE_UNITS[k]}</span>
+              </b>
+            </div>
+          );
+        })}
+        {measureLogs.length > 0 && (
+          <details style={{ marginTop: 10 }}>
+            <summary className="small muted" style={{ cursor: 'pointer' }}>
+              Registros de medidas ({measureLogs.length})
+            </summary>
+            {measureLogs.slice(0, 40).map((e) => (
+              <div key={e.eventId} className="item" style={{ padding: '6px 0' }}>
+                <div className="grow small">
+                  {describeMeasures(e)}
+                  <div className="tiny muted">{fmtDate(e.date, true)}</div>
+                </div>
+                <button className="btn icon ghost danger" aria-label="Anular" onClick={() => confirmAction('¿Anular este registro?') && voidEvent(e.eventId)}>
+                  <Icon name="trash" />
+                </button>
+              </div>
+            ))}
+          </details>
+        )}
       </div>
       <div className="card">
         <h2>Sueño (30 días)</h2>

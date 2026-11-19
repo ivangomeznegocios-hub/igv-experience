@@ -938,3 +938,42 @@ input[type='range'] { width: 100%; accent-color: var(--gold); }
   border: 1px solid color-mix(in srgb, var(--gold) 38%, var(--line)); text-decoration: none;
 }
 .sync-pill.inline { position: static; backdrop-filter: none; }
+
+/* ---------- Personaje 3D (Perfil) ---------- */
+.character-card { padding-top: 0; }
+.character-stage {
+  position: relative; margin: 0 -14px 12px; height: clamp(360px, 58dvh, 500px);
+  border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0; overflow: hidden;
+  background:
+    radial-gradient(90% 60% at 50% 38%, color-mix(in srgb, var(--violet) 15%, transparent) 0%, transparent 70%),
+    linear-gradient(180deg, var(--card-2) 0%, var(--card) 70%, var(--bg-2) 100%);
+  border-bottom: 1px solid var(--line);
+  transition: height 0.25s ease;
+}
+/* Mientras editas, el personaje se queda a la vista y las opciones pasan por debajo. */
+.character-card.editing .character-stage { position: sticky; top: 0; z-index: 6; height: clamp(250px, 40dvh, 360px); }
+.character-canvas { position: absolute; inset: 0; touch-action: pan-y; cursor: grab; }
+.character-canvas:active { cursor: grabbing; }
+.character-canvas canvas { display: block; width: 100%; height: 100%; outline: none; -webkit-tap-highlight-color: transparent; }
+.character-loading, .character-fallback { display: grid; place-items: center; text-align: center; padding: 24px; position: absolute; inset: 0; }
+.character-top { position: absolute; top: 12px; left: 14px; right: 14px; display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; pointer-events: none; }
+.character-views { pointer-events: auto; display: flex; padding: 3px; gap: 2px; border: 1px solid var(--line); border-radius: 999px; background: color-mix(in srgb, var(--card) 82%, transparent); backdrop-filter: blur(6px); }
+.character-views button { border: 0; background: none; color: var(--muted); font-weight: 650; font-size: 12px; padding: 6px 12px; min-height: 32px; border-radius: 999px; cursor: pointer; }
+.character-views button.on { background: var(--text); color: var(--bg); }
+.character-hint { position: absolute; left: 0; right: 0; bottom: 8px; text-align: center; pointer-events: none; opacity: 0.8; }
+.character-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+.character-stats b { font-size: 15px; }
+.character-stats .num { white-space: nowrap; }
+.character-card .tabs { gap: 4px; }
+.character-card .tabs button { padding: 7px 10px; flex: 1 0 auto; }
+.character-note { background: var(--card-2); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px; }
+.character-deltas { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 10px; }
+.character-deltas b { font-family: var(--font-mono); font-weight: 600; }
+.character-group { margin-bottom: 14px; }
+.character-slider { margin-bottom: 12px; }
+.linklike { background: none; border: 0; padding: 0; color: var(--gold); font-weight: 650; cursor: pointer; }
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.swatch { position: relative; width: 34px; height: 34px; padding: 0; border-radius: 50%; border: 1px solid color-mix(in srgb, var(--text) 22%, transparent); cursor: pointer; flex: none; }
+.swatch.on { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--gold); }
+.swatch.custom { display: grid; place-items: center; background: var(--card-2); color: var(--muted); overflow: hidden; }
+.swatch.custom input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
