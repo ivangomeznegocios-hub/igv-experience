@@ -66,15 +66,19 @@ const Habitos = lazy(() => import('./screens/Habitos'));
 const Dia = lazy(() => import('./screens/Dia'));
 
 
-const PROGRESS = ['/progreso', '/jefes', '/logros', '/habilidades', '/temporadas', '/metas', '/estadisticas', '/reporte', '/anual', '/tienda', '/historial', '/retos', '/records'];
-const WORLD = ['/mas', '/inventario', '/npcs', '/mapa', '/vida', '/ajustes', '/game-master', '/conectar-ia', '/enemigos', '/biblioteca', '/cuerpo', '/buscar'];
+const PROGRESS = ['/progreso', '/jefes', '/logros', '/temporadas', '/metas', '/estadisticas', '/reporte', '/anual', '/tienda', '/historial', '/retos', '/records'];
+const WORLD = [
+  '/mas', '/inventario', '/npcs', '/mapa', '/vida', '/ajustes', '/game-master', '/conectar-ia', '/enemigos', '/biblioteca', '/cuerpo', '/buscar',
+  '/habilidades', '/tiempo', '/aprendizaje', '/salud', '/habitos', '/entreno',
+];
+const TODAY = ['/dia'];
 
 function Nav() {
   const { pathname } = useLocation();
   const cls = (paths: string[]) => ({ isActive }: { isActive: boolean }) => (isActive || paths.some((p) => pathname.startsWith(p)) ? 'active' : '');
   return (
     <nav className="nav" aria-label="Navegación principal">
-      <NavLink to="/" end>
+      <NavLink to="/" end className={cls(TODAY)}>
         <Icon name="home" />
         Hoy
       </NavLink>
