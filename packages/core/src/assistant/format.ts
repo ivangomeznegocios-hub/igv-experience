@@ -118,9 +118,13 @@ export function describeEvent(e: GameEvent, byId: Map<string, Entity>, currency 
     case 'library.finished':
       detail = p.title;
       break;
-    case 'body.logged':
-      detail = [p.weightKg ? `${p.weightKg} kg` : '', p.workout ?? '', p.note ?? ''].filter(Boolean).join(' · ');
+    case 'body.logged': {
+      const girths = Object.entries(p)
+        .filter(([k, v]) => k.endsWith('Cm') && typeof v === 'number')
+        .map(([k, v]) => `${k.slice(0, -2)} ${v} cm`);
+      detail = [p.weightKg ? `${p.weightKg} kg` : '', p.bodyFatPct ? `${p.bodyFatPct}% de grasa` : '', ...girths, p.workout ?? '', p.note ?? ''].filter(Boolean).join(' · ');
       break;
+    }
     case 'savings.moved':
       detail = `${name(p.goalId)} ${fmtMoney(p.amount, currency)}`;
       break;

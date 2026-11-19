@@ -280,3 +280,13 @@ describe('herramientas de IA: protegen la XP ganada y las fechas', () => {
     expect((await run(done, 'marcar_reto', { reto_id: 'ch-6', accion: 'iniciar' })).text).toContain('mañana');
   });
 });
+
+describe('herramientas de IA: cuerpo y personaje 3D', () => {
+  it('registrar_cuerpo guarda % de grasa y contornos en el registro que usa el personaje', async () => {
+    const store = mk();
+    const r = await run(store, 'registrar_cuerpo', { peso_kg: 82, grasa_pct: 18, cintura_cm: 88 });
+    expect(r.isError).toBeFalsy();
+    expect(store.allEvents()[0].payload).toMatchObject({ weightKg: 82, bodyFatPct: 18, waistCm: 88 });
+    expect((await run(store, 'registrar_cuerpo', {})).isError).toBe(true);
+  });
+});

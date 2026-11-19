@@ -786,24 +786,68 @@ const avanzarMeta = tool({
   },
 });
 
+/** Contornos en cm (nombre de la herramienta → campo del evento). Dan forma al personaje 3D del Perfil. */
+const GIRTHS = {
+  cuello_cm: 'neckCm',
+  hombros_cm: 'shouldersCm',
+  pecho_cm: 'chestCm',
+  cintura_cm: 'waistCm',
+  cadera_cm: 'hipsCm',
+  brazo_cm: 'armCm',
+  antebrazo_cm: 'forearmCm',
+  muslo_cm: 'thighCm',
+  pantorrilla_cm: 'calfCm',
+} as const;
+const zGirth = z.number().positive().max(300).optional();
+
 const registrarCuerpo = tool({
   name: 'registrar_cuerpo',
-  title: 'Registrar peso o entrenamiento',
+  title: 'Registrar medidas o entrenamiento',
   group: 'registrar',
   writes: true,
-  description: 'Registra peso (kg), un entrenamiento o una nota de cuerpo. Solo registro: no da XP (para la XP de entrenar, completa la misión correspondiente).',
+  description:
+    'Registra medidas del cuerpo (peso en kg, % de grasa y contornos en cm, que dan forma al personaje 3D del Perfil), un entrenamiento o una nota. Solo registro: no da XP (para la XP de entrenar, completa la misión correspondiente).',
   input: z.object({
     peso_kg: z.number().positive().max(500).optional(),
+    grasa_pct: z.number().min(2).max(70).optional().describe('Porcentaje de grasa corporal.'),
+    cuello_cm: zGirth,
+    hombros_cm: zGirth,
+    pecho_cm: zGirth,
+    cintura_cm: zGirth,
+    cadera_cm: zGirth,
+    brazo_cm: zGirth,
+    antebrazo_cm: zGirth,
+    muslo_cm: zGirth,
+    pantorrilla_cm: zGirth,
     entrenamiento: z.string().trim().max(300).optional().describe('Qué entrenó ("Pierna 45 min").'),
     nota: z.string().trim().max(2000).optional(),
     fecha: zFecha,
   }),
-  async run({ peso_kg, entrenamiento, nota, fecha }, store) {
-    const date = pastDate(store, fecha);
-    if (peso_kg === undefined && !entrenamiento && !nota) throw new ToolError('Manda peso_kg, entrenamiento o nota.');
-    const ev = makeEvent(store, 'body.logged', { weightKg: peso_kg, workout: entrenamiento || undefined, note: nota || undefined }, date);
+  async run(i, store) {
+    const date = pastDate(store, i.fecha);
+    const girths: Record<string, number> = {};
+    for (const [k, field] of Object.entries(GIRTHS)) {
+      const v = i[k as keyof typeof GIRTHS];
+      if (v !== undefined) girths[field] = v;
+    }
+    const parts = [
+      i.peso_kg !== undefined ? `${i.peso_kg} kg` : '',
+      i.grasa_pct !== undefined ? `${i.grasa_pct}% de grasa` : '',
+      ...Object.entries(GIRTHS)
+        .filter(([k]) => i[k as keyof typeof GIRTHS] !== undefined)
+        .map(([k]) => `${k.replace('_cm', '')} ${i[k as keyof typeof GIRTHS]} cm`),
+      i.entrenamiento ?? '',
+      i.nota ?? '',
+    ].filter(Boolean);
+    if (!parts.length) throw new ToolError('Manda al menos una medida (peso, % de grasa o un contorno), un entrenamiento o una nota.');
+    const ev = makeEvent(
+      store,
+      'body.logged',
+      { weightKg: i.peso_kg, bodyFatPct: i.grasa_pct, ...girths, workout: i.entrenamiento || undefined, note: i.nota || undefined },
+      date,
+    );
     await store.addEvents([ev]);
-    const what = [peso_kg ? `${peso_kg} kg` : '', entrenamiento ?? '', nota ?? ''].filter(Boolean).join(' · ');
+    const what = parts.join(' · ');
     return ok(`Registrado en Cuerpo: ${what}. Registro [${ev.id}].`, `Cuerpo: ${what}`, { events: [ev.id] });
   },
 });
