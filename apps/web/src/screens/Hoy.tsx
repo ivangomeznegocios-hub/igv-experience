@@ -34,6 +34,8 @@ import { SyncPill } from '../ui/SyncPill';
 import { openPlanSheet, TodayPlanCard } from '../ui/DayPlan';
 import { WeekPaceCard } from '../ui/WeekPace';
 import { WeekShareCard } from '../ui/WeekShare';
+import { DayReviewRow } from '../ui/DayReview';
+import { HabitsHighlight } from '../ui/HabitBits';
 
 export default function Hoy() {
   const { state } = useGame();
@@ -72,10 +74,12 @@ export default function Hoy() {
       <Hero />
       <MorningRitualCard />
       <NarratorBriefing />
+      <DayReviewRow />
       <TodayPlanCard />
       <WeekReportCard />
       <BountyCard />
       <RoutineCard />
+      <HabitsHighlight />
       <AgendaCard />
       <ActiveBossCard />
       <DailyEncounterCard onDefeatRecurring={(bossId) => setRecurring({ open: true, bossId })} />
@@ -267,9 +271,14 @@ function RoutineCard() {
             {perfect ? `¡Día perfecto! ${doneCount}/${routine.length} hechas` : `${doneCount}/${routine.length} hechas · toca ✓, desliza → o pulsa ▶ para enfocarte`}
           </div>
         </div>
-        <Link to="/misiones?tab=daily" className="btn sm ghost">
-          Editar
-        </Link>
+        <div className="row" style={{ gap: 2 }}>
+          <Link to="/habitos" className="btn sm ghost">
+            Hábitos
+          </Link>
+          <Link to="/misiones?tab=daily" className="btn sm ghost">
+            Editar
+          </Link>
+        </div>
       </div>
       {routine.length > 0 && <Bar value={doneCount} max={routine.length} tone={perfect ? 'gold' : 'green'} size="sm" />}
       {low && (
@@ -737,6 +746,7 @@ function CloseDaySheet({ onClose }: { onClose: () => void }) {
         </div>
       )}
       {entries.length === 0 && <p className="small muted">Hoy no registraste XP. Si fue día de descanso, márcalo desde el botón +.</p>}
+      <DayReviewRow flat onNavigate={onClose} />
       <Field label="¿Cómo cerraste el día?">
         <Chips value={mood} onChange={setMood} size="lg" options={MOODS.map((m, i) => ({ value: i + 1, label: m }))} />
       </Field>

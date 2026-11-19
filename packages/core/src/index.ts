@@ -66,4 +66,6 @@ export * from './engine/health';
 export type { HealthState, CheckupState, HealthDueItem, CheckupDone, HealthMetricEntry } from './engine/modules/health';
 
 // [[habitos]]
+export * from './engine/habits';
+export * from './engine/day-review';
 

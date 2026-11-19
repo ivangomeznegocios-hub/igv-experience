@@ -229,6 +229,30 @@ export const GAME_CONFIG = {
   },
 
   // [[habitos]]
+  /** Hábitos y "¿Cómo fue tu día?": solo análisis, nunca dan ni quitan XP. */
+  habits: {
+    /** Veredicto por cumplimiento en 30 días: ≥ goodRate "Vas muy bien", ≥ okRate "A medias", menos "Flojo". */
+    goodRate: 0.8,
+    okRate: 0.4,
+    /** Días que le tocaban (en 30 días) para poder juzgarlo; con menos es "Recién empezado". */
+    minDaysToJudge: 4,
+    /** Tendencia: puntos (0–1) de diferencia contra los 30 días anteriores para "mejorando" / "empeorando". */
+    trendDelta: 0.1,
+    /** Días que le tocaban en los 30 días anteriores para poder comparar. */
+    trendMinDays: 4,
+    /** Patrón por día de la semana: semanas que se revisan y qué tan abajo de tu promedio es un día flojo. */
+    weekdayWeeks: 8,
+    weakDayGap: 0.25,
+    /** "Hazlo hábito": algo fuera de tu rutina que registraste al menos N días en los últimos M días. */
+    suggestMinTimes: 3,
+    suggestLookbackDays: 14,
+    /** Hábitos a dejar: recaídas en 30 días para "Vas muy bien" (≤ viceGoodMax) y "A medias" (≤ viceOkMax). */
+    viceGoodMax: 0,
+    viceOkMax: 2,
+    /** Hábitos a dejar: recaídas por mes de diferencia contra los 30 días anteriores para marcar tendencia. */
+    viceTrendDelta: 1,
+  },
+
 
   /** Meta mensual inicial del Dragón Financiero (MXN). Editable en la app. */
   defaultMonthlyGoal: 100_000,

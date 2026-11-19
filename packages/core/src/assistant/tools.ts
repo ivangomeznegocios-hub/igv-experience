@@ -86,6 +86,7 @@ import { APRENDIZAJE_GUIDE, APRENDIZAJE_TOOLS, renderLearningOverview } from './
 import { SALUD_GUIDE, SALUD_TOOLS, renderSaludOverview } from './tools-salud';
 
 // [[habitos]]
+import { HABITOS_GUIDE, HABITOS_TOOLS, habitsOverviewLines } from './tools-habitos';
 
 
 const DAY_NAMES = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
@@ -173,6 +174,7 @@ export function renderOverview(s: AssistantSnapshot): string {
   L.push(...renderSaludOverview(s));
 
   // [[habitos]]
+  L.push(...habitsOverviewLines(s));
 
   if (s.xp.recent.length) L.push('', `XP reciente: ${s.xp.recent.slice(0, 10).map((e) => `${e.date} ${e.label} +${e.amount}`).join('; ')}.`);
   L.push('', `(Calculado por ${s.computedBy === 'app' ? 'la app' : 'el servidor'} · ${s.computedAt.slice(0, 16).replace('T', ' ')} UTC)`);
@@ -510,6 +512,7 @@ const GUIDE_SYSTEMS: string[] = [
   SALUD_GUIDE,
 
   // [[habitos]]
+  HABITOS_GUIDE,
 
 ];
 
@@ -1473,6 +1476,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
   ...SALUD_TOOLS,
 
   // [[habitos]]
+  ...HABITOS_TOOLS,
 
 ];
 

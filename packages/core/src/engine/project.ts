@@ -42,6 +42,7 @@ import { reduceLearning, type LearningState } from './modules/learning';
 import { reduceHealth, type HealthState } from './modules/health';
 
 // [[habitos]]
+import { reduceHabits, type HabitsState } from './habits';
 
 
 export interface ProjectInput {
@@ -108,6 +109,8 @@ export interface GameState {
   health: HealthState;
 
   // [[habitos]]
+  /** Hábitos de la rutina (cumplimiento, rachas, tendencia) y sugerencias "Hazlo hábito". Solo análisis. */
+  habits: HabitsState;
 
 }
 
@@ -202,6 +205,7 @@ export function project(input: ProjectInput): GameState {
   const health = reduceHealth(ctx);
 
   // [[habitos]]
+  const habits = reduceHabits(ctx, { missions, streak });
 
   const achievements = reduceAchievements(ctx, { missions, streak, lessons, bosses, money, map, seasons });
   const attributes = reduceAttributes(ctx, xp);
@@ -262,6 +266,7 @@ export function project(input: ProjectInput): GameState {
     health,
 
     // [[habitos]]
+    habits,
 
   };
 }
