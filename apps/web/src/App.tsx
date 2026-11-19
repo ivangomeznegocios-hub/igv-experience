@@ -42,6 +42,7 @@ const ConectarIA = lazy(() => import('./screens/ConectarIA'));
 
 // ---- Sistemas nuevos (pantallas) ----
 // [[voz]]
+import { Hablar } from './ui/Cuentame';
 
 // [[entreno]]
 const Entreno = lazy(() => import('./screens/Entreno'));
@@ -270,6 +271,7 @@ export default function App() {
       {store.ready && <SkinSync />}
       {store.ready && <AiSnapshotSync />}
       {/* [[voz]] */}
+      {store.ready && <Hablar />}
 
       {/* [[entreno]] */}
       {store.ready && (

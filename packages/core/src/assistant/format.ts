@@ -66,6 +66,8 @@ export const EVENT_TEXT: Record<string, string> = {
   'pledge.resolved': 'Compromiso resuelto',
 
   // [[voz]]
+  'note.captured': 'Nota',
+  'note.processed': 'Nota procesada',
 
   // [[entreno]]
   'workout.logged': 'Entrenamiento',
@@ -182,6 +184,12 @@ export function describeEvent(e: GameEvent, byId: Map<string, Entity>, currency 
       break;
 
     // [[voz]]
+    case 'note.captured':
+      detail = `${(p.handled ?? 'pendiente') === 'pendiente' ? 'por procesar · ' : ''}"${String(p.text ?? '').slice(0, 140)}"`;
+      break;
+    case 'note.processed':
+      detail = p.via === 'descartada' ? 'descartada' : p.via === 'local' ? 'procesada en la app' : 'procesada con IA';
+      break;
 
     // [[entreno]]
     case 'workout.logged': {

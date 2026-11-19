@@ -106,7 +106,8 @@ export const api = {
   pushUnsubscribe: (endpoint: string) => req<{ ok: true }>('/push/unsubscribe', { method: 'POST', body: JSON.stringify({ endpoint }) }),
   pushPlan: (items: PushPlanItem[]) => req<{ ok: true }>('/push/plan', { method: 'PUT', body: JSON.stringify({ items }) }),
   pushTest: () => req<{ ok: true; sent: number }>('/push/test', { method: 'POST' }),
-  gmAsk: (body: { question: string; history: { role: 'user' | 'assistant'; content: string }[]; context?: string; readOnly?: boolean }) =>
+  /** `mode: 'dictado'` = registrar lo dictado sin conversar (botón Hablar). */
+  gmAsk: (body: { question: string; history: { role: 'user' | 'assistant'; content: string }[]; context?: string; readOnly?: boolean; mode?: 'chat' | 'dictado' }) =>
     req<{ answer: string; actions: CoachAction[] }>('/gm/ask', { method: 'POST', body: JSON.stringify(body) }),
   aiStatus: () => req<AiStatus>('/ai/status'),
   aiSettings: (allowWrites: boolean) => req<{ ok: true }>('/ai/settings', { method: 'PUT', body: JSON.stringify({ allowWrites }) }),

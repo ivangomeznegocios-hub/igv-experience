@@ -74,3 +74,64 @@ describe('Coach con herramientas', () => {
     expect(calls[0].messages[0].content).not.toContain('Panorama');
   });
 });
+
+describe('Coach en modo dictado (botón Hablar)', () => {
+  const ask = (app: any, env: any, body: Record<string, unknown>) =>
+    app.request('/api/gm/ask', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ history: [], ...body }) }, env);
+
+  it('agrega la instrucción de dictado, envuelve lo dictado con la fecha y registra con las herramientas', async () => {
+    calls.length = 0;
+    const app = (await import('../src/index')).default;
+    const env = { DB: fakeD1(), DEV_BYPASS_AUTH: 'true', ANTHROPIC_API_KEY: 'sk-test' } as any;
+    const res = await ask(app, env, { question: 'hoy fui al jim y gasté 200 en comida', mode: 'dictado', context: 'Personas (id | nombre):\nnpc-ana | Ana' });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { answer: string; actions: { tool: string; activityId: string }[] };
+    expect(body.actions).toHaveLength(1);
+    expect(body.actions[0].tool).toBe('completar_mision');
+
+    // Sistema: el bloque principal (con caché) + el de dictado.
+    expect(calls[0].system).toHaveLength(2);
+    expect(calls[0].system[0].cache_control).toEqual({ type: 'ephemeral' });
+    expect(calls[0].system[1].text).toContain('MODO DICTADO');
+    expect(calls[0].system[1].text).toContain('SIN pedir confirmación');
+    // Lo dictado va citado y con la fecha de hoy; los datos de la pantalla van con el panorama.
+    const last = calls[0].messages.at(-1);
+    expect(last.content).toMatch(/^Hoy es \d{4}-\d{2}-\d{2}\. Esto dicté:/);
+    expect(last.content).toContain('hoy fui al jim y gasté 200 en comida');
+    expect(calls[0].messages[0].content).toContain('npc-ana | Ana');
+    // Con herramientas que escriben (incluidas las de notas).
+    const names = calls[0].tools.map((t: { name: string }) => t.name);
+    expect(names).toContain('registrar_dinero');
+    expect(names).toContain('marcar_nota');
+  });
+
+  it('una conversación normal no lleva la instrucción de dictado', async () => {
+    calls.length = 0;
+    const app = (await import('../src/index')).default;
+    const env = { DB: fakeD1(), DEV_BYPASS_AUTH: 'true', ANTHROPIC_API_KEY: 'sk-test' } as any;
+    await ask(app, env, { question: 'Registra que entrené' });
+    expect(calls[0].system).toHaveLength(1);
+    expect(calls[0].messages.at(-1).content).toBe('Registra que entrené');
+  });
+
+  it('en solo lectura responde 409 sin llamar a la API de Claude (la app deja la nota pendiente)', async () => {
+    calls.length = 0;
+    const app = (await import('../src/index')).default;
+    const env = { DB: fakeD1(), DEV_BYPASS_AUTH: 'true', ANTHROPIC_API_KEY: 'sk-test' } as any;
+    const put = await app.request('/api/ai/settings', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ allowWrites: false }) }, env);
+    expect(put.status).toBe(200);
+    const res = await ask(app, env, { question: 'gasté 200 en comida', mode: 'dictado' });
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { code: string; actions: unknown[] };
+    expect(body.code).toBe('read_only');
+    expect(body.actions).toEqual([]);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('rechaza un modo desconocido o dictado de solo lectura', async () => {
+    const app = (await import('../src/index')).default;
+    const env = { DB: fakeD1(), DEV_BYPASS_AUTH: 'true', ANTHROPIC_API_KEY: 'sk-test' } as any;
+    expect((await ask(app, env, { question: 'x', mode: 'otro' })).status).toBe(400);
+    expect((await ask(app, env, { question: 'x', mode: 'dictado', readOnly: true })).status).toBe(400);
+  });
+});

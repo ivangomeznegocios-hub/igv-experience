@@ -69,6 +69,7 @@ export type { EventQuery, AssistantStore, ActivityRefs, ToolResult, ToolGroup, A
 
 // ---- Sistemas nuevos: cada uno importa aquí sus herramientas (assistant/tools-<sistema>.ts) ----
 // [[voz]]
+import { VOZ_TOOLS } from './tools-voz';
 
 // [[entreno]]
 import { ENTRENO_GUIDE, ENTRENO_TOOLS, renderTrainingOverview } from './tools-entreno';
@@ -159,6 +160,7 @@ export function renderOverview(s: AssistantSnapshot): string {
   if (s.lastJournal) L.push(`Último diario semanal (${s.lastJournal.weekStart}): pasó "${s.lastJournal.happened}"; aprendió "${s.lastJournal.learned}"; sigue "${s.lastJournal.next}".`);
   // ---- Sistemas nuevos (panorama) ----
   // [[voz]]
+  if (s.notes?.pending) L.push('', `Notas por procesar: ${s.notes.pending} (lo que dictó sin conexión; léelas con ver_notas).`);
 
   // [[entreno]]
   L.push(...renderTrainingOverview(s));
@@ -509,6 +511,7 @@ const verDinero = tool({
 /** Una línea de guía por cada sistema nuevo (se agregan a APP_GUIDE). */
 const GUIDE_SYSTEMS: string[] = [
   // [[voz]]
+  'Voz y notas: Iván dicta lo que hizo y la app lo registra. Lo que no se pudo procesar queda en "Notas por procesar" (ver_notas): registra lo que diga cada nota con las herramientas que correspondan y luego márcala con marcar_nota.',
 
   // [[entreno]]
   ENTRENO_GUIDE,
@@ -1478,6 +1481,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
   borrarElemento,
 
   // [[voz]]
+  ...VOZ_TOOLS,
 
   // [[entreno]]
   ...ENTRENO_TOOLS,

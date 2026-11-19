@@ -1,30 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import {
-  ATTRIBUTE_IDS,
-  ATTRIBUTE_NAMES,
-  GAME_CONFIG,
-  addDays,
-  type AttributeId,
-  type BossData,
-  type Entity,
-  type GameState,
-  type GoalData,
-  type MainQuestData,
-  type MissionData,
-  type MissionSize,
-  type NpcData,
-  type TodoData,
-  type ViceData,
-} from '@igv/core';
-import { api, ApiError, type CoachAction, type GmParseResult, type GmProposal } from '../data/api';
-import { addEvent, sync, useGame } from '../data/store';
+import { type AttributeId, type GoalData, type MissionSize } from '@igv/core';
+import { api, ApiError, type CoachAction, type GmParseResult } from '../data/api';
+import { sync, useGame } from '../data/store';
 import { uploadSnapshotNow } from '../lib/aiSnapshot';
-import { completeMission, completeQuick, saveTodo, writeLesson } from '../lib/actions';
-import { fmtMoney } from '../lib/time';
-import { useVoiceInput } from '../lib/voice';
+import { saveTodo } from '../lib/actions';
+import { appendSpeech, useVoiceInput } from '../lib/voice';
+import { useVoiceContext } from '../lib/voz';
 import { Icon } from '../ui/icons';
 import { AttrBadge, PageHeader, SizeBadge, Tabs, toast } from '../ui/kit';
+import { CoachActionList, ProposalList, useGmProposals } from '../ui/Proposals';
 import { startQuest } from '../ui/QuestMode';
 
 type Msg = { role: 'user' | 'assistant'; content: string; actions?: (CoachAction & { undone?: boolean })[] };
@@ -118,90 +103,35 @@ function Registrar() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [res, setRes] = useState<GmParseResult | null>(null);
-  const [sel, setSel] = useState<Set<number>>(new Set());
-  const voice = useVoiceInput((t) => setText((prev) => (prev ? `${prev} ${t}` : t)));
+  const voice = useVoiceInput((t) => setText((prev) => appendSpeech(prev, t)));
+  const ctx = useVoiceContext();
+  const proposals = useGmProposals(res?.proposals ?? null, ctx);
 
-  const missions = list<MissionData>('missions').filter((m) => ['daily', 'side', 'event', 'chapter'].includes(m.kind) && (m.kind === 'daily' || !state.missions.completions[m.id]));
-  const npcs = list<NpcData>('npcs', 'npc');
   const goals = list<GoalData>('goals', 'goal').filter((g) => !state.goals[g.id]?.completedOn);
   const catalog = () =>
     [
       'Misiones (id | título | tamaño | atributo):',
-      ...missions.map((m) => `${m.id} | ${m.data.title} | ${m.data.size} | ${m.data.attribute}`),
+      ...ctx.missions.map((m) => `${m.id} | ${m.title} | ${m.size} | ${m.attribute}`),
       '',
       'Personas (id | nombre):',
-      ...npcs.map((n) => `${n.id} | ${n.data.name}`),
+      ...ctx.people.map((n) => `${n.id} | ${n.name}${n.role ? ` (${n.role})` : ''}`),
       '',
       'Metas (id | meta | unidad):',
       ...goals.map((g) => `${g.id} | ${g.data.title} | ${g.data.unit}`),
     ].join('\n');
 
   const parse = async () => {
+    if (voice.listening) await voice.flush();
     if (!text.trim() || busy) return;
     setBusy(true);
     setErr(null);
     try {
-      const r = await api.gmParse({ text: text.trim(), today: state.today, catalog: catalog() });
-      setRes(r);
-      setSel(new Set(r.proposals.map((_, i) => i)));
+      setRes(await api.gmParse({ text: text.trim(), today: state.today, catalog: catalog() }));
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Error');
     } finally {
       setBusy(false);
     }
-  };
-
-  const label = (p: GmProposal): { title: string; detail: string; ok: boolean } => {
-    const mission = p.matchId ? missions.find((m) => m.id === p.matchId) : undefined;
-    switch (p.kind) {
-      case 'mission': {
-        const size = mission?.data.size ?? p.size ?? 'chica';
-        const attr = mission?.data.attribute ?? p.attribute ?? 'disciplina';
-        return { title: mission?.data.title ?? p.title ?? 'Misión', detail: `Misión ${size} · ${ATTRIBUTE_NAMES[attr]} · +${GAME_CONFIG.missionXp[size]} XP`, ok: !!(mission || p.title) };
-      }
-      case 'income':
-      case 'expense':
-        return { title: `${p.kind === 'income' ? 'Ingreso' : 'Gasto'} ${fmtMoney(p.amount ?? 0, state.settings.currency)}`, detail: [p.concept, p.category].filter(Boolean).join(' · '), ok: (p.amount ?? 0) > 0 };
-      case 'npc': {
-        const n = npcs.find((x) => x.id === p.matchId);
-        return { title: `Hablé con ${n?.data.name ?? '?'}`, detail: 'Interacción con una persona', ok: !!n };
-      }
-      case 'lesson':
-        return { title: 'Lección', detail: `${p.text ?? ''} · +${GAME_CONFIG.rewards.lesson} XP`, ok: (p.text ?? '').trim().length >= 3 };
-      case 'body':
-        return { title: 'Cuerpo', detail: [p.weightKg ? `${p.weightKg} kg` : '', p.workout ?? ''].filter(Boolean).join(' · '), ok: !!(p.weightKg || p.workout) };
-      case 'goal': {
-        const g = goals.find((x) => x.id === p.matchId);
-        return { title: `Meta: ${g?.data.title ?? '?'}`, detail: `+${p.amount ?? 0} ${g?.data.unit ?? ''}`, ok: !!g && (p.amount ?? 0) > 0 };
-      }
-      case 'rest':
-        return { title: 'Día de descanso', detail: 'No rompe la racha', ok: true };
-    }
-  };
-
-  const apply = () => {
-    if (!res) return;
-    let n = 0;
-    res.proposals.forEach((p, i) => {
-      if (!sel.has(i) || !label(p).ok) return;
-      const date = addDays(state.today, -Math.min(6, Math.max(0, p.daysAgo || 0)));
-      const opts = { localDate: date };
-      const mission = p.matchId ? missions.find((m) => m.id === p.matchId) : undefined;
-      if (p.kind === 'mission') {
-        if (mission) completeMission(mission, date);
-        else completeQuick(p.title!, p.size ?? 'chica', p.attribute ?? 'disciplina', date);
-      } else if (p.kind === 'income') addEvent('income.recorded', { amount: p.amount!, concept: p.concept ?? '', category: p.category ?? undefined }, opts);
-      else if (p.kind === 'expense') addEvent('expense.recorded', { amount: p.amount!, concept: p.concept ?? '', category: p.category ?? undefined }, opts);
-      else if (p.kind === 'npc') addEvent('npc.interaction', { npcId: p.matchId! }, opts);
-      else if (p.kind === 'lesson') writeLesson(p.text!.trim(), null, date);
-      else if (p.kind === 'body') addEvent('body.logged', { weightKg: p.weightKg ?? undefined, workout: p.workout ?? undefined }, opts);
-      else if (p.kind === 'goal') addEvent('goal.progress', { goalId: p.matchId!, amount: p.amount! }, opts);
-      else if (p.kind === 'rest') addEvent('rest_day.marked', {}, opts);
-      n++;
-    });
-    toast(`${n} registro(s) guardado(s)`);
-    setRes(null);
-    setText('');
   };
 
   return (
@@ -211,10 +141,11 @@ function Registrar() {
           Escríbelo o díctalo por voz: “Hoy fui al gym, cerré una venta de $5,000 con Grupo Norte y hablé con mi mamá”. Te propongo los registros y tú confirmas.
         </p>
         <textarea className="input" rows={4} value={text} onChange={(e) => setText(e.target.value)} placeholder="¿Qué hiciste hoy?" />
+        {voice.interim && <div className="vz-interim">{voice.interim}…</div>}
         <div className="row" style={{ marginTop: 8, gap: 8 }}>
           {voice.supported && (
-            <button type="button" className={`btn ${voice.listening ? 'danger' : ''}`} onClick={voice.toggle} aria-label="Dictar por voz">
-              <Icon name="mic" /> {voice.listening ? 'Escuchando…' : 'Dictar'}
+            <button type="button" className={`btn ${voice.listening ? 'danger' : ''}`} onClick={voice.toggle} aria-label="Dictar por voz" aria-pressed={voice.listening}>
+              <Icon name={voice.listening ? 'stop' : 'mic'} /> {voice.listening ? 'Terminar' : 'Dictar'}
             </button>
           )}
           <button className="btn primary grow" disabled={busy || !text.trim()} onClick={parse}>
@@ -228,41 +159,13 @@ function Registrar() {
           <div className="bubble gm" style={{ maxWidth: '100%', marginBottom: 10 }}>
             {res.reply}
           </div>
-          {res.proposals.length === 0 && <div className="small muted">No encontré nada que registrar.</div>}
-          {res.proposals.map((p, i) => {
-            const l = label(p);
-            const on = sel.has(i) && l.ok;
-            return (
-              <label key={i} className="item" style={{ cursor: 'pointer', opacity: l.ok ? 1 : 0.5 }}>
-                <input
-                  type="checkbox"
-                  checked={on}
-                  disabled={!l.ok}
-                  onChange={() =>
-                    setSel((s) => {
-                      const n = new Set(s);
-                      if (n.has(i)) n.delete(i);
-                      else n.add(i);
-                      return n;
-                    })
-                  }
-                  style={{ width: 20, height: 20, accentColor: 'var(--gold)' }}
-                />
-                <div className="grow">
-                  <div className="item-title">{l.title}</div>
-                  <div className="tiny muted">
-                    {l.detail}
-                    {p.daysAgo ? ` · ${p.daysAgo === 1 ? 'ayer' : `hace ${p.daysAgo} días`}` : ''}
-                  </div>
-                </div>
-              </label>
-            );
-          })}
-          {res.proposals.length > 0 && (
-            <button className="btn primary block" style={{ marginTop: 10 }} disabled={![...sel].some((i) => res.proposals[i] && label(res.proposals[i]).ok)} onClick={apply}>
-              Registrar seleccionados
-            </button>
-          )}
+          {proposals.length === 0 && <div className="small muted">No encontré nada que registrar.</div>}
+          <ProposalList
+            proposals={proposals}
+            onSaved={(n) => {
+              if (n > 0) setText('');
+            }}
+          />
         </div>
       )}
     </>
@@ -277,13 +180,14 @@ function Chat() {
   const [err, setErr] = useState<string | null>(null);
   const [accepted, setAccepted] = useState<Set<string>>(new Set());
   const end = useRef<HTMLDivElement>(null);
-  const voice = useVoiceInput((t) => setQ((prev) => (prev ? `${prev} ${t}` : t)));
+  const voice = useVoiceInput((t) => setQ((prev) => appendSpeech(prev, t)));
 
   useEffect(() => {
     end.current?.scrollIntoView({ behavior: 'smooth' });
   }, [msgs, busy]);
 
   const ask = async (question: string) => {
+    if (voice.listening) voice.stop();
     if (!question.trim() || busy) return;
     setErr(null);
     const history = msgs.slice(-10).map(({ role, content }) => ({ role, content }));
@@ -350,21 +254,7 @@ function Chat() {
             return (
               <div key={i} className="stack" style={{ alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', display: 'flex', flexDirection: 'column' }}>
                 <div className={`bubble ${m.role === 'user' ? 'me' : 'gm'}`}>{m.content}</div>
-                {!!m.actions?.length && (
-                  <div className="coach-actions">
-                    {m.actions.map((a) => (
-                      <div key={a.activityId} className={`coach-action ${a.undone ? 'undone' : ''}`}>
-                        <Icon name="check" width={14} />
-                        <span className="grow">{a.summary}</span>
-                        {!a.undone && (
-                          <button className="btn sm ghost" onClick={() => undoAction(i, a)}>
-                            Deshacer
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                {!!m.actions?.length && <CoachActionList actions={m.actions} onUndo={(a) => undoAction(i, a)} />}
                 {offers.length > 0 && (
                   <div className="gm-offers">
                     {offers.map((o, j) => {
@@ -413,11 +303,11 @@ function Chat() {
         }}
       >
         {voice.supported && (
-          <button type="button" className={`btn icon ${voice.listening ? 'danger' : ''}`} onClick={voice.toggle} aria-label="Dictar pregunta">
-            <Icon name="mic" />
+          <button type="button" className={`btn icon ${voice.listening ? 'danger' : ''}`} onClick={voice.toggle} aria-label={voice.listening ? 'Terminar dictado' : 'Dictar pregunta'} aria-pressed={voice.listening}>
+            <Icon name={voice.listening ? 'stop' : 'mic'} />
           </button>
         )}
-        <input className="input" placeholder="Pregúntale al Coach…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="input" placeholder={voice.interim ? `${voice.interim}…` : voice.listening ? 'Te escucho…' : 'Pregúntale al Coach…'} value={q} onChange={(e) => setQ(e.target.value)} />
         <button className="btn primary" disabled={busy || !q.trim()} aria-label="Enviar">
           <Icon name="sparkles" />
         </button>
