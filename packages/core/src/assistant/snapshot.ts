@@ -128,8 +128,33 @@ export interface AssistantSnapshot {
     overdue: { id: string; npcId: string; name: string; daysSince: number | null }[];
     keyPeople: number;
     total: number;
-    /** Último contacto de cada persona (interacciones y misiones "Escribirle a X"). */
+    /** Último contacto de cada persona (interacciones, misiones "Escribirle a X" y visitas juntos). */
     lastContact: Record<string, string | null>;
+    /** Cada persona (familia primero): círculo, rol, nivel de cercanía, temperatura y lo que falta para el siguiente nivel. */
+    list: {
+      id: string;
+      name: string;
+      circle: PeopleCircle;
+      role: string | null;
+      key: boolean;
+      level: number;
+      levelName: string;
+      temperature: Temperature | null;
+      daysSince: number | null;
+      /** Frecuencia esperada en días (0 = sin meta). */
+      cadenceDays: number;
+      trend: 'sube' | 'baja' | 'estable';
+      /** "Te faltan 2 convivencias en persona para Amiga" (null en el nivel máximo). */
+      next: string | null;
+    }[];
+    /** Ids de las personas con contacto hoy. */
+    today: string[];
+    /** Cumpleaños próximos. */
+    birthdays: { id: string; name: string; date: string; inDays: number; turns: number | null }[];
+    /** Esta semana: contactos (persona-día) y personas distintas. */
+    week: { contacts: number; people: number };
+    /** Últimos niveles de cercanía ganados. */
+    recentLevelUps: { id: string; name: string; level: number; levelName: string; date: string }[];
   };
   achievements: { unlocked: number; total: number; recent: { name: string; date: string }[] };
   /** Lo que sabe hacer: rango, categoría, si vive de eso y el tiempo invertido (minutos, sin XP). */
@@ -358,6 +383,26 @@ export function buildSnapshot(
   const overdue = state.npcs.generatedMissions
     .filter((m) => state.npcs.npcs[m.npcId]?.overdue)
     .map((m) => ({ id: m.id, npcId: m.npcId, name: npcs.find((n) => n.id === m.npcId)?.data.name ?? m.title, daysSince: state.npcs.npcs[m.npcId]?.daysSince ?? null }));
+  const npcName = (id: string) => npcs.find((n) => n.id === id)?.data.name ?? id;
+  const peopleList = npcs
+    .filter((n) => state.npcs.npcs[n.id])
+    .map((n) => ({ n, st: state.npcs.npcs[n.id] }))
+    .sort((a, b) => a.st.priority - b.st.priority || b.st.level - a.st.level || a.n.data.name.localeCompare(b.n.data.name))
+    .map(({ n, st }) => ({
+      id: n.id,
+      name: n.data.name,
+      circle: st.circle,
+      role: st.role,
+      key: !!n.data.key,
+      level: st.level,
+      levelName: st.levelName,
+      temperature: st.temperature,
+      daysSince: st.daysSince,
+      cadenceDays: st.cadenceDays,
+      trend: st.trend,
+      next: st.next?.hint ?? null,
+    }));
+  const thisWeek = state.npcs.weeks.at(-1);
 
   const achs = list<AchievementData>('achievements', 'achievement');
   const unlocked = achs
@@ -442,6 +487,18 @@ export function buildSnapshot(
       keyPeople: npcs.filter((n) => n.data.key).length,
       total: npcs.length,
       lastContact: Object.fromEntries(npcs.map((n) => [n.id, state.npcs.npcs[n.id]?.lastInteraction ?? null])),
+      list: peopleList,
+      today: [...state.npcs.contactedToday],
+      birthdays: state.npcs.birthdays.map((b) => ({ id: b.npcId, name: npcName(b.npcId), date: b.date, inDays: b.inDays, turns: b.turns })),
+      week: { contacts: thisWeek?.contacts ?? 0, people: thisWeek?.people ?? 0 },
+      recentLevelUps: state.npcs.levelUps
+        .filter((u) => state.npcs.npcs[u.npcId])
+        .slice(-5)
+        .reverse()
+        .map((u) => {
+          const n = npcs.find((x) => x.id === u.npcId);
+          return { id: u.npcId, name: npcName(u.npcId), level: u.level, levelName: n ? levelNameFor(n.data, u.level) : `nivel ${u.level}`, date: u.date };
+        }),
     },
     achievements: { unlocked: unlocked.length, total: achs.length, recent: unlocked.slice(0, 5) },
     skills: list<SkillData>('skills', 'skill').map((s) => {
@@ -623,3 +680,7 @@ function sizeFromXp(xp: number): MissionSize {
   for (const [size, amount] of entries) if (amount <= xp) best = size;
   return best;
 }
+
+// Mi gente (va al final para no chocar con los imports de otros sistemas; los imports se elevan igual).
+import { levelNameFor, type Temperature } from '../engine/modules/gente';
+import type { PeopleCircle } from '../types';

@@ -331,20 +331,130 @@ export interface ItemData {
   link?: string;
 }
 
+/** Tipo de persona de la primera versión. Se sigue guardando (derivado del círculo) para versiones anteriores de la app. */
 export const NPC_TYPES = ['party', 'aliado', 'mentor', 'cliente', 'rival'] as const;
 export type NpcType = (typeof NPC_TYPES)[number];
 
+// ---------- Mi gente ----------
+
+/** Círculo de vida de una persona (categoría fija; los grupos `npcs/guild` son otra cosa). */
+export const PEOPLE_CIRCLES = ['familia', 'pareja', 'amigos', 'trabajo', 'clientes', 'comunidad', 'conocidos'] as const;
+export type PeopleCircle = (typeof PEOPLE_CIRCLES)[number];
+export const CIRCLE_NAMES: Record<PeopleCircle, string> = {
+  familia: 'Familia',
+  pareja: 'Pareja',
+  amigos: 'Amigos',
+  trabajo: 'Trabajo',
+  clientes: 'Clientes',
+  comunidad: 'Comunidad',
+  conocidos: 'Conocidos',
+};
+
+/** Cómo fue un contacto (`npc.interaction.channel`). Sin canal = sin especificar (no cuenta como en persona). */
+export const CONTACT_CHANNELS = ['persona', 'llamada', 'videollamada', 'mensaje'] as const;
+export type ContactChannel = (typeof CONTACT_CHANNELS)[number];
+export const CHANNEL_NAMES: Record<ContactChannel, string> = {
+  persona: 'En persona',
+  llamada: 'Llamada',
+  videollamada: 'Videollamada',
+  mensaje: 'Mensaje',
+};
+
+/** Escalera de nombres de nivel: familia y pareja, amistades, y relaciones de trabajo. */
+export type RelationTrack = 'familia' | 'social' | 'profesional';
+
+/** Tipo de rol: decide el orden en "Familia" y la frecuencia esperada (config `gente.roleCadence`). */
+export const ROLE_GROUPS = ['pareja', 'hijo', 'padres', 'hermano', 'abuelo', 'familia', 'mejorAmigo', 'amigo', 'trabajo', 'cliente', 'mentor', 'vecino', 'conocido'] as const;
+export type RoleGroup = (typeof ROLE_GROUPS)[number];
+
+export interface PersonRole {
+  label: string;
+  group: RoleGroup;
+  circle: PeopleCircle;
+  /** Rol en femenino (para que el nombre del nivel concuerde: "Amiga cercana"). */
+  fem?: boolean;
+}
+
+/** Roles sugeridos (el rol es texto libre: cualquier otro también vale). */
+export const PERSON_ROLES: readonly PersonRole[] = [
+  { label: 'Pareja', group: 'pareja', circle: 'pareja' },
+  { label: 'Novia', group: 'pareja', circle: 'pareja', fem: true },
+  { label: 'Novio', group: 'pareja', circle: 'pareja' },
+  { label: 'Esposa', group: 'pareja', circle: 'pareja', fem: true },
+  { label: 'Esposo', group: 'pareja', circle: 'pareja' },
+  { label: 'Hija', group: 'hijo', circle: 'familia', fem: true },
+  { label: 'Hijo', group: 'hijo', circle: 'familia' },
+  { label: 'Mamá', group: 'padres', circle: 'familia', fem: true },
+  { label: 'Papá', group: 'padres', circle: 'familia' },
+  { label: 'Hermana', group: 'hermano', circle: 'familia', fem: true },
+  { label: 'Hermano', group: 'hermano', circle: 'familia' },
+  { label: 'Abuela', group: 'abuelo', circle: 'familia', fem: true },
+  { label: 'Abuelo', group: 'abuelo', circle: 'familia' },
+  { label: 'Tía', group: 'familia', circle: 'familia', fem: true },
+  { label: 'Tío', group: 'familia', circle: 'familia' },
+  { label: 'Prima', group: 'familia', circle: 'familia', fem: true },
+  { label: 'Primo', group: 'familia', circle: 'familia' },
+  { label: 'Sobrina', group: 'familia', circle: 'familia', fem: true },
+  { label: 'Sobrino', group: 'familia', circle: 'familia' },
+  { label: 'Suegra', group: 'familia', circle: 'familia', fem: true },
+  { label: 'Suegro', group: 'familia', circle: 'familia' },
+  { label: 'Cuñada', group: 'familia', circle: 'familia', fem: true },
+  { label: 'Cuñado', group: 'familia', circle: 'familia' },
+  { label: 'Mejor amiga', group: 'mejorAmigo', circle: 'amigos', fem: true },
+  { label: 'Mejor amigo', group: 'mejorAmigo', circle: 'amigos' },
+  { label: 'Amiga', group: 'amigo', circle: 'amigos', fem: true },
+  { label: 'Amigo', group: 'amigo', circle: 'amigos' },
+  { label: 'Socia', group: 'trabajo', circle: 'trabajo', fem: true },
+  { label: 'Socio', group: 'trabajo', circle: 'trabajo' },
+  { label: 'Colega', group: 'trabajo', circle: 'trabajo' },
+  { label: 'Jefa', group: 'trabajo', circle: 'trabajo', fem: true },
+  { label: 'Jefe', group: 'trabajo', circle: 'trabajo' },
+  { label: 'Empleada', group: 'trabajo', circle: 'trabajo', fem: true },
+  { label: 'Empleado', group: 'trabajo', circle: 'trabajo' },
+  { label: 'Mentora', group: 'mentor', circle: 'trabajo', fem: true },
+  { label: 'Mentor', group: 'mentor', circle: 'trabajo' },
+  { label: 'Clienta', group: 'cliente', circle: 'clientes', fem: true },
+  { label: 'Cliente', group: 'cliente', circle: 'clientes' },
+  { label: 'Compañera', group: 'amigo', circle: 'comunidad', fem: true },
+  { label: 'Compañero', group: 'amigo', circle: 'comunidad' },
+  { label: 'Vecina', group: 'vecino', circle: 'comunidad', fem: true },
+  { label: 'Vecino', group: 'vecino', circle: 'comunidad' },
+  { label: 'Conocida', group: 'conocido', circle: 'conocidos', fem: true },
+  { label: 'Conocido', group: 'conocido', circle: 'conocidos' },
+];
+
 export interface NpcData {
   name: string;
+  /** Tipo de la primera versión; se guarda derivado del círculo (ver `legacyNpcType`). */
   npcType: NpcType;
+  /** Relación 0–5 de la primera versión (ya no se muestra). */
   relation: number;
+  /** Persona clave: si pasa mucho sin contacto, aparece la misión "Escribirle a X". */
   key: boolean;
+  /** Grupo (`npcs/guild`). */
   guildId?: string | null;
   notes?: string;
   /** Última interacción registrada a mano al crear la ficha. */
   lastContact?: string | null;
+  /** Círculo. Sin él (fichas viejas) se deduce de `npcType`. */
+  circle?: PeopleCircle;
+  /** Rol: texto libre ("Novia", "Hija", "Amigo de la prepa"…); los de PERSON_ROLES se reconocen. */
+  role?: string | null;
+  /** Dónde se conocieron (texto) y, opcional, el lugar del mapa. */
+  metWhere?: string | null;
+  metPlaceId?: string | null;
+  /** Cuándo se conocieron: 'YYYY', 'YYYY-MM' o 'YYYY-MM-DD'. */
+  metOn?: string | null;
+  /** Cumpleaños: 'MM-DD' o 'YYYY-MM-DD' (con año se calcula cuántos cumple). */
+  birthday?: string | null;
+  phone?: string | null;
+  /** Punto de partida (1–5): lo cercana que ya era la relación antes de la app. Solo cambia el nivel que se muestra; no da XP. */
+  startLevel?: number;
+  /** Cada cuántos días quieres tener contacto. Sin valor = automático por rol/círculo; 0 = sin meta. */
+  cadenceDays?: number | null;
 }
 
+/** Grupo de personas (equipo, generación, club…). En pantalla: "Grupos". */
 export interface GuildData {
   name: string;
   description?: string;

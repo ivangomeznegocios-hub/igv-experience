@@ -19,6 +19,8 @@ export type XpSource =
   // [[entreno]]
 
   // [[gente]]
+  /** Mi gente: alcanzar un nivel de cercanía con una persona (una vez por nivel). */
+  | 'relationship'
 
   // [[mapa]]
 

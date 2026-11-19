@@ -141,6 +141,37 @@ export const GAME_CONFIG = {
   // [[entreno]]
 
   // [[gente]]
+  /**
+   * Mi gente: niveles de cercanía (1–5), temperatura y frecuencia esperada. Ver docs/sistemas/gente.md.
+   * Requisitos ACUMULADOS para ganar cada nivel (el 1 es la base): días distintos con contacto, días en
+   * persona, semanas distintas y meses distintos con contacto. Diez mensajes en un día cuentan como un día.
+   * `xp` se da UNA vez, el día que se alcanza por primera vez (atributo `attribute`).
+   */
+  gente: {
+    levels: [
+      { level: 2, days: 3, inPerson: 1, weeks: 2, months: 1, xp: 20 },
+      { level: 3, days: 8, inPerson: 3, weeks: 4, months: 2, xp: 30 },
+      { level: 4, days: 20, inPerson: 8, weeks: 10, months: 4, xp: 50 },
+      { level: 5, days: 50, inPerson: 20, weeks: 24, months: 8, xp: 100 },
+    ],
+    attribute: 'relaciones',
+    /** Temperatura: cálida hasta frecuencia × warmFactor días sin contacto; tibia hasta × coolFactor; luego fría. */
+    warmFactor: 1.5,
+    coolFactor: 3,
+    /** Frecuencia esperada (días entre contactos) por círculo, si su rol no dice otra cosa. 0 = sin meta. */
+    circleCadence: { familia: 14, pareja: 1, amigos: 30, trabajo: 14, clientes: 30, comunidad: 60, conocidos: 0 },
+    /** Frecuencia esperada por tipo de rol (gana sobre la del círculo). */
+    roleCadence: { pareja: 1, hijo: 2, padres: 7, hermano: 14, abuelo: 14, familia: 60, mejorAmigo: 14, amigo: 30, trabajo: 14, cliente: 30, mentor: 60, vecino: 60, conocido: 0 },
+    /**
+     * Quién se acerca o se aleja: días con contacto en los últimos `trendDays` contra los `trendDays` anteriores.
+     * Cuenta como cambio si la diferencia es de al menos `trendMinChange` días y `trendRatio` veces.
+     */
+    trendDays: 30,
+    trendMinChange: 2,
+    trendRatio: 1.5,
+    /** Cumpleaños próximos que se muestran (días). */
+    birthdayWindowDays: 30,
+  },
 
   // [[mapa]]
 
