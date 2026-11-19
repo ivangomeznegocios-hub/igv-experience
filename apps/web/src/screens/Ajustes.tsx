@@ -6,6 +6,10 @@ import { updateSettings } from '../lib/actions';
 import { fmtDate } from '../lib/time';
 import { getTheme, setTheme, type Theme } from '../lib/theme';
 import { Field, PageHeader, Tabs, confirmAction, toast } from '../ui/kit';
+import { getPrefs, setPrefs, type Prefs } from '../lib/prefs';
+import { sfx } from '../lib/sound';
+import { disablePush, enablePush, needsInstall, pushSupported, schedulePlanUpload } from '../lib/notifications';
+import { describeEvent } from '../ui/DaySheet';
 import { Icon } from '../ui/icons';
 
 export default function Ajustes() {
@@ -15,6 +19,8 @@ export default function Ajustes() {
       <Profile />
       <Rewards />
       <ThemeCard />
+      <FeelCard />
+      <NotifyCard />
       <BackupCard />
       <EventLog />
       <ConfigCard />
@@ -98,6 +104,130 @@ function Rewards() {
   );
 }
 
+function FeelCard() {
+  const [p, setP] = useState(getPrefs());
+  const up = (patch: Partial<Prefs>) => setP(setPrefs(patch));
+  return (
+    <div className="card">
+      <h2>Sonido y vibración</h2>
+      <label className="checkbox">
+        <input type="checkbox" checked={p.sound} onChange={(e) => (up({ sound: e.target.checked }), e.target.checked && sfx.xp(30))} />
+        Sonidos al ganar XP y subir de nivel
+      </label>
+      <label className="checkbox" style={{ marginBottom: 0 }}>
+        <input type="checkbox" checked={p.haptics} onChange={(e) => up({ haptics: e.target.checked })} />
+        Vibración (en celulares que la soportan)
+      </label>
+    </div>
+  );
+}
+
+function NotifyCard() {
+  const { state, entities } = useGame();
+  const [p, setP] = useState(getPrefs());
+  const [busy, setBusy] = useState(false);
+  const [devices, setDevices] = useState<number | null>(null);
+  const n = p.notify;
+  useEffect(() => {
+    if (n.enabled) api.pushStatus().then((s) => setDevices(s.devices)).catch(() => {});
+  }, [n.enabled]);
+  const upNotify = (patch: Partial<Prefs['notify']>) => {
+    const next = setPrefs({ notify: { ...getPrefs().notify, ...patch } });
+    setP(next);
+    schedulePlanUpload(state, entities);
+  };
+  if (!pushSupported())
+    return (
+      <div className="card">
+        <h2>Notificaciones</h2>
+        <p className="small muted">Este navegador no soporta notificaciones push.</p>
+      </div>
+    );
+  return (
+    <div className="card">
+      <h2>Notificaciones</h2>
+      <p className="small muted" style={{ marginTop: 0 }}>
+        Recordatorio del check-in en la mañana, aviso de racha en riesgo en la noche, NPCs olvidados y cierre de semana. Se calculan con tu progreso y se envían desde tu Worker (cada 15 min).
+      </p>
+      {needsInstall() && (
+        <div className="banner warn">
+          <Icon name="download" width={18} /> En iPhone primero instala la app: Compartir → “Agregar a inicio”, y actívalas desde ahí.
+        </div>
+      )}
+      {n.enabled ? (
+        <>
+          <div className="grid2">
+            <Field label="Mañana (check-in)">
+              <input className="input" type="time" value={n.morning} onChange={(e) => upNotify({ morning: e.target.value })} />
+            </Field>
+            <Field label="Noche (racha en riesgo)">
+              <input className="input" type="time" value={n.evening} onChange={(e) => upNotify({ evening: e.target.value })} />
+            </Field>
+          </div>
+          <label className="checkbox">
+            <input type="checkbox" checked={n.npcs} onChange={(e) => upNotify({ npcs: e.target.checked })} />
+            NPCs clave sin contacto
+          </label>
+          <label className="checkbox">
+            <input type="checkbox" checked={n.weekly} onChange={(e) => upNotify({ weekly: e.target.checked })} />
+            Cierre de semana (domingo 7 pm)
+          </label>
+          <div className="row wrap" style={{ gap: 6 }}>
+            <button
+              className="btn sm"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  const r = await api.pushTest();
+                  toast(r.sent ? 'Notificación de prueba enviada' : 'No se pudo entregar: vuelve a activarlas', r.sent ? 'info' : 'error');
+                } catch (e) {
+                  toast(e instanceof Error ? e.message : 'Error', 'error');
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              <Icon name="bolt" /> Probar
+            </button>
+            <button
+              className="btn sm ghost danger"
+              onClick={async () => {
+                await disablePush();
+                setP(getPrefs());
+                toast('Notificaciones desactivadas en este dispositivo');
+              }}
+            >
+              Desactivar
+            </button>
+            {devices !== null && <span className="tiny muted">{devices} dispositivo(s) activo(s)</span>}
+          </div>
+        </>
+      ) : (
+        <button
+          className="btn primary block"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              await enablePush();
+              setP(getPrefs());
+              schedulePlanUpload(state, entities);
+              toast('Notificaciones activadas');
+            } catch (e) {
+              toast(e instanceof Error ? e.message : 'No se pudieron activar', 'error');
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          <Icon name="bolt" /> Activar notificaciones
+        </button>
+      )}
+    </div>
+  );
+}
+
 function ThemeCard() {
   const [t, setT] = useState<Theme>(getTheme());
   return (
@@ -172,30 +302,14 @@ function BackupCard() {
 }
 
 function EventLog() {
-  const { events } = useGame();
+  const { events, state } = useGame();
   const [n, setN] = useState(20);
   const [showVoided, setShowVoided] = useState(false);
   const list = events
     .filter((e) => showVoided || !e.voidedAt)
     .sort((a, b) => (a.createdAt ?? 0) < (b.createdAt ?? 0) ? 1 : -1)
     .slice(0, n);
-  const describe = (e: (typeof events)[number]): string => {
-    const p = e.payload ?? {};
-    switch (e.type) {
-      case 'mission.completed':
-        return `${p.title} (${MISSION_SIZE_NAMES[p.size as keyof typeof MISSION_SIZE_NAMES] ?? p.size})`;
-      case 'income.recorded':
-      case 'expense.recorded':
-        return `${p.amount} ${p.concept ?? ''}`;
-      case 'checkin.morning':
-        return `${p.sleepHours} h de sueño`;
-      case 'lesson.written':
-      case 'boss.recurring_defeated':
-        return String(p.text ?? p.note ?? '').slice(0, 60);
-      default:
-        return '';
-    }
-  };
+  const describe = (e: (typeof events)[number]) => describeEvent(e, state.settings.currency);
   return (
     <div className="card">
       <div className="card-head">
@@ -254,6 +368,8 @@ function ConfigCard() {
           <tr><td>Jefe recurrente / Mapa / Lección</td><td className="r">{c.rewards.recurringBoss} / {c.rewards.discovery} / {c.rewards.lesson}</td></tr>
           <tr><td>Nivel n → n+1</td><td className="r">{c.levels.factor} × n XP</td></tr>
           <tr><td>Energía</td><td className="r">≥7 h 100 · ≥6 h 75 · menos 50</td></tr>
+          <tr><td>Oro</td><td className="r">1 por cada {c.gold.xpPerGold} XP</td></tr>
+          <tr><td>Misión sorpresa</td><td className="r">+{c.bounty.bonusPercent}% de bono</td></tr>
         </tbody>
       </table>
     </div>

@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
-import { monthKey, type Entity, type ItemData } from '@igv/core';
-import { deleteEntity, saveEntity, useGame, voidEvent } from '../data/store';
+import { monthKey, type Entity, type ItemData, type SavingsData } from '@igv/core';
+import { addEvent, deleteEntity, saveEntity, useGame, voidEvent } from '../data/store';
+import { updateSettings } from '../lib/actions';
 import { fmtDate, fmtMoney, fmtMonth, newId } from '../lib/time';
-import { Empty, Field, PageHeader, Sheet, Tabs, confirmAction } from '../ui/kit';
+import { Bar, Chips, Empty, Field, PageHeader, Sheet, Tabs, confirmAction, undoToast } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { MoneySheet } from './Hoy';
 
-type Tab = 'money' | 'tool' | 'knowledge';
+type Tab = 'money' | 'budget' | 'savings' | 'tool' | 'knowledge';
 
 export default function Inventario() {
   const [tab, setTab] = useState<Tab>('money');
@@ -18,11 +19,13 @@ export default function Inventario() {
         onChange={setTab}
         options={[
           { value: 'money', label: 'Dinero' },
+          { value: 'budget', label: 'Presupuesto' },
+          { value: 'savings', label: 'Ahorro' },
           { value: 'tool', label: 'Herramientas' },
           { value: 'knowledge', label: 'Conocimientos' },
         ]}
       />
-      {tab === 'money' ? <Money /> : <Items kind={tab} />}
+      {tab === 'money' ? <Money /> : tab === 'budget' ? <Budget /> : tab === 'savings' ? <Savings /> : <Items kind={tab} />}
     </>
   );
 }
@@ -215,6 +218,242 @@ function ItemForm({ kind, initial, onClose }: { kind: 'tool' | 'knowledge'; init
       </Field>
       <Field label="Enlace">
         <input className="input" type="url" value={d.link ?? ''} onChange={(e) => setD({ ...d, link: e.target.value })} />
+      </Field>
+    </Sheet>
+  );
+}
+
+/** Presupuesto mensual por categoría de gasto (dinero real; no da XP). */
+function Budget() {
+  const { state, events } = useGame();
+  const cur = state.settings.currency;
+  const budgets = state.settings.budgets ?? {};
+  const month = state.money.currentMonth;
+  const [editing, setEditing] = useState(false);
+  const spent = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const e of events) {
+      if (e.voidedAt || e.type !== 'expense.recorded' || monthKey(e.localDate) !== month) continue;
+      const c = String(e.payload.category ?? '').trim() || 'Sin categoría';
+      m.set(c, (m.get(c) ?? 0) + e.payload.amount);
+    }
+    return m;
+  }, [events, month]);
+  const cats = [...new Set([...Object.keys(budgets), ...spent.keys()])];
+  const totalBudget = Object.values(budgets).reduce((s, v) => s + v, 0);
+  const totalSpent = [...spent.values()].reduce((s, v) => s + v, 0);
+  const [y, m] = month.split('-').map(Number);
+  const daysIn = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const dayN = Number(state.today.slice(8));
+  return (
+    <>
+      <div className="card">
+        <div className="card-head">
+          <h2 style={{ textTransform: 'capitalize' }}>{fmtMonth(month)}</h2>
+          <button className="btn sm ghost" onClick={() => setEditing(true)}>
+            <Icon name="edit" /> Presupuesto
+          </button>
+        </div>
+        {totalBudget > 0 && (
+          <Bar
+            value={totalSpent}
+            max={totalBudget}
+            tone={totalSpent > totalBudget ? 'red' : totalSpent > (totalBudget * dayN) / daysIn ? 'flame' : 'green'}
+            size="lg"
+            label={
+              <>
+                <span className="num">
+                  {fmtMoney(totalSpent, cur)} / {fmtMoney(totalBudget, cur)}
+                </span>
+                <span>día {dayN} de {daysIn}</span>
+              </>
+            }
+          />
+        )}
+        {cats.length === 0 && <Empty>Define cuánto quieres gastar al mes en cada categoría (comida, transporte, ocio…).</Empty>}
+        {cats.map((c) => {
+          const b = budgets[c] ?? 0;
+          const sp = spent.get(c) ?? 0;
+          return (
+            <div key={c} style={{ marginTop: 12 }}>
+              <div className="row between small">
+                <b>{c}</b>
+                <span className={`num ${b && sp > b ? 'red' : ''}`}>
+                  {fmtMoney(sp, cur)}
+                  {b ? ` / ${fmtMoney(b, cur)}` : ''}
+                </span>
+              </div>
+              {b > 0 && <Bar value={sp} max={b} tone={sp > b ? 'red' : sp > (b * dayN) / daysIn ? 'flame' : 'green'} size="sm" />}
+            </div>
+          );
+        })}
+        <p className="tiny muted">La barra se pone naranja si vas gastando más rápido que el mes, y roja si te pasaste.</p>
+      </div>
+      {editing && <BudgetSheet onClose={() => setEditing(false)} />}
+    </>
+  );
+}
+
+function BudgetSheet({ onClose }: { onClose: () => void }) {
+  const { state } = useGame();
+  const [rows, setRows] = useState<{ cat: string; amount: string }[]>(() => {
+    const b = Object.entries(state.settings.budgets ?? {}).map(([cat, v]) => ({ cat, amount: String(v) }));
+    return b.length ? b : [{ cat: 'Comida', amount: '' }];
+  });
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      title="Presupuesto mensual"
+      actions={
+        <button
+          className="btn primary"
+          onClick={() => {
+            const budgets = Object.fromEntries(rows.filter((r) => r.cat.trim() && Number(r.amount) > 0).map((r) => [r.cat.trim(), Number(r.amount)]));
+            updateSettings(state.settings, { budgets });
+            onClose();
+          }}
+        >
+          Guardar
+        </button>
+      }
+    >
+      <p className="small muted" style={{ marginTop: 0 }}>
+        Usa los mismos nombres de categoría que al registrar gastos.
+      </p>
+      {rows.map((r, i) => (
+        <div key={i} className="row" style={{ gap: 6, marginBottom: 8 }}>
+          <input className="input" value={r.cat} placeholder="Categoría" onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, cat: e.target.value } : x)))} />
+          <input className="input" style={{ width: 130 }} type="number" inputMode="decimal" value={r.amount} placeholder="Monto" onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))} />
+          <button className="btn icon ghost danger" aria-label="Quitar" onClick={() => setRows(rows.filter((_, j) => j !== i))}>
+            <Icon name="x" />
+          </button>
+        </div>
+      ))}
+      <button className="btn sm" onClick={() => setRows([...rows, { cat: '', amount: '' }])}>
+        <Icon name="plus" /> Categoría
+      </button>
+    </Sheet>
+  );
+}
+
+/** Metas de ahorro: aportar o retirar. Dinero real, separado de la XP. */
+function Savings() {
+  const { state, list } = useGame();
+  const cur = state.settings.currency;
+  const goals = list<SavingsData>('finance', 'savings');
+  const [edit, setEdit] = useState<Entity<SavingsData> | 'new' | null>(null);
+  const [moving, setMoving] = useState<{ g: Entity<SavingsData>; sign: 1 | -1 } | null>(null);
+  return (
+    <>
+      {goals.length === 0 && <Empty>Crea un apartado: fondo de emergencia, viaje, enganche…</Empty>}
+      {goals.map((g) => {
+        const st = state.savings[g.id];
+        return (
+          <div key={g.id} className="card">
+            <div className="card-head">
+              <h2>{g.data.name}</h2>
+              <button className="btn icon ghost" aria-label="Editar" onClick={() => setEdit(g)}>
+                <Icon name="edit" />
+              </button>
+            </div>
+            <Bar
+              value={st?.current ?? 0}
+              max={g.data.target}
+              tone="green"
+              size="lg"
+              label={
+                <>
+                  <span className="num">
+                    {fmtMoney(st?.current ?? 0, cur)} / {fmtMoney(g.data.target, cur)}
+                  </span>
+                  <span className="num">{Math.round((st?.progress ?? 0) * 100)}%</span>
+                </>
+              }
+            />
+            <div className="grid2" style={{ marginTop: 10 }}>
+              <button className="btn primary" onClick={() => setMoving({ g, sign: 1 })}>
+                <Icon name="plus" /> Aportar
+              </button>
+              <button className="btn" onClick={() => setMoving({ g, sign: -1 })}>
+                Retirar
+              </button>
+            </div>
+          </div>
+        );
+      })}
+      <button className="btn block" onClick={() => setEdit('new')}>
+        <Icon name="plus" /> Meta de ahorro
+      </button>
+      {edit && <SavingsSheet initial={edit === 'new' ? null : edit} onClose={() => setEdit(null)} />}
+      {moving && <MoveSheet goal={moving.g} sign={moving.sign} onClose={() => setMoving(null)} />}
+    </>
+  );
+}
+
+function MoveSheet({ goal, sign, onClose }: { goal: Entity<SavingsData>; sign: 1 | -1; onClose: () => void }) {
+  const { state } = useGame();
+  const [v, setV] = useState('');
+  const cur = state.settings.currency;
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      title={`${sign > 0 ? 'Aportar a' : 'Retirar de'} ${goal.data.name}`}
+      actions={
+        <button
+          className="btn primary"
+          disabled={!(Number(v) > 0)}
+          onClick={() => {
+            const ev = addEvent('savings.moved', { goalId: goal.id, amount: sign * Number(v) });
+            undoToast(`${sign > 0 ? 'Aportaste' : 'Retiraste'} ${fmtMoney(Number(v), cur)}`, () => voidEvent(ev.id));
+            onClose();
+          }}
+        >
+          Guardar
+        </button>
+      }
+    >
+      <Field label={`Monto (${cur})`}>
+        <input className="input" type="number" inputMode="decimal" value={v} onChange={(e) => setV(e.target.value)} autoFocus />
+      </Field>
+      <Chips value={Number(v) || null} onChange={(n) => setV(String(n))} options={[500, 1000, 2000, 5000].map((n) => ({ value: n, label: fmtMoney(n, cur) }))} />
+    </Sheet>
+  );
+}
+
+function SavingsSheet({ initial, onClose }: { initial: Entity<SavingsData> | null; onClose: () => void }) {
+  const [d, setD] = useState<SavingsData>(initial?.data ?? { name: '', target: 50000 });
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      title={initial ? 'Editar meta de ahorro' : 'Nueva meta de ahorro'}
+      actions={
+        <>
+          {initial && (
+            <button className="btn ghost danger" onClick={() => confirmAction('¿Borrar esta meta de ahorro?') && (deleteEntity(initial.id), onClose())}>
+              Borrar
+            </button>
+          )}
+          <button
+            className="btn primary"
+            disabled={!d.name.trim() || !(d.target > 0)}
+            onClick={() => {
+              saveEntity({ id: initial?.id ?? `sav-${newId().slice(0, 8)}`, module: 'finance', kind: 'savings', data: { ...d, name: d.name.trim() } });
+              onClose();
+            }}
+          >
+            Guardar
+          </button>
+        </>
+      }
+    >
+      <Field label="Nombre">
+        <input className="input" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} placeholder="Fondo de emergencia" />
+      </Field>
+      <Field label="Objetivo">
+        <input className="input" type="number" value={d.target} onChange={(e) => setD({ ...d, target: Number(e.target.value) })} />
       </Field>
     </Sheet>
   );

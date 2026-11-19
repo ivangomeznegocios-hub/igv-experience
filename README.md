@@ -19,6 +19,7 @@ conversaciones) y lo convierte en XP, niveles, atributos, rachas, jefes y logros
 | 2. Progresión | Jefes con fases automáticas o manuales, jefes recurrentes, logros (vitrina), habilidades con evidencia, temporadas con revisión de inicio/fin, diario semanal y foto de atributos |
 | 3. Mundo | Inventario (ingresos, gastos, resumen mensual, herramientas, conocimientos), NPCs y gremios con aviso a los 30 días, mapa |
 | 4. Game Master IA (opcional) | Asistente que lee tu progreso y te propone misiones con la API de Claude y tu propia clave |
+| 5. Inmersión | Botón **+** para registrar todo con un toque (misión sin catálogo, dinero con montos rápidos, NPC, agenda, meta, cuerpo, descanso, días pasados), rutina de diarias con checks y "Deshacer", deslizar para completar, favoritos, agenda, misión sorpresa con bono, oro y tienda de premios reales, avatar que evoluciona, sonidos y vibración, cierre del día, reporte semanal con crónica del GM, registro por texto libre con el GM, notificaciones push, Mi vida en semanas por año calendario con zoom a año y a días, hitos de vida, historial en calendario, estadísticas, metas con contador, enemigos (malos hábitos), presupuesto y ahorro, biblioteca, cuerpo, buscador y "Mi año en review" (imagen/PDF) |
 
 Los números del juego están en [`packages/core/src/config/game.ts`](packages/core/src/config/game.ts).
 Las reglas y decisiones técnicas están en [`CLAUDE.md`](CLAUDE.md).
@@ -64,16 +65,28 @@ tus 7 atributos iniciales con la guía de 30 y 70.
 3. Abre **Mundo → Game Master**. Usa el modelo `claude-opus-5-5`; para cambiarlo, agrega la variable
    `ANTHROPIC_MODEL`. Cada pregunta consume tokens de tu cuenta de la API de Claude.
 
+### (Opcional) Notificaciones
+
+**Mundo → Ajustes → Notificaciones → Activar**. No hace falta configurar nada en Cloudflare: el Worker genera
+sus propias llaves (VAPID) la primera vez y un cron cada 15 minutos envía los recordatorios. En iPhone,
+primero instala la app en la pantalla de inicio (Compartir → Agregar a inicio) y actívalas desde ahí.
+
 ---
 
 ## Uso diario
 
-1. **En la mañana**: check-in de sueño (energía), elige tus 3 diarias (trabajo, cuerpo, libre).
-2. **Durante el día**: toca ✓ al completar. Registra ingresos en el Dragón Financiero.
-3. **Si fallaste**: "Escribir lección" (+30 XP). **Si no puedes**: "Día de descanso" (máx. 2 por semana).
-4. **Domingo**: diario semanal de 3 líneas en Temporadas.
-5. **¿Te equivocaste?** Ajustes → Bitácora de eventos → **Anular**. Nada se borra; solo deja de contar.
-6. **Respaldo**: Ajustes → Exportar respaldo (JSON). Guárdalo de vez en cuando.
+1. **En la mañana**: check-in de sueño (energía). Tu **rutina** de diarias ya aparece como lista de checks.
+2. **Durante el día**: toca el check (o desliza →) al completar. ¿Algo que no está en el catálogo? Botón
+   **+ → Hice algo**. Ingresos, gastos, NPCs, metas y entrenos también van por el **+**.
+3. **¿Te equivocaste?** Toca otra vez el check o "Deshacer" en el aviso. Para días pasados: Progreso →
+   Historial → toca el día. Nada se borra; solo deja de contar.
+4. **¿Se te olvidó ayer?** En el **+** elige "Ayer" (o cualquier fecha) antes de registrar.
+5. **Si fallaste**: "Escribir lección" (+30 XP). **Si no puedes**: "Día de descanso" (máx. 2 por semana).
+6. **En la noche**: "Cerrar el día" (resumen + una línea). Planea mañana con **+ → Por hacer**.
+7. **Domingo**: diario semanal de 3 líneas en Temporadas y Reporte de batalla.
+8. **Respaldo**: Ajustes → Exportar respaldo (JSON). Guárdalo de vez en cuando.
+
+Atajos: mantén presionado el ícono de la app instalada para "Registrar misión / gasto / ingreso / Planear".
 
 ## Desarrollo local
 
@@ -105,5 +118,5 @@ apps/web        React + Vite + PWA
 
 ## Plan gratuito de Cloudflare
 
-Workers: 100,000 peticiones al día. D1: 5 GB y 5 millones de filas leídas al día. Access: hasta 50
+Workers: 100,000 peticiones al día (el cron de notificaciones usa ~96 al día). D1: 5 GB y 5 millones de filas leídas al día. Access: hasta 50
 usuarios. El uso de una persona queda muy por debajo de estos límites.

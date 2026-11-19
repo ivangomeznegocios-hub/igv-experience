@@ -84,3 +84,32 @@ export function birthdayInYear(month: number, day: number, year: number): string
   const d = month === 2 && day === 29 && !isLeap ? 28 : day;
   return `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
+
+/** Desfase (minutos) de la zona horaria respecto a UTC en un instante dado. */
+function tzOffsetMinutes(instant: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(instant);
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value);
+  const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'));
+  return Math.round((asUtc - instant.getTime()) / 60000);
+}
+
+/** Instante UTC (ISO) de una fecha y hora locales ("2026-11-20", "21:00") en la zona horaria dada. */
+export function zonedTimeToUtc(date: string, time: string, timeZone: string): string {
+  const [y, m, d] = date.split('-').map(Number);
+  const [hh, mm] = time.split(':').map(Number);
+  const guess = Date.UTC(y, m - 1, d, hh, mm);
+  const off = tzOffsetMinutes(new Date(guess), timeZone);
+  let t = guess - off * 60000;
+  const off2 = tzOffsetMinutes(new Date(t), timeZone);
+  if (off2 !== off) t = guess - off2 * 60000;
+  return new Date(t).toISOString();
+}

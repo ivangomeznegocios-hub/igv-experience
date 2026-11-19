@@ -14,6 +14,12 @@ import { reduceSeasons, type SeasonsState } from './modules/seasons';
 import { reduceSkills, type SkillState } from './modules/skills';
 import { reduceStreak, type StreakState } from './modules/streak';
 import { reduceMap, reduceNpcs, type MapState, type NpcsState } from './modules/world';
+import { reduceBounty, type BountyState } from './modules/bounty';
+import { reduceGold, type GoldState } from './modules/gold';
+import { reduceGoals, type GoalState } from './modules/goals';
+import { reduceVices, type ViceState } from './modules/vices';
+import { reduceLibrary, type LibraryState } from './modules/library';
+import { reduceBody, reduceDayClosures, reduceSavings, type BodyState, type DayClosure, type SavingsState } from './modules/life-logs';
 
 export interface ProjectInput {
   events: GameEvent[];
@@ -46,6 +52,14 @@ export interface GameState {
   seasons: SeasonsState;
   map: MapState;
   npcs: NpcsState;
+  bounty: BountyState;
+  gold: GoldState;
+  goals: Record<string, GoalState>;
+  vices: Record<string, ViceState>;
+  library: LibraryState;
+  body: BodyState;
+  savings: Record<string, SavingsState>;
+  dayClosures: Record<string, DayClosure>;
 }
 
 export const DEFAULT_SETTINGS: SettingsData = {
@@ -110,14 +124,23 @@ export function project(input: ProjectInput): GameState {
   const map = reduceMap(ctx);
   const npcs = reduceNpcs(ctx, missions);
   const seasons = reduceSeasons(ctx);
+  const bounty = reduceBounty(ctx, missions);
+  const goals = reduceGoals(ctx);
+  const library = reduceLibrary(ctx);
+  const vices = reduceVices(ctx);
+  const body = reduceBody(ctx);
+  const savings = reduceSavings(ctx);
+  const dayClosures = reduceDayClosures(ctx);
   const achievements = reduceAchievements(ctx, { missions, streak, lessons, bosses, money, map, seasons });
   const attributes = reduceAttributes(ctx, xp);
+  // El oro se calcula al final: depende de toda la XP ganada.
+  xp.sort((a, b) => compareDates(a.date, b.date));
+  const gold = reduceGold(ctx, xp);
 
   const checkin = (byType.get('checkin.morning') ?? []).filter((e) => e.localDate === today).at(-1);
   const sleepHours = checkin ? (checkin.payload as { sleepHours: number }).sleepHours : null;
   const energyValue = sleepHours === null ? null : energyFromSleep(sleepHours, cfg);
 
-  xp.sort((a, b) => compareDates(a.date, b.date));
   const total = xp.reduce((s, e) => s + e.amount, 0);
   const todayXp = xp.filter((e) => e.date === today).reduce((s, e) => s + e.amount, 0);
 
@@ -138,5 +161,13 @@ export function project(input: ProjectInput): GameState {
     seasons,
     map,
     npcs,
+    bounty,
+    gold,
+    goals,
+    vices,
+    library,
+    body,
+    savings,
+    dayClosures,
   };
 }

@@ -1,9 +1,12 @@
 import { useMemo, useState } from 'react';
-import { ATTRIBUTE_GUIDE, ATTRIBUTE_IDS, ATTRIBUTE_NAMES, GAME_CONFIG, addDays, type AttributeId, type SeasonData, type Entity } from '@igv/core';
+import { ATTRIBUTE_GUIDE, ATTRIBUTE_IDS, ATTRIBUTE_NAMES, GAME_CONFIG, addDays, type AchievementData, type AttributeId, type SeasonData, type Entity } from '@igv/core';
 import { addEvent, projectAsOf, useGame } from '../data/store';
 import { fmtDate, fmtNum } from '../lib/time';
 import { Hero } from '../ui/Hero';
 import { Bar, PageHeader, confirmAction } from '../ui/kit';
+import { Avatar, topAttribute } from '../ui/Avatar';
+import { Icon } from '../ui/icons';
+import { updateSettings } from '../lib/actions';
 
 export default function Personaje() {
   const { state } = useGame();
@@ -11,10 +14,66 @@ export default function Personaje() {
     <>
       <PageHeader title="Personaje" eyebrow="Atributos" />
       <Hero />
+      <AvatarCard />
       {state.attributes.rated ? <Attributes /> : <RateAttributes />}
       {state.attributes.rated && <SeasonSnapshots />}
       <XpLedger />
     </>
+  );
+}
+
+function AvatarCard() {
+  const { state, list } = useGame();
+  const [picking, setPicking] = useState(false);
+  const top = topAttribute(state.attributes.values);
+  const unlocked = list<AchievementData>('achievements', 'achievement').filter((a) => state.achievements[a.id]?.unlocked);
+  const chosen = state.settings.avatarBadges ?? [];
+  const nextTitle = state.level.nextTitle;
+  return (
+    <div className="card">
+      <div className="row" style={{ gap: 16 }}>
+        <Avatar size={88} />
+        <div className="grow small">
+          <div>
+            <b>Marco:</b> {state.level.title}
+            {nextTitle ? <span className="muted"> · cambia a {nextTitle.title} en el nivel {nextTitle.level}</span> : null}
+          </div>
+          <div>
+            <b>Color:</b> {ATTRIBUTE_NAMES[top]} <span className="muted">(tu atributo más alto)</span>
+          </div>
+          <div>
+            <b>Aura:</b> {state.streak.current >= 7 ? 'encendida 🔥' : <span className="muted">se enciende con racha de 7+ días</span>}
+          </div>
+          <button className="btn sm" style={{ marginTop: 8 }} onClick={() => setPicking((x) => !x)} disabled={!unlocked.length}>
+            <Icon name="trophy" /> Insignias ({chosen.length || 'auto'})
+          </button>
+        </div>
+      </div>
+      {picking && (
+        <div style={{ marginTop: 12 }}>
+          <div className="tiny muted" style={{ marginBottom: 6 }}>
+            Elige hasta 3 logros para lucir en tu avatar (sin elegir, se muestran los más recientes).
+          </div>
+          <div className="chips">
+            {unlocked.map((a) => {
+              const on = chosen.includes(a.id);
+              return (
+                <button
+                  key={a.id}
+                  className={`chip ${on ? 'on' : ''}`}
+                  onClick={() => {
+                    const next = on ? chosen.filter((x) => x !== a.id) : [...chosen, a.id].slice(-3);
+                    updateSettings(state.settings, { avatarBadges: next });
+                  }}
+                >
+                  <Icon name={a.data.icon} width={14} /> {a.data.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -164,6 +223,9 @@ const SOURCE_LABEL: Record<string, string> = {
   boss_phase: 'Jefe',
   recurring_boss: 'Jefe recurrente',
   discovery: 'Mapa',
+  bounty: 'Misión sorpresa',
+  goal: 'Meta',
+  library: 'Biblioteca',
 };
 
 function XpLedger() {

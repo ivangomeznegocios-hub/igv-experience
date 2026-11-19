@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ATTRIBUTE_IDS, ATTRIBUTE_NAMES, MISSION_SIZE_NAMES, MISSION_SIZES, GAME_CONFIG, type AttributeId, type MissionSize } from '@igv/core';
+import { ATTRIBUTE_IDS, ATTRIBUTE_NAMES, MISSION_SIZE_NAMES, MISSION_SIZES, GAME_CONFIG, addDays, type AttributeId, type MissionSize } from '@igv/core';
 import { Icon } from './icons';
 
 export function Bar({ value, max = 1, tone, size, label }: { value: number; max?: number; tone?: string; size?: 'sm' | 'lg'; label?: ReactNode }) {
@@ -122,12 +122,16 @@ export function Empty({ children }: { children: ReactNode }) {
 }
 
 // ---------- Toasts ----------
-type Toast = { id: number; text: string; kind?: 'error' | 'xp' | 'info' };
+type Toast = { id: number; text: string; kind?: 'error' | 'xp' | 'info'; action?: { label: string; run: () => void } };
 const toastListeners = new Set<(t: Toast) => void>();
 let toastId = 0;
-export function toast(text: string, kind: Toast['kind'] = 'info') {
-  const t = { id: ++toastId, text, kind };
+export function toast(text: string, kind: Toast['kind'] = 'info', action?: Toast['action']) {
+  const t = { id: ++toastId, text, kind, action };
   toastListeners.forEach((l) => l(t));
+}
+/** Aviso con botón "Deshacer" (5 s). */
+export function undoToast(text: string, undo: () => void) {
+  toast(text, 'info', { label: 'Deshacer', run: undo });
 }
 
 export function Toasts() {
@@ -135,7 +139,7 @@ export function Toasts() {
   useEffect(() => {
     const l = (t: Toast) => {
       setItems((xs) => [...xs, t]);
-      setTimeout(() => setItems((xs) => xs.filter((x) => x.id !== t.id)), t.kind === 'error' ? 5000 : 2600);
+      setTimeout(() => setItems((xs) => xs.filter((x) => x.id !== t.id)), t.kind === 'error' || t.action ? 5000 : 2600);
     };
     toastListeners.add(l);
     return () => {
@@ -147,6 +151,17 @@ export function Toasts() {
       {items.map((t) => (
         <div key={t.id} className={`toast ${t.kind ?? ''}`}>
           {t.text}
+          {t.action && (
+            <button
+              className="toast-action"
+              onClick={() => {
+                t.action!.run();
+                setItems((xs) => xs.filter((x) => x.id !== t.id));
+              }}
+            >
+              {t.action.label}
+            </button>
+          )}
         </div>
       ))}
     </div>
@@ -165,4 +180,157 @@ export function useAutoFocus<T extends HTMLElement>() {
     return () => clearTimeout(t);
   }, []);
   return ref;
+}
+
+// ---------- Chips (selección con botones) ----------
+export function Chips<T extends string | number>({
+  value,
+  onChange,
+  options,
+  size,
+}: {
+  value: T | null;
+  onChange: (v: T) => void;
+  options: { value: T; label: ReactNode; tone?: string }[];
+  size?: 'lg';
+}) {
+  return (
+    <div className={`chips ${size ?? ''}`} role="radiogroup">
+      {options.map((o) => (
+        <button key={String(o.value)} type="button" role="radio" aria-checked={o.value === value} className={`chip ${o.value === value ? 'on' : ''} ${o.tone ?? ''}`} onClick={() => onChange(o.value)}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function SizeChips({ value, onChange }: { value: MissionSize; onChange: (v: MissionSize) => void }) {
+  return (
+    <Chips
+      value={value}
+      onChange={onChange}
+      options={MISSION_SIZES.map((s) => ({ value: s, label: <>{MISSION_SIZE_NAMES[s]} <small>{GAME_CONFIG.missionXp[s]}</small></>, tone: `size-${s}` }))}
+    />
+  );
+}
+
+const ATTR_SHORT: Record<AttributeId, string> = {
+  fuerza: 'Fuerza',
+  inteligencia: 'Intelig.',
+  carisma: 'Carisma',
+  finanzas: 'Finanzas',
+  disciplina: 'Disciplina',
+  relaciones: 'Relaciones',
+  creatividad: 'Creativ.',
+};
+export function AttrChips({ value, onChange }: { value: AttributeId; onChange: (v: AttributeId) => void }) {
+  return <Chips value={value} onChange={onChange} options={ATTRIBUTE_IDS.map((a) => ({ value: a, label: ATTR_SHORT[a] }))} />;
+}
+
+/** Elegir el día de un registro: Hoy · Ayer · Antier · otro. */
+export function DateChips({ value, onChange, today }: { value: string; onChange: (d: string) => void; today: string }) {
+  const y = addDays(today, -1);
+  const y2 = addDays(today, -2);
+  const other = value !== today && value !== y && value !== y2;
+  return (
+    <div className="row wrap" style={{ gap: 6 }}>
+      <Chips
+        value={other ? null : value}
+        onChange={onChange}
+        options={[
+          { value: today, label: 'Hoy' },
+          { value: y, label: 'Ayer' },
+          { value: y2, label: 'Antier' },
+        ]}
+      />
+      <input className={`input date-mini ${other ? 'on' : ''}`} type="date" max={today} value={value} onChange={(e) => e.target.value && onChange(e.target.value)} aria-label="Otro día" />
+    </div>
+  );
+}
+
+// ---------- Fila deslizable (deslizar a la derecha = completar, a la izquierda = acción secundaria) ----------
+export function SwipeRow({
+  children,
+  onRight,
+  onLeft,
+  rightLabel = 'Hecho',
+  leftLabel,
+  className,
+}: {
+  children: ReactNode;
+  onRight?: () => void;
+  onLeft?: () => void;
+  rightLabel?: string;
+  leftLabel?: string;
+  className?: string;
+}) {
+  const [dx, setDx] = useState(0);
+  const start = useRef<{ x: number; y: number; locked: 'x' | 'y' | null } | null>(null);
+  const TH = 80;
+  const end = () => {
+    if (dx > TH && onRight) onRight();
+    else if (dx < -TH && onLeft) onLeft();
+    setDx(0);
+    start.current = null;
+  };
+  return (
+    <div className={`swipe ${className ?? ''}`}>
+      {onRight && dx > 0 && (
+        <div className={`swipe-bg right ${dx > TH ? 'armed' : ''}`}>
+          <Icon name="check" /> {rightLabel}
+        </div>
+      )}
+      {onLeft && dx < 0 && (
+        <div className={`swipe-bg left ${dx < -TH ? 'armed' : ''}`}>
+          {leftLabel} <Icon name="right" />
+        </div>
+      )}
+      <div
+        className="swipe-fg"
+        style={{ transform: dx ? `translateX(${dx}px)` : undefined, transition: dx ? 'none' : undefined }}
+        onTouchStart={(e) => {
+          const t = e.touches[0];
+          start.current = { x: t.clientX, y: t.clientY, locked: null };
+        }}
+        onTouchMove={(e) => {
+          const s = start.current;
+          if (!s) return;
+          const t = e.touches[0];
+          const mx = t.clientX - s.x;
+          const my = t.clientY - s.y;
+          if (!s.locked) {
+            if (Math.abs(mx) < 8 && Math.abs(my) < 8) return;
+            s.locked = Math.abs(mx) > Math.abs(my) ? 'x' : 'y';
+          }
+          if (s.locked !== 'x') return;
+          const v = mx > 0 ? (onRight ? mx : 0) : onLeft ? mx : 0;
+          setDx(Math.max(-140, Math.min(140, v)));
+        }}
+        onTouchEnd={end}
+        onTouchCancel={() => {
+          setDx(0);
+          start.current = null;
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/** Contenido que se muestra/oculta. */
+export function Collapse({ title, children, defaultOpen = false, right }: { title: ReactNode; children: ReactNode; defaultOpen?: boolean; right?: ReactNode }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="card">
+      <div className="card-head" style={{ marginBottom: open ? 10 : 0 }}>
+        <button className="collapse-btn" onClick={() => setOpen((x) => !x)} aria-expanded={open}>
+          <Icon name={open ? 'down' : 'right'} width={16} /> <h2 style={{ margin: 0 }}>{title}</h2>
+        </button>
+        {right}
+      </div>
+      {open && children}
+    </div>
+  );
 }

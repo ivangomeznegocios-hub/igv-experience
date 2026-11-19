@@ -67,6 +67,10 @@ export interface SettingsData {
   currency: string;
   /** Premio real por nivel (5, 10, 15, 20…). */
   levelRewards: Record<string, string>;
+  /** Presupuesto mensual por categoría de gasto (dinero real; no da XP). */
+  budgets?: Record<string, number>;
+  /** Logros que el avatar muestra como insignias (máx. 3). */
+  avatarBadges?: string[];
 }
 
 export interface MainQuestData {
@@ -90,9 +94,22 @@ export interface MissionData {
   number?: number;
   /** Solo eventos: fecha opcional. */
   date?: string | null;
+  /** Solo diarias: forma parte de la rutina (aparece sola cada día). Por defecto, sí. */
+  routine?: boolean;
+  /** Solo diarias: días de la semana en que aparece (0 = lunes … 6 = domingo). Vacío = todos. */
+  days?: number[];
 }
 
 export type MissionKind = 'main' | 'chapter' | 'side' | 'daily' | 'event';
+/** Tipos que puede llevar un evento `mission.completed` (incluye misiones sin catálogo). */
+export const COMPLETION_KINDS = ['main', 'chapter', 'side', 'daily', 'event', 'npc', 'quick', 'todo'] as const;
+export type CompletionKind = (typeof COMPLETION_KINDS)[number];
+
+/** Una diaria aparece hoy si está en la rutina y le toca este día de la semana. */
+export function isInRoutine(m: Pick<MissionData, 'routine' | 'days'>, weekdayIndex: number): boolean {
+  if (m.routine === false) return false;
+  return !m.days || m.days.length === 0 || m.days.includes(weekdayIndex);
+}
 
 export type PhaseMetric =
   | { type: 'manual' }
@@ -192,6 +209,79 @@ export interface PlaceData {
   notes?: string;
 }
 
+// ---------- Sistemas de la fase 5 ----------
+
+/** Algo planeado para un día (agenda). Se completa una sola vez. */
+export interface TodoData {
+  title: string;
+  size: MissionSize;
+  attribute: AttributeId;
+  /** Día planeado (YYYY-MM-DD). */
+  date: string;
+  /** Misión del catálogo de la que viene (opcional). */
+  missionId?: string | null;
+  notes?: string;
+}
+
+/** Premio real que se compra con oro en la tienda. */
+export interface ShopRewardData {
+  name: string;
+  cost: number;
+  icon?: string;
+  notes?: string;
+}
+
+/** Meta con contador ("Leer 12 libros en 2027"). */
+export interface GoalData {
+  title: string;
+  target: number;
+  unit: string;
+  attribute: AttributeId;
+  /** Tamaño de la recompensa al cumplirla (misma XP que una misión). */
+  size: MissionSize;
+  deadline?: string | null;
+  notes?: string;
+  /** Archivada (solo las cumplidas; su XP se conserva). */
+  archived?: boolean;
+}
+
+/** Mal hábito ("enemigo"): se cuenta la racha de días sin caer. No da ni quita XP. */
+export interface ViceData {
+  name: string;
+  /** Desde cuándo se cuenta. */
+  startDate: string;
+  notes?: string;
+}
+
+/** Meta de ahorro (dinero real; no da XP). */
+export interface SavingsData {
+  name: string;
+  target: number;
+}
+
+export const BOOK_TYPES = ['libro', 'curso', 'audiolibro'] as const;
+export const BOOK_STATUSES = ['pendiente', 'leyendo'] as const;
+export type BookStatus = (typeof BOOK_STATUSES)[number];
+
+export interface BookData {
+  title: string;
+  author?: string;
+  bookType: (typeof BOOK_TYPES)[number];
+  /** Estado manual; "terminado" se deriva del evento `library.finished`. */
+  status: BookStatus;
+  attribute: AttributeId;
+  size: MissionSize;
+  notes?: string;
+}
+
+/** Hito de vida (mudanza, empresa, viaje…) que se marca en Mi vida en semanas. */
+export interface MilestoneData {
+  title: string;
+  date: string;
+  icon?: string;
+  notes?: string;
+}
+
 /** Tipos de entidad permitidos por módulo (la API rechaza cualquier otro). */
 export const ENTITY_KINDS: Record<string, readonly string[]> = {
   profile: ['settings'],
@@ -203,6 +293,13 @@ export const ENTITY_KINDS: Record<string, readonly string[]> = {
   inventory: ['tool', 'knowledge'],
   npcs: ['npc', 'guild'],
   map: ['place'],
+  planner: ['todo'],
+  shop: ['reward'],
+  goals: ['goal'],
+  habits: ['vice'],
+  finance: ['savings'],
+  library: ['book'],
+  life: ['milestone'],
 };
 
 export function isValidEntityKind(module: string, kind: string): boolean {

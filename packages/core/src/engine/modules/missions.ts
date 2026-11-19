@@ -30,8 +30,9 @@ type CompletedPayload = {
   npcId?: string | null;
 };
 
-/** Diarias y misiones de NPC se pueden repetir (una vez por día); el resto cuenta una sola vez. */
-const REPEATABLE = new Set(['daily', 'npc']);
+/** Diarias, misiones de NPC y misiones rápidas ("hice algo") se repiten (una vez por día); el resto cuenta una sola vez. */
+export const REPEATABLE_KINDS = new Set(['daily', 'npc', 'quick']);
+const REPEATABLE = REPEATABLE_KINDS;
 
 export function reduceMissions(ctx: Ctx): MissionsState {
   const completions: Record<string, CompletionInfo> = {};

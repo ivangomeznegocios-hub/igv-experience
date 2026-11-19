@@ -278,6 +278,17 @@ export function deleteEntity(id: string) {
   enqueue({ op: 'delete', id });
 }
 
+/** Eventos actuales (sin suscribirse). */
+export function getEvents(): GameEvent[] {
+  return [...snap.events.values()];
+}
+
+/** Escucha cambios del store fuera de React (p. ej. para subir el plan de notificaciones). */
+export function onStoreChange(fn: () => void) {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+
 /** Tras importar un respaldo: recargar todo desde el servidor. */
 export async function resetAndResync() {
   cursor = 0;

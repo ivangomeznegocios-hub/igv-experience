@@ -1,7 +1,10 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, NavLink, Route, Routes, useLocation } from 'react-router-dom';
-import { onStoreError, sync, useStore } from './data/store';
+import { onStoreError, sync, useGame, useStore } from './data/store';
 import { Fx } from './ui/fx';
+import { QuickAdd } from './ui/QuickAdd';
+import { SyncPill } from './ui/SyncPill';
+import { schedulePlanUpload } from './lib/notifications';
 import { Toasts, toast } from './ui/kit';
 import { Icon } from './ui/icons';
 import Hoy from './screens/Hoy';
@@ -19,9 +22,19 @@ const Mapa = lazy(() => import('./screens/Mapa'));
 const Vida = lazy(() => import('./screens/Vida'));
 const Ajustes = lazy(() => import('./screens/Ajustes'));
 const GameMaster = lazy(() => import('./screens/GameMaster'));
+const Historial = lazy(() => import('./screens/Historial'));
+const Estadisticas = lazy(() => import('./screens/Estadisticas'));
+const Reporte = lazy(() => import('./screens/Reporte'));
+const Tienda = lazy(() => import('./screens/Tienda'));
+const Metas = lazy(() => import('./screens/Metas'));
+const Enemigos = lazy(() => import('./screens/Enemigos'));
+const Biblioteca = lazy(() => import('./screens/Biblioteca'));
+const Cuerpo = lazy(() => import('./screens/Cuerpo'));
+const Buscar = lazy(() => import('./screens/Buscar'));
+const Anual = lazy(() => import('./screens/Anual'));
 
-const PROGRESS = ['/progreso', '/jefes', '/logros', '/habilidades', '/temporadas'];
-const WORLD = ['/mas', '/inventario', '/npcs', '/mapa', '/vida', '/ajustes', '/game-master'];
+const PROGRESS = ['/progreso', '/jefes', '/logros', '/habilidades', '/temporadas', '/metas', '/estadisticas', '/reporte', '/anual', '/tienda', '/historial'];
+const WORLD = ['/mas', '/inventario', '/npcs', '/mapa', '/vida', '/ajustes', '/game-master', '/enemigos', '/biblioteca', '/cuerpo', '/buscar'];
 
 function Nav() {
   const { pathname } = useLocation();
@@ -81,6 +94,15 @@ function StatusBanner() {
   return null;
 }
 
+/** Mantiene al día el plan de notificaciones (solo si están activas en este dispositivo). */
+function NotificationsSync() {
+  const { state, entities, store } = useGame();
+  useEffect(() => {
+    if (store.ready) schedulePlanUpload(state, entities);
+  }, [state, entities, store.ready]);
+  return null;
+}
+
 function ScrollTop() {
   const { pathname } = useLocation();
   useEffect(() => {
@@ -135,6 +157,16 @@ export default function App() {
                 <Route path="/vida" element={<Vida />} />
                 <Route path="/ajustes" element={<Ajustes />} />
                 <Route path="/game-master" element={<GameMaster />} />
+                <Route path="/historial" element={<Historial />} />
+                <Route path="/estadisticas" element={<Estadisticas />} />
+                <Route path="/reporte" element={<Reporte />} />
+                <Route path="/tienda" element={<Tienda />} />
+                <Route path="/metas" element={<Metas />} />
+                <Route path="/enemigos" element={<Enemigos />} />
+                <Route path="/biblioteca" element={<Biblioteca />} />
+                <Route path="/cuerpo" element={<Cuerpo />} />
+                <Route path="/buscar" element={<Buscar />} />
+                <Route path="/anual" element={<Anual />} />
                 <Route path="*" element={<Hoy />} />
               </Routes>
             </Suspense>
@@ -143,6 +175,9 @@ export default function App() {
       </div>
       <Fx />
       <Toasts />
+      <SyncPill />
+      {store.ready && <QuickAdd />}
+      {store.ready && <NotificationsSync />}
     </BrowserRouter>
   );
 }

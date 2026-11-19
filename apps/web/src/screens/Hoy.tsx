@@ -1,22 +1,31 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  DAILY_SLOTS,
+  ATTRIBUTE_NAMES,
   GAME_CONFIG,
-  type DailySlot,
+  addDays,
+  frequentMissions,
+  isInRoutine,
+  pickForDate,
+  weekStart,
+  weekday,
+  type AttributeId,
   type Entity,
   type MissionData,
+  type MissionSize,
   type RecurringBossData,
+  type TodoData,
+  type ViceData,
 } from '@igv/core';
-import { addEvent, useGame } from '../data/store';
-import { completeGenerated, completeMission, isDone, updateSettings } from '../lib/actions';
-import { fmtDate, fmtMoney, fmtWeekday } from '../lib/time';
+import { addEvent, useGame, voidEvent } from '../data/store';
+import { completeGenerated, completeMission, completeQuick, completeTodo, isDone, saveTodo, uncomplete, updateSettings } from '../lib/actions';
+import { TZ, fmtDate, fmtMoney, fmtWeekday } from '../lib/time';
 import { Hero } from '../ui/Hero';
-import { Badge, Bar, Field, Sheet, SizeBadge, AttrBadge, confirmAction, toast, useAutoFocus } from '../ui/kit';
+import { Badge, Bar, Chips, Empty, Field, Sheet, SizeBadge, AttrBadge, SwipeRow, confirmAction, toast, undoToast, useAutoFocus } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { LessonForm } from '../ui/MissionForm';
-
-const SLOT_LABEL: Record<DailySlot, string> = { trabajo: 'Trabajo', cuerpo: 'Cuerpo', libre: 'Libre' };
+import { openQuickAdd } from '../ui/QuickAdd';
+import { SyncPill } from '../ui/SyncPill';
 
 export default function Hoy() {
   const { state } = useGame();
@@ -31,6 +40,12 @@ export default function Hoy() {
             {state.seasons.current && ` · T${state.seasons.current.data.number} semana ${state.seasons.currentWeek}`}
           </div>
           <h1>Hoy</h1>
+        </div>
+        <div className="row" style={{ gap: 4 }}>
+          <SyncPill inline />
+          <Link to="/buscar" className="btn icon ghost" aria-label="Buscar">
+            <Icon name="compass" />
+          </Link>
         </div>
       </div>
       <BirthDatePrompt />
@@ -48,10 +63,16 @@ export default function Hoy() {
         <EnergyCard />
         <StreakCard />
       </div>
-      <DailyCard />
+      <WeekReportCard />
+      <BountyCard />
+      <RoutineCard />
+      <AgendaCard />
+      <FavoritesCard />
       <NpcMissions />
       <WeeklyCard />
       <DragonCard />
+      <VicesMini />
+      <CloseDayCard />
       <div className="grid2">
         <button className="btn block" onClick={() => setLesson(true)}>
           <Icon name="feather" /> Escribir lección
@@ -165,10 +186,8 @@ function StreakCard() {
         style={{ marginTop: 8 }}
         disabled={!canRest}
         onClick={() => {
-          if (confirmAction(`¿Marcar hoy como Día de descanso? No rompe la racha, no suma día ni da bono. Te quedan ${s.restDaysLeftThisWeek} esta semana.`)) {
-            addEvent('rest_day.marked', {});
-            toast('Día de descanso marcado. Tu racha está a salvo.');
-          }
+          const ev = addEvent('rest_day.marked', {});
+          undoToast('Día de descanso marcado. Tu racha está a salvo.', () => voidEvent(ev.id));
         }}
       >
         <Icon name="moon" /> {s.todayRest ? 'Descansando' : `Día de descanso (${s.restDaysLeftThisWeek})`}
@@ -177,106 +196,348 @@ function StreakCard() {
   );
 }
 
-function DailyCard() {
+function RoutineCard() {
   const { state, list } = useGame();
-  const [picking, setPicking] = useState<DailySlot | null>(null);
+  const wd = weekday(state.today);
   const dailies = list<MissionData>('missions', 'daily');
-  const sel = state.missions.dailySelections;
+  const routine = dailies.filter((m) => isInRoutine(m.data, wd));
   const doneToday = new Set(state.missions.completedToday);
-  return (
-    <div className="card">
-      <div className="card-head">
-        <h2>Misiones diarias</h2>
-        <Link to="/misiones?tab=daily" className="btn sm ghost">
-          Menú
-        </Link>
-      </div>
-      {state.energy.low && (
-        <div className="banner warn" style={{ marginBottom: 8 }}>
-          <Icon name="bolt" width={18} /> Energía baja: hoy solo misiones chicas y de recuperación.
-        </div>
-      )}
-      {DAILY_SLOTS.map((slot) => {
-        const m = dailies.find((d) => d.id === sel[slot]);
-        const done = m ? doneToday.has(m.id) : false;
-        return (
-          <div key={slot} className={`item ${done ? 'done' : ''}`}>
-            {m ? (
-              <button className={`check ${done ? 'done' : ''}`} disabled={done} aria-label={`Completar ${m.data.title}`} onClick={() => completeMission(m)}>
-                <Icon name="check" />
-              </button>
-            ) : (
-              <button className="check" aria-label="Elegir misión" onClick={() => setPicking(slot)}>
-                <Icon name="plus" style={{ color: 'var(--muted)' }} />
-              </button>
-            )}
-            <div className="grow">
-              <div className="slot-label">{SLOT_LABEL[slot]}</div>
-              {m ? (
-                <>
-                  <div className="item-title">{m.data.title}</div>
-                  <div className="row wrap" style={{ gap: 4, marginTop: 3 }}>
-                    <SizeBadge size={m.data.size} />
-                    <AttrBadge attr={m.data.attribute} />
-                  </div>
-                </>
-              ) : (
-                <button className="btn sm ghost" style={{ paddingLeft: 0 }} onClick={() => setPicking(slot)}>
-                  Elegir del menú…
-                </button>
-              )}
-            </div>
-            {m && !done && (
-              <button className="btn sm ghost" onClick={() => setPicking(slot)}>
-                Cambiar
-              </button>
-            )}
-          </div>
-        );
-      })}
-      {picking && <DailyPicker slot={picking} onClose={() => setPicking(null)} />}
-    </div>
-  );
-}
-
-function DailyPicker({ slot, onClose }: { slot: DailySlot; onClose: () => void }) {
-  const { state, list } = useGame();
   const low = state.energy.low;
-  const sel = state.missions.dailySelections;
-  const taken = new Set(Object.entries(sel).filter(([s]) => s !== slot).map(([, id]) => id));
-  const options = list<MissionData>('missions', 'daily')
-    .filter((m) => slot === 'libre' || (m.data.category ?? 'libre') === slot)
-    .filter((m) => !taken.has(m.id));
   const suitable = (m: Entity<MissionData>) => !low || m.data.size === 'chica' || !!m.data.recovery;
-  return (
-    <Sheet open onClose={onClose} title={`Elegir misión: ${SLOT_LABEL[slot]}`}>
-      {low && <p className="small muted">Con energía baja se sugieren solo misiones chicas y de recuperación.</p>}
-      {options.length === 0 && <p className="muted">No hay misiones en esta categoría. Agrégalas en Misiones → Diarias.</p>}
-      {[...options].sort((a, b) => Number(suitable(b)) - Number(suitable(a))).map((m) => (
-        <div key={m.id} className="item" style={{ opacity: suitable(m) ? 1 : 0.45 }}>
-          <div className="grow">
+  const ordered = [...routine].sort((a, b) => Number(doneToday.has(a.id)) - Number(doneToday.has(b.id)) || Number(suitable(b)) - Number(suitable(a)));
+  const doneCount = routine.filter((m) => doneToday.has(m.id)).length;
+  const others = dailies.filter((m) => !routine.includes(m));
+  const [showOthers, setShowOthers] = useState(false);
+  const toggle = (m: Entity<MissionData>) => (doneToday.has(m.id) ? uncomplete(m.id, state.today, m.data.title) : completeMission(m));
+  const row = (m: Entity<MissionData>) => {
+    const done = doneToday.has(m.id);
+    const isBounty = state.bounty.today?.missionId === m.id;
+    return (
+      <SwipeRow key={m.id} onRight={done ? undefined : () => completeMission(m)}>
+        <div className={`item ${done ? 'done' : ''}`} style={{ opacity: suitable(m) || done ? 1 : 0.5 }}>
+          <button className={`check ${done ? 'done' : ''}`} aria-pressed={done} aria-label={`${done ? 'Desmarcar' : 'Completar'} ${m.data.title}`} onClick={() => toggle(m)}>
+            <Icon name="check" />
+          </button>
+          <div className="grow" onClick={() => toggle(m)} style={{ cursor: 'pointer' }}>
             <div className="item-title">{m.data.title}</div>
             <div className="row wrap" style={{ gap: 4, marginTop: 3 }}>
               <SizeBadge size={m.data.size} />
               <AttrBadge attr={m.data.attribute} />
-              {m.data.recovery && <Badge tone="teal">Recuperación</Badge>}
+              {isBounty && <Badge tone="flame">Sorpresa +{state.bounty.today!.bonus}</Badge>}
+              {m.data.recovery && low && <Badge tone="teal">Recuperación</Badge>}
             </div>
           </div>
-          <button
-            className="btn sm"
-            onClick={() => {
-              addEvent('daily.selected', { slot, missionId: m.id });
-              onClose();
-            }}
-          >
-            Elegir
-          </button>
         </div>
-      ))}
-    </Sheet>
+      </SwipeRow>
+    );
+  };
+  return (
+    <div className="card">
+      <div className="card-head">
+        <div>
+          <h2>Rutina de hoy</h2>
+          <div className="tiny muted">
+            {doneCount}/{routine.length} hechas · toca o desliza → para marcar
+          </div>
+        </div>
+        <Link to="/misiones?tab=daily" className="btn sm ghost">
+          Editar
+        </Link>
+      </div>
+      {routine.length > 0 && <Bar value={doneCount} max={routine.length} tone="green" size="sm" />}
+      {low && (
+        <div className="banner warn" style={{ margin: '10px 0 4px' }}>
+          <Icon name="bolt" width={18} /> Energía baja: hoy prioriza misiones chicas y de recuperación.
+        </div>
+      )}
+      <div style={{ marginTop: 6 }}>
+        {routine.length === 0 && <Empty>No tienes diarias en tu rutina para hoy. Agrégalas en Misiones → Diarias.</Empty>}
+        {ordered.map(row)}
+      </div>
+      {others.length > 0 && (
+        <>
+          <button className="btn sm ghost" onClick={() => setShowOthers((x) => !x)}>
+            {showOthers ? 'Ocultar' : `Otras diarias (${others.length})`}
+          </button>
+          {showOthers && others.map(row)}
+        </>
+      )}
+    </div>
   );
 }
 
+function FavoritesCard() {
+  const { state, events, list } = useGame();
+  const routineIds = new Set(list<MissionData>('missions', 'daily').filter((m) => isInRoutine(m.data, weekday(state.today))).map((m) => m.id));
+  const favs = useMemo(() => frequentMissions(events, state.today, 60, 12).filter((f) => !routineIds.has(f.missionId)), [events, state.today, routineIds]);
+  if (!favs.length) return null;
+  const doneToday = new Set(state.missions.completedToday);
+  const dailies = list<MissionData>('missions', 'daily');
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h2>Un toque</h2>
+        <span className="tiny muted">Lo que más registras</span>
+      </div>
+      <div className="fav-row">
+        {favs.map((f) => {
+          const done = doneToday.has(f.missionId);
+          return (
+            <button
+              key={f.missionId}
+              className={`fav ${done ? 'done' : ''}`}
+              onClick={() => {
+                if (done) return uncomplete(f.missionId, state.today, f.title);
+                const d = dailies.find((x) => x.id === f.missionId);
+                if (d) completeMission(d);
+                else completeQuick(f.title, f.size as MissionSize, f.attribute as AttributeId);
+              }}
+            >
+              <Icon name={done ? 'check' : 'plus'} />
+              {f.title}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function AgendaCard() {
+  const { state, list } = useGame();
+  const todos = list<TodoData>('planner', 'todo');
+  const pending = todos.filter((t) => !isDone(state.missions.completions, t.id));
+  const due = pending.filter((t) => t.data.date <= state.today).sort((a, b) => (a.data.date < b.data.date ? -1 : 1));
+  const doneToday = todos.filter((t) => state.missions.completions[t.id]?.dates.includes(state.today));
+  const tomorrow = addDays(state.today, 1);
+  const tomorrowCount = pending.filter((t) => t.data.date === tomorrow).length;
+  const postpone = (t: Entity<TodoData>) => {
+    saveTodo({ ...t.data, date: tomorrow }, t.id);
+    undoToast(`"${t.data.title}" pasó a mañana`, () => saveTodo(t.data, t.id));
+  };
+  return (
+    <div className="card">
+      <div className="card-head">
+        <div>
+          <h2>Agenda</h2>
+          <div className="tiny muted">{tomorrowCount ? `${tomorrowCount} planeada(s) para mañana` : 'Planea mañana para empezar con todo armado'}</div>
+        </div>
+        <div className="row" style={{ gap: 4 }}>
+          <button className="btn sm ghost" onClick={() => openQuickAdd({ mode: 'todo' })}>
+            <Icon name="plus" /> Planear
+          </button>
+          <Link to="/misiones?tab=agenda" className="btn sm ghost">
+            Ver
+          </Link>
+        </div>
+      </div>
+      {due.length === 0 && doneToday.length === 0 && <div className="small muted">Nada pendiente para hoy.</div>}
+      {due.map((t) => (
+        <SwipeRow key={t.id} onRight={() => completeTodo(t)} onLeft={() => postpone(t)} leftLabel="Mañana">
+          <div className="item">
+            <button className="check" aria-label={`Completar ${t.data.title}`} onClick={() => completeTodo(t)}>
+              <Icon name="check" />
+            </button>
+            <div className="grow">
+              <div className="item-title">{t.data.title}</div>
+              <div className="row wrap" style={{ gap: 4, marginTop: 3 }}>
+                <SizeBadge size={t.data.size} />
+                <AttrBadge attr={t.data.attribute} />
+                {t.data.date < state.today && <Badge tone="red">Desde {fmtDate(t.data.date)}</Badge>}
+              </div>
+            </div>
+            <button className="btn sm ghost" onClick={() => postpone(t)} aria-label="Pasar a mañana">
+              Mañana
+            </button>
+          </div>
+        </SwipeRow>
+      ))}
+      {doneToday.map((t) => (
+        <div key={t.id} className="item done">
+          <button className="check done" aria-label={`Desmarcar ${t.data.title}`} onClick={() => uncomplete(t.id, state.today, t.data.title)}>
+            <Icon name="check" />
+          </button>
+          <div className="grow">
+            <div className="item-title">{t.data.title}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function BountyCard() {
+  const { state, list } = useGame();
+  const b = state.bounty.today;
+  const drawing = useRef(false);
+  const wd = weekday(state.today);
+  const candidates = useMemo(() => {
+    const low = state.energy.low;
+    const fits = (m: Entity<MissionData>) => !low || m.data.size === 'chica' || !!m.data.recovery;
+    const daily = list<MissionData>('missions', 'daily').filter((m) => isInRoutine(m.data, wd) && fits(m));
+    const side = list<MissionData>('missions', 'side').filter((m) => !isDone(state.missions.completions, m.id) && fits(m) && m.data.size !== 'epica');
+    return [...daily, ...side];
+  }, [list, state.energy.low, state.missions.completions, wd]);
+  // Se sortea una vez al día (y se guarda como evento para que el historial no cambie).
+  useEffect(() => {
+    if (b || drawing.current || !candidates.length) return;
+    const pick = pickForDate(candidates, state.today, 'bounty');
+    if (!pick) return;
+    drawing.current = true;
+    addEvent('bounty.drawn', { missionId: pick.id, title: pick.data.title, size: pick.data.size, attribute: pick.data.attribute });
+  }, [b, candidates, state.today]);
+  if (!b) return null;
+  const m = list<MissionData>('missions').find((x) => x.id === b.missionId);
+  return (
+    <div className={`card bounty ${b.completed ? 'won' : ''}`}>
+      <div className="row">
+        <div className="bounty-icon">
+          <Icon name={b.completed ? 'trophy' : 'target'} />
+        </div>
+        <div className="grow">
+          <div className="eyebrow">Misión sorpresa del día</div>
+          <div className="item-title">{b.title}</div>
+          <div className="tiny muted">
+            {b.completed ? `¡Cumplida! Ganaste +${b.bonus} XP de bono.` : `Hazla hoy: XP normal + ${b.bonus} XP de bono (${GAME_CONFIG.bounty.bonusPercent}%).`}
+          </div>
+        </div>
+        {!b.completed && m && (
+          <button className="btn sm primary" onClick={() => completeMission(m)}>
+            Hecha
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function VicesMini() {
+  const { state, list } = useGame();
+  const vices = list<ViceData>('habits', 'vice');
+  if (!vices.length) return null;
+  return (
+    <Link to="/enemigos" className="card vices-mini" style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}>
+      <div className="card-head" style={{ marginBottom: 6 }}>
+        <h2>Enemigos a raya</h2>
+        <Icon name="right" width={18} className="muted" />
+      </div>
+      <div className="row wrap" style={{ gap: 8 }}>
+        {vices.map((v) => (
+          <span key={v.id} className="badge">
+            {v.data.name}: <b className="num" style={{ color: 'var(--text)' }}>{state.vices[v.id]?.current ?? 0}</b> días
+          </span>
+        ))}
+      </div>
+    </Link>
+  );
+}
+
+function WeekReportCard() {
+  const { state } = useGame();
+  const wd = weekday(state.today);
+  // Domingo y lunes: invitar a ver el reporte de la semana (el lunes, el de la semana pasada).
+  if (wd !== 6 && wd !== 0) return null;
+  const target = wd === 0 ? addDays(state.today, -7) : state.today;
+  return (
+    <Link to={`/reporte?semana=${weekStart(target)}`} className="banner" style={{ textDecoration: 'none', color: 'inherit' }}>
+      <Icon name="scroll" width={20} />
+      <span>
+        <b>Reporte de batalla</b> de {wd === 0 ? 'la semana pasada' : 'esta semana'} listo.
+      </span>
+      <span className="btn sm">Ver</span>
+    </Link>
+  );
+}
+
+function localHour(): number {
+  return Number(new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', hourCycle: 'h23' }).format(new Date()));
+}
+
+function CloseDayCard() {
+  const { state } = useGame();
+  const [open, setOpen] = useState(false);
+  const closed = state.dayClosures[state.today];
+  const evening = localHour() >= 18;
+  if (!evening && !closed && state.xp.today === 0) return null;
+  return (
+    <>
+      <button className={`card close-day ${evening && !closed ? 'glow' : ''}`} onClick={() => setOpen(true)}>
+        <Icon name={closed ? 'moon' : 'sun'} width={22} />
+        <div className="grow" style={{ textAlign: 'left' }}>
+          <b>{closed ? 'Día cerrado' : 'Cerrar el día'}</b>
+          <div className="tiny muted">{closed ? closed.note || 'Ver resumen' : `Hoy: +${state.xp.today} XP · racha ${state.streak.current}`}</div>
+        </div>
+        <Icon name="right" width={18} />
+      </button>
+      {open && <CloseDaySheet onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+const MOODS = ['😫', '😕', '😐', '🙂', '🔥'];
+
+function CloseDaySheet({ onClose }: { onClose: () => void }) {
+  const { state } = useGame();
+  const prev = state.dayClosures[state.today];
+  const [note, setNote] = useState(prev?.note ?? '');
+  const [mood, setMood] = useState<number | null>(prev?.mood ?? null);
+  const entries = state.xp.ledger.filter((e) => e.date === state.today);
+  const byAttr = new Map<string, number>();
+  for (const e of entries) if (e.attribute) byAttr.set(e.attribute, (byAttr.get(e.attribute) ?? 0) + e.amount);
+  const missions = entries.filter((e) => e.source === 'mission').length;
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      title="Cierre del día"
+      actions={
+        <button
+          className="btn primary"
+          onClick={() => {
+            addEvent('day.closed', { note: note.trim(), mood: mood ?? undefined });
+            toast('Día cerrado. Descansa, mañana seguimos.');
+            onClose();
+          }}
+        >
+          {prev ? 'Actualizar' : 'Cerrar el día'}
+        </button>
+      }
+    >
+      <div className="grid2" style={{ gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
+        <div className="stat-tile">
+          <span>XP hoy</span>
+          <b className="gold num">+{state.xp.today}</b>
+        </div>
+        <div className="stat-tile">
+          <span>Misiones</span>
+          <b className="num">{missions}</b>
+        </div>
+        <div className="stat-tile">
+          <span>Racha</span>
+          <b className="num flame">{state.streak.current}</b>
+        </div>
+      </div>
+      {byAttr.size > 0 && (
+        <div className="row wrap" style={{ gap: 6, marginBottom: 12 }}>
+          {[...byAttr.entries()].map(([a, x]) => (
+            <Badge key={a} tone="violet">
+              {ATTRIBUTE_NAMES[a as AttributeId]} +{x}
+            </Badge>
+          ))}
+          {state.gold.earnedToday > 0 && <Badge tone="gold">+{state.gold.earnedToday} oro</Badge>}
+        </div>
+      )}
+      {entries.length === 0 && <p className="small muted">Hoy no registraste XP. Si fue día de descanso, márcalo desde el botón +.</p>}
+      <Field label="¿Cómo te sentiste?">
+        <Chips value={mood} onChange={setMood} size="lg" options={MOODS.map((m, i) => ({ value: i + 1, label: m }))} />
+      </Field>
+      <Field label="Una línea sobre hoy">
+        <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Lo mejor del día, lo que aprendí…" />
+      </Field>
+      <p className="tiny muted">El cierre del día no da XP: es para ti. Aparece en tu historial y en Mi vida en semanas.</p>
+    </Sheet>
+  );
+}
 function NpcMissions() {
   const { state } = useGame();
   const gen = state.npcs.generatedMissions;
@@ -294,7 +555,7 @@ function NpcMissions() {
         const done = doneToday.has(m.id);
         return (
           <div key={m.id} className={`item ${done ? 'done' : ''}`}>
-            <button className={`check ${done ? 'done' : ''}`} disabled={done} onClick={() => completeGenerated(m)} aria-label={m.title}>
+            <button className={`check ${done ? 'done' : ''}`} onClick={() => (done ? uncomplete(m.id, state.today, m.title) : completeGenerated(m))} aria-label={m.title}>
               <Icon name="check" />
             </button>
             <div className="grow">
@@ -331,8 +592,7 @@ function WeeklyCard() {
         <div className={`item ${done ? 'done' : ''}`}>
           <button
             className={`check ${done ? 'done' : ''}`}
-            disabled={done}
-            onClick={() => confirmAction(`¿Completaste "${m.data.title}"?`) && completeMission(m)}
+            onClick={() => (done ? confirmAction(`¿Desmarcar "${m.data.title}"?`) && uncomplete(m.id, undefined, m.data.title) : confirmAction(`¿Completaste "${m.data.title}"?`) && completeMission(m))}
             aria-label="Completar misión de la semana"
           >
             <Icon name="check" />

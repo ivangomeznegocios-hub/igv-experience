@@ -84,3 +84,118 @@ gmRoute.post('/ask', async (c) => {
     throw err;
   }
 });
+
+// ---------- Registrar escribiendo como hablas ----------
+
+const PARSE_SYSTEM = `Conviertes lo que Iván cuenta de su día en registros para su juego "IGV EXPERIENCE".
+Solo PROPONES registros; él los confirma con un toque. Nunca inventes cosas que no dijo.
+
+Tipos de registro (campo "kind"):
+- "mission": algo que hizo. Si coincide con una misión del catálogo, pon su id en "matchId" y usa su tamaño y atributo. Si no, inventa un título corto en infinitivo o pasado ("Fui al gym") y elige tamaño y atributo razonables.
+  Tamaños: chica (10 XP, tareas de minutos), media (30, una hora o algo con esfuerzo), grande (100, un logro importante), epica (300, algo excepcional). Sé conservador: casi todo es chica o media.
+  Atributos: fuerza, inteligencia, carisma, finanzas, disciplina, relaciones, creatividad.
+- "income": dinero que ganó (amount en número, concept).
+- "expense": dinero que gastó (amount, concept, category opcional).
+- "npc": habló o convivió con una persona del catálogo de NPCs (matchId = id del NPC). Si la persona no está en el catálogo, conviértelo en "mission" de Relaciones.
+- "lesson": algo que salió mal y de lo que aprendió (text con la lección, en primera persona).
+- "body": peso (weightKg) o entrenamiento (workout) que mencionó.
+- "goal": avance en una meta del catálogo (matchId = id de la meta, amount = cuánto avanzó en su unidad).
+- "rest": dijo que hoy es su día de descanso.
+
+"daysAgo": 0 si fue hoy, 1 si fue ayer, etc. (máximo 6).
+"reply": una frase breve y cálida en español de México resumiendo lo que propones (o pidiendo aclaración si no entendiste).
+Los campos que no apliquen van en null.`;
+
+const nullable = (schema: Record<string, unknown>) => ({ anyOf: [schema, { type: 'null' }] });
+
+const PARSE_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['reply', 'proposals'],
+  properties: {
+    reply: { type: 'string' },
+    proposals: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['kind', 'title', 'matchId', 'size', 'attribute', 'amount', 'concept', 'category', 'text', 'weightKg', 'workout', 'daysAgo'],
+        properties: {
+          kind: { type: 'string', enum: ['mission', 'income', 'expense', 'npc', 'lesson', 'body', 'goal', 'rest'] },
+          title: nullable({ type: 'string' }),
+          matchId: nullable({ type: 'string' }),
+          size: nullable({ type: 'string', enum: ['chica', 'media', 'grande', 'epica'] }),
+          attribute: nullable({ type: 'string', enum: ['fuerza', 'inteligencia', 'carisma', 'finanzas', 'disciplina', 'relaciones', 'creatividad'] }),
+          amount: nullable({ type: 'number' }),
+          concept: nullable({ type: 'string' }),
+          category: nullable({ type: 'string' }),
+          text: nullable({ type: 'string' }),
+          weightKg: nullable({ type: 'number' }),
+          workout: nullable({ type: 'string' }),
+          daysAgo: { type: 'integer' },
+        },
+      },
+    },
+  },
+} as const;
+
+const proposalSchema = z.object({
+  kind: z.enum(['mission', 'income', 'expense', 'npc', 'lesson', 'body', 'goal', 'rest']),
+  title: z.string().max(300).nullable(),
+  matchId: z.string().max(100).nullable(),
+  size: z.enum(['chica', 'media', 'grande', 'epica']).nullable(),
+  attribute: z.enum(['fuerza', 'inteligencia', 'carisma', 'finanzas', 'disciplina', 'relaciones', 'creatividad']).nullable(),
+  amount: z.number().nullable(),
+  concept: z.string().max(300).nullable(),
+  category: z.string().max(100).nullable(),
+  text: z.string().max(4000).nullable(),
+  weightKg: z.number().nullable(),
+  workout: z.string().max(300).nullable(),
+  daysAgo: z.number().int().min(0).max(6).catch(0),
+});
+export const parseResultSchema = z.object({ reply: z.string().max(2000), proposals: z.array(proposalSchema).max(20) });
+export type ParseResult = z.infer<typeof parseResultSchema>;
+
+const parseBody = z.object({
+  text: z.string().min(1).max(4000),
+  today: z.string().max(20),
+  catalog: z.string().max(20000),
+});
+
+gmRoute.post('/parse', async (c) => {
+  if (!c.env.ANTHROPIC_API_KEY) return c.json({ error: 'El Game Master no está activado: falta el secreto ANTHROPIC_API_KEY.' }, 503);
+  const parsed = parseBody.safeParse(await c.req.json());
+  if (!parsed.success) return c.json({ error: 'Solicitud inválida' }, 400);
+  const { text, today, catalog } = parsed.data;
+  const client = new Anthropic({ apiKey: c.env.ANTHROPIC_API_KEY });
+  try {
+    const response = await client.beta.messages.create({
+      model: c.env.ANTHROPIC_MODEL || DEFAULT_MODEL,
+      max_tokens: 16000,
+      system: [{ type: 'text', text: PARSE_SYSTEM, cache_control: { type: 'ephemeral' } }],
+      output_config: { effort: 'low', format: { type: 'json_schema', schema: PARSE_SCHEMA as unknown as Record<string, unknown> } },
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+      messages: [{ role: 'user', content: `Hoy es ${today}.\n\nCatálogo:\n${catalog}\n\nLo que cuento:\n${text}` }],
+    });
+    if (response.stop_reason === 'refusal') return c.json({ reply: 'No pude procesar eso. Intenta decirlo de otra forma.', proposals: [] });
+    const raw = response.content
+      .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text')
+      .map((b) => b.text)
+      .join('');
+    let json: unknown;
+    try {
+      json = JSON.parse(raw);
+    } catch {
+      return c.json({ error: 'El Game Master respondió en un formato inesperado. Intenta de nuevo.' }, 502);
+    }
+    const result = parseResultSchema.safeParse(json);
+    if (!result.success) return c.json({ error: 'El Game Master respondió en un formato inesperado. Intenta de nuevo.' }, 502);
+    return c.json(result.data);
+  } catch (err) {
+    if (err instanceof Anthropic.AuthenticationError) return c.json({ error: 'La clave de la API de Claude no es válida.' }, 502);
+    if (err instanceof Anthropic.RateLimitError) return c.json({ error: 'Límite de uso alcanzado. Intenta en un momento.' }, 429);
+    if (err instanceof Anthropic.APIError) return c.json({ error: `Error de la API de Claude (${err.status ?? '?'})` }, 502);
+    throw err;
+  }
+});

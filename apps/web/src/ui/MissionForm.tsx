@@ -3,7 +3,7 @@ import { DAILY_SLOTS, type Entity, type MissionData, type MissionKind, type Main
 import { saveEntity, useGame } from '../data/store';
 import { newId } from '../lib/time';
 import { writeLesson } from '../lib/actions';
-import { AttrSelect, Field, Sheet, SizeSelect, useAutoFocus } from './kit';
+import { AttrChips, Field, Sheet, SizeChips, useAutoFocus } from './kit';
 
 const KIND_LABEL: Record<string, string> = { side: 'secundaria', daily: 'diaria', event: 'evento', chapter: 'capítulo' };
 
@@ -59,14 +59,12 @@ export function MissionForm({
       <Field label="Nombre">
         <input ref={ref} className="input" value={d.title} onChange={(e) => up({ title: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && save()} />
       </Field>
-      <div className="grid2">
-        <Field label="Tamaño">
-          <SizeSelect value={d.size} onChange={(size) => up({ size })} />
-        </Field>
-        <Field label="Atributo">
-          <AttrSelect value={d.attribute} onChange={(attribute) => up({ attribute })} />
-        </Field>
-      </div>
+      <Field label="Tamaño">
+        <SizeChips value={d.size} onChange={(size) => up({ size })} />
+      </Field>
+      <Field label="Atributo">
+        <AttrChips value={d.attribute} onChange={(attribute) => up({ attribute })} />
+      </Field>
       <Field label="Misión principal ligada">
         <select className="input" value={d.mainQuestId ?? ''} onChange={(e) => up({ mainQuestId: e.target.value || null })}>
           <option value="">— Ninguna —</option>
@@ -88,6 +86,29 @@ export function MissionForm({
               ))}
             </select>
           </Field>
+          <label className="checkbox">
+            <input type="checkbox" checked={d.routine !== false} onChange={(e) => up({ routine: e.target.checked })} />
+            En mi rutina (aparece sola en Hoy como check)
+          </label>
+          {d.routine !== false && (
+            <Field label="¿Qué días? (ninguno = todos)">
+              <div className="chips">
+                {['L', 'M', 'Mi', 'J', 'V', 'S', 'D'].map((l, i) => {
+                  const on = d.days?.includes(i) ?? false;
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      className={`chip ${on ? 'on' : ''}`}
+                      onClick={() => up({ days: on ? (d.days ?? []).filter((x) => x !== i) : [...(d.days ?? []), i].sort() })}
+                    >
+                      {l}
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
+          )}
           <label className="checkbox">
             <input type="checkbox" checked={!!d.recovery} onChange={(e) => up({ recovery: e.target.checked })} />
             Misión de recuperación (se sugiere con energía baja)

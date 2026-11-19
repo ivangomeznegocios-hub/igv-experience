@@ -3,6 +3,8 @@ import { useGame } from '../data/store';
 import { fmtNum } from '../lib/time';
 import { Bar } from './kit';
 import { Icon } from './icons';
+import { Avatar } from './Avatar';
+import { Link } from 'react-router-dom';
 
 export function Hero() {
   const { state } = useGame();
@@ -12,9 +14,11 @@ export function Hero() {
   return (
     <div className="card hero">
       <div className="row" style={{ alignItems: 'flex-start' }}>
-        <div className="level-badge" aria-label={`Nivel ${level.level}`}>
-          <span>Nivel</span>
-          <b className="num">{level.level}</b>
+        <div className="hero-avatar">
+          <Avatar size={64} />
+          <span className="hero-level num" aria-label={`Nivel ${level.level}`}>
+            {level.level}
+          </span>
         </div>
         <div className="grow">
           <div className="hero-name ellipsis">{settings.name}</div>
@@ -30,6 +34,9 @@ export function Hero() {
             {fmtNum(level.totalXp)}
           </div>
           {state.xp.today > 0 && <div className="small gold num">+{state.xp.today} hoy</div>}
+          <Link to="/tienda" className="gold-chip num" aria-label="Oro y tienda">
+            <Icon name="coin" width={13} height={13} /> {fmtNum(state.gold.balance)}
+          </Link>
         </div>
       </div>
       <div style={{ marginTop: 14 }}>

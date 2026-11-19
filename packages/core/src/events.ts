@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ATTRIBUTE_IDS, DAILY_SLOTS, MISSION_SIZES, PLACE_STATUSES } from './types';
+import { ATTRIBUTE_IDS, COMPLETION_KINDS, DAILY_SLOTS, MISSION_SIZES, PLACE_STATUSES } from './types';
 import { isDateString } from './util/dates';
 
 const attr = z.enum(ATTRIBUTE_IDS);
@@ -27,7 +27,7 @@ export const EVENT_SCHEMAS = {
     title: z.string().min(1).max(300),
     size,
     attribute: attr,
-    kind: z.enum(['main', 'chapter', 'side', 'daily', 'event', 'npc']),
+    kind: z.enum(COMPLETION_KINDS),
     mainQuestId: id.nullish(),
     npcId: id.nullish(),
   }),
@@ -73,6 +73,28 @@ export const EVENT_SCHEMAS = {
   // --- Mundo ---
   'npc.interaction': z.object({ npcId: id, note: z.string().max(2000).optional() }),
   'map.status_changed': z.object({ placeId: id, status: z.enum(PLACE_STATUSES), note: z.string().max(2000).optional() }),
+
+  // --- Inmersión ---
+  /** Cierre del día: una línea de reflexión. No da XP. */
+  'day.closed': z.object({ note: z.string().max(2000).default(''), mood: z.number().int().min(1).max(5).optional() }),
+  /** Misión sorpresa del día (se sortea en el dispositivo y se guarda para que el historial no cambie). */
+  'bounty.drawn': z.object({ missionId: id, title: z.string().min(1).max(300), size, attribute: attr }),
+  /** Canje de un premio real en la tienda (se paga con oro, nunca con XP). */
+  'reward.redeemed': z.object({ rewardId: id, name: z.string().min(1).max(300), cost: z.number().int().positive() }),
+
+  // --- Metas, hábitos, biblioteca, cuerpo y ahorro ---
+  'goal.progress': z.object({ goalId: id, amount: z.number().positive().max(1e9), note: z.string().max(2000).optional() }),
+  'vice.relapse': z.object({ viceId: id, note: z.string().max(2000).optional() }),
+  'library.finished': z.object({ bookId: id, title: z.string().min(1).max(300), size, attribute: attr, note: z.string().max(4000).optional() }),
+  'body.logged': z
+    .object({
+      weightKg: z.number().positive().max(500).optional(),
+      workout: z.string().max(300).optional(),
+      note: z.string().max(2000).optional(),
+    })
+    .refine((p) => p.weightKg !== undefined || !!p.workout?.trim() || !!p.note?.trim(), 'Registra peso, entrenamiento o nota'),
+  /** Movimiento a una meta de ahorro (positivo = aportar, negativo = retirar). Dinero real: no da XP. */
+  'savings.moved': z.object({ goalId: id, amount: z.number().refine((n) => n !== 0 && Math.abs(n) < 1e12, 'Monto inválido') }),
 } as const;
 
 export type EventType = keyof typeof EVENT_SCHEMAS;
@@ -96,6 +118,14 @@ export const EVENT_LABELS: Record<EventType, string> = {
   'season.review': 'Revisión de temporada',
   'npc.interaction': 'Interacción con NPC',
   'map.status_changed': 'Cambio en el mapa',
+  'day.closed': 'Cierre del día',
+  'bounty.drawn': 'Misión sorpresa del día',
+  'reward.redeemed': 'Premio canjeado',
+  'goal.progress': 'Avance de meta',
+  'vice.relapse': 'Recaída',
+  'library.finished': 'Libro o curso terminado',
+  'body.logged': 'Registro de cuerpo',
+  'savings.moved': 'Movimiento de ahorro',
 };
 
 export const eventEnvelopeSchema = z.object({

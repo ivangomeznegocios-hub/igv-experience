@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { ATTRIBUTE_IDS, ATTRIBUTE_NAMES, GAME_CONFIG, type BossData, type Entity, type GameState, type MainQuestData, type MissionData } from '@igv/core';
-import { api } from '../data/api';
-import { useGame } from '../data/store';
+import { useSearchParams } from 'react-router-dom';
+import { ATTRIBUTE_IDS, ATTRIBUTE_NAMES, GAME_CONFIG, addDays, type BossData, type Entity, type GameState, type GoalData, type MainQuestData, type MissionData, type NpcData, type TodoData, type ViceData } from '@igv/core';
+import { api, type GmParseResult, type GmProposal } from '../data/api';
+import { addEvent, useGame } from '../data/store';
+import { completeMission, completeQuick, writeLesson } from '../lib/actions';
 import { fmtMoney } from '../lib/time';
-import { PageHeader } from '../ui/kit';
+import { PageHeader, Tabs, toast } from '../ui/kit';
 import { Icon } from '../ui/icons';
 
 type Msg = { role: 'user' | 'assistant'; content: string };
@@ -43,6 +45,14 @@ function buildContext(state: GameState, list: <D>(m: string, k?: string) => Enti
     lines.push('\nÚltimas entradas del diario:');
     for (const j of journal) lines.push(`- ${j.weekStart}: pasó "${j.happened}"; aprendí "${j.learned}"; sigue "${j.next}"`);
   }
+  lines.push(`\nOro: ${state.gold.balance} (para premios reales de la tienda).`);
+  if (state.bounty.today) lines.push(`Misión sorpresa de hoy: ${state.bounty.today.title} (${state.bounty.today.completed ? 'cumplida' : 'pendiente'}).`);
+  const goals = list<GoalData>('goals', 'goal').filter((g) => !state.goals[g.id]?.completedOn);
+  if (goals.length) lines.push(`Metas: ${goals.map((g) => `${g.data.title} ${state.goals[g.id]?.current ?? 0}/${g.data.target} ${g.data.unit}`).join('; ')}.`);
+  const todos = list<TodoData>('planner', 'todo').filter((t) => !state.missions.completions[t.id] && t.data.date <= addDays(state.today, 7));
+  if (todos.length) lines.push(`Agenda: ${todos.map((t) => `${t.data.date} ${t.data.title}`).join('; ')}.`);
+  const vices = list<ViceData>('habits', 'vice');
+  if (vices.length) lines.push(`Enemigos (días sin caer): ${vices.map((v) => `${v.data.name} ${state.vices[v.id]?.current ?? 0}`).join('; ')}.`);
   const recent = [...state.xp.ledger].reverse().slice(0, 12);
   if (recent.length) lines.push(`\nXP reciente: ${recent.map((e) => `${e.date} ${e.label} +${e.amount}`).join('; ')}.`);
   return lines.join('\n');
@@ -51,17 +61,191 @@ function buildContext(state: GameState, list: <D>(m: string, k?: string) => Enti
 const SUGGESTIONS = ['Propónme 3 misiones para hoy', '¿Qué jefe estoy más cerca de vencer y cómo lo remato?', 'Plan para esta semana según mi misión en foco', '¿Qué atributo estoy descuidando?'];
 
 export default function GameMaster() {
-  const { state, list } = useGame();
+  const [params, setParams] = useSearchParams();
+  const tab = params.get('modo') === 'registrar' ? 'registrar' : 'chat';
   const [enabled, setEnabled] = useState<boolean | null>(null);
+  useEffect(() => {
+    api.gmStatus().then((s) => setEnabled(s.enabled)).catch(() => setEnabled(false));
+  }, []);
+  return (
+    <>
+      <PageHeader title="Game Master" eyebrow="IA · opcional" />
+      {enabled === false && (
+        <div className="card">
+          <h2>Activa el Game Master</h2>
+          <p className="small muted">
+            Usa la API de Claude con tu propia clave. En el panel de Cloudflare: Workers &amp; Pages → igv-experience → Settings → Variables and Secrets → agrega el secreto <code>ANTHROPIC_API_KEY</code>. Los pasos completos están en el README.
+          </p>
+        </div>
+      )}
+      {enabled && (
+        <>
+          <Tabs
+            value={tab}
+            onChange={(t) => setParams(t === 'registrar' ? { modo: 'registrar' } : {}, { replace: true })}
+            options={[
+              { value: 'chat', label: 'Conversar' },
+              { value: 'registrar', label: 'Registrar mi día' },
+            ]}
+          />
+          {tab === 'chat' ? <Chat /> : <Registrar />}
+        </>
+      )}
+    </>
+  );
+}
+
+/** Cuéntale tu día en texto libre: el GM propone registros y tú confirmas con un toque. */
+function Registrar() {
+  const { state, list } = useGame();
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [res, setRes] = useState<GmParseResult | null>(null);
+  const [sel, setSel] = useState<Set<number>>(new Set());
+  const missions = list<MissionData>('missions').filter((m) => ['daily', 'side', 'event', 'chapter'].includes(m.kind) && (m.kind === 'daily' || !state.missions.completions[m.id]));
+  const npcs = list<NpcData>('npcs', 'npc');
+  const goals = list<GoalData>('goals', 'goal').filter((g) => !state.goals[g.id]?.completedOn);
+  const catalog = () =>
+    [
+      'Misiones (id | título | tamaño | atributo):',
+      ...missions.map((m) => `${m.id} | ${m.data.title} | ${m.data.size} | ${m.data.attribute}`),
+      '',
+      'NPCs (id | nombre):',
+      ...npcs.map((n) => `${n.id} | ${n.data.name}`),
+      '',
+      'Metas (id | meta | unidad):',
+      ...goals.map((g) => `${g.id} | ${g.data.title} | ${g.data.unit}`),
+    ].join('\n');
+  const parse = async () => {
+    if (!text.trim() || busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const r = await api.gmParse({ text: text.trim(), today: state.today, catalog: catalog() });
+      setRes(r);
+      setSel(new Set(r.proposals.map((_, i) => i)));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const label = (p: GmProposal): { title: string; detail: string; ok: boolean } => {
+    const mission = p.matchId ? missions.find((m) => m.id === p.matchId) : undefined;
+    switch (p.kind) {
+      case 'mission': {
+        const size = mission?.data.size ?? p.size ?? 'chica';
+        const attr = mission?.data.attribute ?? p.attribute ?? 'disciplina';
+        return { title: mission?.data.title ?? p.title ?? 'Misión', detail: `Misión ${size} · ${ATTRIBUTE_NAMES[attr]} · +${GAME_CONFIG.missionXp[size]} XP`, ok: !!(mission || p.title) };
+      }
+      case 'income':
+      case 'expense':
+        return { title: `${p.kind === 'income' ? 'Ingreso' : 'Gasto'} ${fmtMoney(p.amount ?? 0, state.settings.currency)}`, detail: [p.concept, p.category].filter(Boolean).join(' · '), ok: (p.amount ?? 0) > 0 };
+      case 'npc': {
+        const n = npcs.find((x) => x.id === p.matchId);
+        return { title: `Hablé con ${n?.data.name ?? '?'}`, detail: 'Interacción con NPC', ok: !!n };
+      }
+      case 'lesson':
+        return { title: 'Lección', detail: `${p.text ?? ''} · +${GAME_CONFIG.rewards.lesson} XP`, ok: (p.text ?? '').trim().length >= 3 };
+      case 'body':
+        return { title: 'Cuerpo', detail: [p.weightKg ? `${p.weightKg} kg` : '', p.workout ?? ''].filter(Boolean).join(' · '), ok: !!(p.weightKg || p.workout) };
+      case 'goal': {
+        const g = goals.find((x) => x.id === p.matchId);
+        return { title: `Meta: ${g?.data.title ?? '?'}`, detail: `+${p.amount ?? 0} ${g?.data.unit ?? ''}`, ok: !!g && (p.amount ?? 0) > 0 };
+      }
+      case 'rest':
+        return { title: 'Día de descanso', detail: 'No rompe la racha', ok: true };
+    }
+  };
+  const apply = () => {
+    if (!res) return;
+    let n = 0;
+    res.proposals.forEach((p, i) => {
+      if (!sel.has(i) || !label(p).ok) return;
+      const date = addDays(state.today, -Math.min(6, Math.max(0, p.daysAgo || 0)));
+      const opts = { localDate: date };
+      const mission = p.matchId ? missions.find((m) => m.id === p.matchId) : undefined;
+      if (p.kind === 'mission') {
+        if (mission) completeMission(mission, date);
+        else completeQuick(p.title!, p.size ?? 'chica', p.attribute ?? 'disciplina', date);
+      } else if (p.kind === 'income') addEvent('income.recorded', { amount: p.amount!, concept: p.concept ?? '', category: p.category ?? undefined }, opts);
+      else if (p.kind === 'expense') addEvent('expense.recorded', { amount: p.amount!, concept: p.concept ?? '', category: p.category ?? undefined }, opts);
+      else if (p.kind === 'npc') addEvent('npc.interaction', { npcId: p.matchId! }, opts);
+      else if (p.kind === 'lesson') writeLesson(p.text!.trim(), null, date);
+      else if (p.kind === 'body') addEvent('body.logged', { weightKg: p.weightKg ?? undefined, workout: p.workout ?? undefined }, opts);
+      else if (p.kind === 'goal') addEvent('goal.progress', { goalId: p.matchId!, amount: p.amount! }, opts);
+      else if (p.kind === 'rest') addEvent('rest_day.marked', {}, opts);
+      n++;
+    });
+    toast(`${n} registro(s) guardado(s)`);
+    setRes(null);
+    setText('');
+  };
+  return (
+    <>
+      <div className="card">
+        <p className="small muted" style={{ marginTop: 0 }}>
+          Escríbelo como se lo contarías a alguien: “Hoy fui al gym, cerré una venta de $5,000 con Grupo Norte y hablé con mi mamá”. Te propongo los registros y tú decides cuáles guardar.
+        </p>
+        <textarea className="input" rows={4} value={text} onChange={(e) => setText(e.target.value)} placeholder="¿Qué hiciste hoy?" />
+        <button className="btn violet block" style={{ marginTop: 8 }} disabled={busy || !text.trim()} onClick={parse}>
+          <Icon name="sparkles" /> {busy ? 'Leyendo…' : 'Proponer registros'}
+        </button>
+        {err && <p className="small red">{err}</p>}
+      </div>
+      {res && (
+        <div className="card">
+          <div className="bubble gm" style={{ maxWidth: '100%', marginBottom: 10 }}>
+            {res.reply}
+          </div>
+          {res.proposals.length === 0 && <div className="small muted">No encontré nada que registrar.</div>}
+          {res.proposals.map((p, i) => {
+            const l = label(p);
+            const on = sel.has(i) && l.ok;
+            return (
+              <label key={i} className="item" style={{ cursor: 'pointer', opacity: l.ok ? 1 : 0.5 }}>
+                <input
+                  type="checkbox"
+                  checked={on}
+                  disabled={!l.ok}
+                  onChange={() => setSel((s) => {
+                    const n = new Set(s);
+                    if (n.has(i)) n.delete(i);
+                    else n.add(i);
+                    return n;
+                  })}
+                  style={{ width: 20, height: 20, accentColor: 'var(--violet)' }}
+                />
+                <div className="grow">
+                  <div className="item-title">{l.title}</div>
+                  <div className="tiny muted">
+                    {l.detail}
+                    {p.daysAgo ? ` · ${p.daysAgo === 1 ? 'ayer' : `hace ${p.daysAgo} días`}` : ''}
+                  </div>
+                </div>
+              </label>
+            );
+          })}
+          {res.proposals.length > 0 && (
+            <button className="btn primary block" style={{ marginTop: 10 }} disabled={![...sel].some((i) => res.proposals[i] && label(res.proposals[i]).ok)} onClick={apply}>
+              Registrar seleccionados
+            </button>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
+function Chat() {
+  const { state, list } = useGame();
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const end = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    api.gmStatus().then((s) => setEnabled(s.enabled)).catch(() => setEnabled(false));
-  }, []);
   useEffect(() => {
     end.current?.scrollIntoView({ behavior: 'smooth' });
   }, [msgs, busy]);
@@ -85,17 +269,6 @@ export default function GameMaster() {
 
   return (
     <>
-      <PageHeader title="Game Master" eyebrow="IA · opcional" />
-      {enabled === false && (
-        <div className="card">
-          <h2>Activa el Game Master</h2>
-          <p className="small muted">
-            Usa la API de Claude con tu propia clave. En el panel de Cloudflare: Workers &amp; Pages → igv-experience → Settings → Variables and Secrets → agrega el secreto <code>ANTHROPIC_API_KEY</code>. Los pasos completos están en el README.
-          </p>
-        </div>
-      )}
-      {enabled && (
-        <>
           <div className="card">
             {msgs.length === 0 && (
               <>
@@ -134,8 +307,6 @@ export default function GameMaster() {
               <Icon name="sparkles" />
             </button>
           </form>
-        </>
-      )}
     </>
   );
 }

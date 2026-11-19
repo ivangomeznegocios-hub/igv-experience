@@ -7,6 +7,8 @@ import type { AppEnv } from './env';
 import { requireAccess } from './auth';
 import { changesSince, db, ensureSeeded, getEntity, rowToEntity, rowToEvent, runChunked } from './repo';
 import { gmRoute } from './gm';
+import { pushRoute, runScheduledPush } from './push';
+import type { Env } from './env';
 
 const app = new Hono<AppEnv>().basePath('/api');
 
@@ -192,7 +194,15 @@ app.post('/backup/import', async (c) => {
 });
 
 app.route('/gm', gmRoute);
+app.route('/push', pushRoute);
 
 app.notFound((c) => c.json({ error: 'No encontrado' }, 404));
 
-export default app;
+/** El Worker: `fetch` sirve la API y `scheduled` (cron) envía los recordatorios push que ya tocan. */
+export default {
+  fetch: app.fetch,
+  request: app.request,
+  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(runScheduledPush(env).then(() => undefined));
+  },
+};

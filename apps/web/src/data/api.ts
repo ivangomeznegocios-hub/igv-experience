@@ -1,6 +1,33 @@
 import type { Entity, GameEvent } from '@igv/core';
 
 export class AuthError extends Error {}
+
+export interface PushPlanItem {
+  id: string;
+  at: string;
+  title: string;
+  body: string;
+  url?: string;
+}
+
+export interface GmProposal {
+  kind: 'mission' | 'income' | 'expense' | 'npc' | 'lesson' | 'body' | 'goal' | 'rest';
+  title: string | null;
+  matchId: string | null;
+  size: 'chica' | 'media' | 'grande' | 'epica' | null;
+  attribute: 'fuerza' | 'inteligencia' | 'carisma' | 'finanzas' | 'disciplina' | 'relaciones' | 'creatividad' | null;
+  amount: number | null;
+  concept: string | null;
+  category: string | null;
+  text: string | null;
+  weightKg: number | null;
+  workout: string | null;
+  daysAgo: number;
+}
+export interface GmParseResult {
+  reply: string;
+  proposals: GmProposal[];
+}
 export class ApiError extends Error {
   constructor(message: string, public status: number) {
     super(message);
@@ -41,6 +68,13 @@ export const api = {
   importBackup: (data: unknown, mode: 'replace' | 'merge') => req<{ ok: true; events: number; entities: number }>(`/backup/import?mode=${mode}`, { method: 'POST', body: JSON.stringify(data) }),
   me: () => req<{ email: string }>('/me'),
   gmStatus: () => req<{ enabled: boolean; model?: string }>('/gm/status'),
+  gmParse: (body: { text: string; today: string; catalog: string }) => req<GmParseResult>('/gm/parse', { method: 'POST', body: JSON.stringify(body) }),
+  pushKey: () => req<{ publicKey: string }>('/push/key'),
+  pushStatus: () => req<{ devices: number; planned: number }>('/push/status'),
+  pushSubscribe: (sub: unknown) => req<{ ok: true; devices: number }>('/push/subscribe', { method: 'POST', body: JSON.stringify(sub) }),
+  pushUnsubscribe: (endpoint: string) => req<{ ok: true }>('/push/unsubscribe', { method: 'POST', body: JSON.stringify({ endpoint }) }),
+  pushPlan: (items: PushPlanItem[]) => req<{ ok: true }>('/push/plan', { method: 'PUT', body: JSON.stringify({ items }) }),
+  pushTest: () => req<{ ok: true; sent: number }>('/push/test', { method: 'POST' }),
   gmAsk: (body: { question: string; context: string; history: { role: 'user' | 'assistant'; content: string }[] }) =>
     req<{ answer: string }>('/gm/ask', { method: 'POST', body: JSON.stringify(body) }),
 };

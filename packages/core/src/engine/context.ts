@@ -9,7 +9,10 @@ export type XpSource =
   | 'skill'
   | 'boss_phase'
   | 'recurring_boss'
-  | 'discovery';
+  | 'discovery'
+  | 'bounty'
+  | 'goal'
+  | 'library';
 
 /** Una línea del libro de XP. Siempre amount ≥ 0 (la XP nunca se resta). */
 export interface XpEntry {

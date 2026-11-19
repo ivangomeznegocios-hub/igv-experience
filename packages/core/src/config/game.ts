@@ -105,6 +105,17 @@ export const GAME_CONFIG = {
     contactMissionSize: 'chica',
   },
 
+  /** Oro: moneda del juego, separada de la XP. Se gana al ganar XP y se gasta en la tienda de premios. */
+  gold: {
+    /** 1 de oro por cada `xpPerGold` XP ganada (por cada entrada de XP, redondeando hacia abajo). */
+    xpPerGold: 10,
+  },
+
+  /** Misión sorpresa del día: bono sobre la XP normal de la misión si la completas ese mismo día. */
+  bounty: {
+    bonusPercent: 50,
+  },
+
   /** Meta mensual inicial del Dragón Financiero (MXN). Editable en la app. */
   defaultMonthlyGoal: 100_000,
 } as const;

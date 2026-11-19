@@ -8,7 +8,7 @@ function rng(seed: number) {
 }
 
 function randomEvent(r: () => number, date: string) {
-  const k = Math.floor(r() * 9);
+  const k = Math.floor(r() * 16);
   switch (k) {
     case 0: return done(date, ['daily-leer', 'daily-entrenar', 'daily-hijo'][Math.floor(r() * 3)], 'chica', 'fuerza');
     case 1: return ev('rest_day.marked', date);
@@ -18,6 +18,13 @@ function randomEvent(r: () => number, date: string) {
     case 5: return ev('boss.recurring_defeated', date, { bossId: 'rb-perfeccionista', note: 'x' });
     case 6: return ev('checkin.morning', date, { sleepHours: Math.floor(r() * 10) });
     case 7: return done(date, `side-${Math.floor(r() * 5)}`, 'grande', 'finanzas', 'side');
+    case 9: return done(date, `quick-${Math.floor(r() * 3)}`, 'media', 'carisma', 'quick');
+    case 10: return ev('bounty.drawn', date, { missionId: 'daily-leer', title: 'Leer', size: 'chica', attribute: 'inteligencia' });
+    case 11: return ev('reward.redeemed', date, { rewardId: 'r1', name: 'Cena', cost: Math.floor(r() * 50) + 1 });
+    case 12: return ev('library.finished', date, { bookId: `b${Math.floor(r() * 3)}`, title: 'Libro', size: 'media', attribute: 'inteligencia' });
+    case 13: return ev('vice.relapse', date, { viceId: 'v1' });
+    case 14: return ev('day.closed', date, { note: 'ok' });
+    case 15: return ev('body.logged', date, { weightKg: 80 });
     default: return ev('boss.phase_completed', date, { bossId: 'boss-torre', phaseIndex: Math.floor(r() * 3) });
   }
 }
