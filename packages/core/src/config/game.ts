@@ -145,6 +145,20 @@ export const GAME_CONFIG = {
   // [[mapa]]
 
   // [[habilidades]]
+  /**
+   * Tiempo ("¿A qué te dedicas?"), habilidades y biblioteca. El tiempo NO da XP (regla de oro 3) y el avance
+   * o las notas de un libro tampoco: solo terminarlo (XP de su tamaño, una vez) y los rangos de habilidad.
+   */
+  timeLog: {
+    /** Máximo de minutos por registro (un día completo). */
+    maxMinutesPerEntry: 1440,
+    /** Cronómetro: al detenerlo con más de estas horas se pide revisar (¿se te olvidó detenerlo?). */
+    timerReviewHours: 14,
+    /** Días que se promedian en "Tu tiempo". */
+    averageDays: 28,
+    /** "En qué se te va el tiempo": avisar si los traslados pasan de este % de lo registrado en la semana. */
+    commuteWarnPercent: 12,
+  },
 
   // [[aprendizaje]]
   /** Aprendizaje (idiomas y temas): tarjetas con repaso espaciado (Leitner) y tests. */

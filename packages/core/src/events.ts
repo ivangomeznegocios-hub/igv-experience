@@ -136,6 +136,33 @@ export const EVENT_SCHEMAS = {
   // [[mapa]]
 
   // [[habilidades]]
+  /**
+   * Tiempo dedicado a algo ("8 h 20 min de trabajo"). Puro registro: NO da XP (regla de oro 3: XP por
+   * acciones y resultados, no por horas). `area` = una de TIME_AREAS (types.ts; la oficina es `trabajo`).
+   * `skillId` liga el tiempo a una habilidad; `start` es la hora local de inicio (HH:MM) para la línea del día.
+   */
+  'time.logged': z.object({
+    minutes: z.number().int().min(1).max(1440),
+    area: z.enum(['trabajo', 'estudio', 'lectura', 'proyecto', 'ejercicio', 'familia', 'pareja', 'amigos', 'casa', 'traslado', 'ocio', 'otro']),
+    skillId: id.nullish(),
+    note: z.string().max(1000).optional(),
+    start: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Hora inválida (HH:MM)').optional(),
+  }),
+  /** Avance de un libro o curso (página o %). La última versión gana. No da XP. */
+  'library.progress': z
+    .object({
+      bookId: id,
+      page: z.number().int().min(0).max(100000).optional(),
+      percent: z.number().min(0).max(100).optional(),
+    })
+    .refine((p) => p.page !== undefined || p.percent !== undefined, 'Indica la página o el porcentaje'),
+  /** "Lo que aprendí": una idea de un libro o curso. `title` = título del libro en ese momento. No da XP. */
+  'library.note': z.object({
+    bookId: id,
+    title: z.string().max(300).optional(),
+    text: z.string().trim().min(2).max(4000),
+    page: z.number().int().min(0).max(100000).optional(),
+  }),
 
   // [[aprendizaje]]
   /** Repaso de una tarjeta (Leitner): bien, dudé o mal. No da XP por sí solo. */
@@ -233,6 +260,9 @@ export const EVENT_LABELS: Record<EventType, string> = {
   // [[mapa]]
 
   // [[habilidades]]
+  'time.logged': 'Tiempo registrado',
+  'library.progress': 'Avance de lectura',
+  'library.note': 'Nota de libro',
 
   // [[aprendizaje]]
   'learning.reviewed': 'Repaso de tarjeta',

@@ -74,6 +74,9 @@ export const EVENT_TEXT: Record<string, string> = {
   // [[mapa]]
 
   // [[habilidades]]
+  'time.logged': 'Tiempo',
+  'library.progress': 'Avance de lectura',
+  'library.note': 'Lo que aprendí',
 
   // [[aprendizaje]]
   'learning.reviewed': 'Repaso de tarjeta',
@@ -184,6 +187,18 @@ export function describeEvent(e: GameEvent, byId: Map<string, Entity>, currency 
     // [[mapa]]
 
     // [[habilidades]]
+    case 'time.logged': {
+      const m = Math.round(Number(p.minutes) || 0);
+      const dur = m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}` : `${m} min`;
+      detail = [`${dur} de ${p.area}`, p.skillId ? `habilidad ${name(p.skillId)}` : '', p.start ? `desde ${p.start}` : '', p.note ? String(p.note).slice(0, 100) : ''].filter(Boolean).join(' · ');
+      break;
+    }
+    case 'library.progress':
+      detail = `${name(p.bookId)} · ${typeof p.percent === 'number' ? `${p.percent}%` : `página ${p.page}`}`;
+      break;
+    case 'library.note':
+      detail = `${byId.has(String(p.bookId)) ? name(p.bookId) : (p.title ?? p.bookId)} · ${String(p.text ?? '').slice(0, 140)}`;
+      break;
 
     // [[aprendizaje]]
     case 'learning.reviewed': {

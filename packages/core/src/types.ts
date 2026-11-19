@@ -307,6 +307,12 @@ export interface SkillData {
   attribute: AttributeId;
   /** Requisito de cada rango: [Aprendiz, Experto, Maestro]. */
   ranks: [string, string, string];
+  /** Categoría en "Lo que sabes hacer". Sin ella se deduce con `skillCategory()` (habilidades viejas). */
+  category?: SkillCategory;
+  /** "De esto vivo": forma parte de a qué te dedicas. */
+  livelihood?: boolean;
+  /** Lo que sabes de esto: métodos, recursos, cómo lo aprendiste (texto libre). */
+  notes?: string;
 }
 
 export const SKILL_RANK_NAMES = ['Aprendiz', 'Experto', 'Maestro'] as const;
@@ -429,6 +435,12 @@ export interface BookData {
   attribute: AttributeId;
   size: MissionSize;
   notes?: string;
+  /** Páginas (o lecciones) en total: con ellas el avance por página se vuelve porcentaje. */
+  pages?: number | null;
+  /** Habilidad a la que aporta (aparece en su ficha). */
+  skillId?: string | null;
+  /** Calificación de 1 a 5 (normalmente al terminarlo). */
+  rating?: number | null;
 }
 
 /** Hito de vida (mudanza, empresa, viaje…) que se marca en Mi vida en semanas. */
@@ -496,6 +508,79 @@ export function isValidEntityKind(module: string, kind: string): boolean {
 // [[mapa]]
 
 // [[habilidades]]
+// ---- Habilidades, tiempo y biblioteca (sistema "habilidades") ----
+
+/** Categorías de "Lo que sabes hacer". */
+export const SKILL_CATEGORIES = ['negocio', 'oficio', 'idioma', 'tecnologia', 'deporte', 'arte', 'hogar', 'social', 'otro'] as const;
+export type SkillCategory = (typeof SKILL_CATEGORIES)[number];
+export const SKILL_CATEGORY_NAMES: Record<SkillCategory, string> = {
+  negocio: 'Negocio y ventas',
+  oficio: 'Oficio y profesión',
+  idioma: 'Idiomas',
+  tecnologia: 'Tecnología',
+  deporte: 'Deporte',
+  arte: 'Arte y música',
+  hogar: 'Hogar',
+  social: 'Social',
+  otro: 'Otro',
+};
+/** Atributo sugerido al crear una habilidad de una categoría (se puede cambiar). */
+export const SKILL_CATEGORY_ATTRIBUTE: Record<SkillCategory, AttributeId> = {
+  negocio: 'finanzas',
+  oficio: 'disciplina',
+  idioma: 'inteligencia',
+  tecnologia: 'inteligencia',
+  deporte: 'fuerza',
+  arte: 'creatividad',
+  hogar: 'disciplina',
+  social: 'carisma',
+  otro: 'inteligencia',
+};
+/** Requisitos de rango por defecto para una habilidad agregada en una línea ("Sé hacer…"). */
+export const SKILL_DEFAULT_RANKS: [string, string, string] = [
+  'Ya lo hice de verdad, con un resultado concreto',
+  'Lo hago bien y sin ayuda, con resultados repetidos',
+  'Me pagan por hacerlo o se lo enseño a otros',
+];
+
+/**
+ * Áreas del tiempo ("¿A qué te dedicas?"). La oficina cuenta como `trabajo` (el lugar va en la nota).
+ * Si agregas una, agrégala también al schema de `time.logged` en events.ts (hay una prueba que lo verifica).
+ */
+export const TIME_AREAS = ['trabajo', 'estudio', 'lectura', 'proyecto', 'ejercicio', 'familia', 'pareja', 'amigos', 'casa', 'traslado', 'ocio', 'otro'] as const;
+export type TimeArea = (typeof TIME_AREAS)[number];
+export const TIME_AREA_NAMES: Record<TimeArea, string> = {
+  trabajo: 'Trabajo',
+  estudio: 'Estudio',
+  lectura: 'Lectura',
+  proyecto: 'Proyecto propio',
+  ejercicio: 'Ejercicio',
+  familia: 'Familia',
+  pareja: 'Pareja',
+  amigos: 'Amigos',
+  casa: 'Casa',
+  traslado: 'Traslados',
+  ocio: 'Ocio',
+  otro: 'Otro',
+};
+/** Grupos para "en qué se te va el tiempo". */
+export const TIME_GROUPS = ['construir', 'cuerpo', 'gente', 'resto'] as const;
+export type TimeGroup = (typeof TIME_GROUPS)[number];
+export const TIME_GROUP_NAMES: Record<TimeGroup, string> = { construir: 'Construir', cuerpo: 'Cuerpo', gente: 'Tu gente', resto: 'Lo demás' };
+export const TIME_AREA_GROUP: Record<TimeArea, TimeGroup> = {
+  trabajo: 'construir',
+  estudio: 'construir',
+  lectura: 'construir',
+  proyecto: 'construir',
+  ejercicio: 'cuerpo',
+  familia: 'gente',
+  pareja: 'gente',
+  amigos: 'gente',
+  casa: 'resto',
+  traslado: 'resto',
+  ocio: 'resto',
+  otro: 'resto',
+};
 
 // [[aprendizaje]]
 

@@ -49,6 +49,9 @@ export * from './assistant/toolkit';
 // [[mapa]]
 
 // [[habilidades]]
+export * from './engine/habilidades';
+export type { TimeState } from './engine/modules/time';
+export type { LibraryProgress, LibraryNote } from './engine/modules/library';
 
 // [[aprendizaje]]
 export * from './engine/modules/learning';
