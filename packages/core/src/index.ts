@@ -53,6 +53,8 @@ export * from './assistant/toolkit';
 // [[aprendizaje]]
 
 // [[salud]]
+export * from './engine/health';
+export type { HealthState, CheckupState, HealthDueItem, CheckupDone, HealthMetricEntry } from './engine/modules/health';
 
 // [[habitos]]
 

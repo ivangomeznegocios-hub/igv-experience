@@ -140,6 +140,26 @@ export const EVENT_SCHEMAS = {
   // [[aprendizaje]]
 
   // [[salud]]
+  /** Salud: hiciste un chequeo preventivo. XP de misión de su tamaño, una vez por chequeo por día. Guarda nombre y tamaño del momento. */
+  'health.checkup_done': z.object({
+    checkupId: id,
+    name: z.string().trim().min(1).max(200).optional(),
+    size: size.optional(),
+    note: z.string().trim().max(2000).optional(),
+    result: z.string().trim().max(2000).optional(),
+  }),
+  /** Salud: una medición (presión, glucosa, colesterol, pulso en reposo u otra). Solo registro: no da XP. */
+  'health.metric': z
+    .object({
+      kind: z.enum(['presion', 'glucosa', 'colesterol', 'frecuencia_reposo', 'otro']),
+      value: z.number().positive().max(100000),
+      value2: z.number().positive().max(100000).optional(),
+      unit: z.string().trim().max(20).optional(),
+      label: z.string().trim().max(80).optional(),
+      note: z.string().trim().max(2000).optional(),
+    })
+    .refine((p) => p.kind !== 'presion' || (p.value2 !== undefined && p.value2 < p.value), 'La presión lleva sistólica y diastólica (la diastólica es menor)')
+    .refine((p) => p.kind !== 'otro' || !!p.label, 'Ponle nombre a la medición'),
 
   // [[habitos]]
 
@@ -193,6 +213,8 @@ export const EVENT_LABELS: Record<EventType, string> = {
   // [[aprendizaje]]
 
   // [[salud]]
+  'health.checkup_done': 'Chequeo de salud hecho',
+  'health.metric': 'Medición de salud',
 
   // [[habitos]]
 

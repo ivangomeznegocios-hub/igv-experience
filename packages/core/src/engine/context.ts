@@ -27,6 +27,7 @@ export type XpSource =
   // [[aprendizaje]]
 
   // [[salud]]
+  | 'health'
 
   // [[habitos]]
   ;

@@ -153,6 +153,36 @@ export interface AssistantSnapshot {
   // [[aprendizaje]]
 
   // [[salud]]
+  /** Salud: chequeos preventivos (estado y siguiente fecha), última medición de cada serie y ficha médica. */
+  health: {
+    score: number | null;
+    counts: { active: number; alDia: number; pronto: number; atrasado: number; sinRegistro: number };
+    doneThisYear: number;
+    xpThisYear: number;
+    checkups: {
+      id: string;
+      name: string;
+      category: import('../types').CheckupCategory;
+      everyMonths: number;
+      active: boolean;
+      status: 'al_dia' | 'pronto' | 'atrasado' | 'sin_registro';
+      lastDone: string | null;
+      nextDue: string | null;
+      daysLeft: number | null;
+      xp: number;
+      doneToday: boolean;
+      suggestionId: string | null;
+    }[];
+    metrics: {
+      key: string;
+      kind: import('../types').HealthMetricKind;
+      label: string;
+      count: number;
+      last: { date: string; text: string; levelText: string | null };
+      prev: { date: string; text: string } | null;
+    }[];
+    card: import('../types').HealthProfileData | null;
+  };
 
   // [[habitos]]
 
@@ -417,6 +447,53 @@ export function buildSnapshot(
     // [[aprendizaje]]
 
     // [[salud]]
+    health: (() => {
+      const h = state.health;
+      const fmt = (m: { value: number; value2?: number; unit: string }) => {
+        const n = (x: number) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
+        return `${m.value2 !== undefined ? `${n(m.value)}/${n(m.value2)}` : n(m.value)}${m.unit ? ` ${m.unit}` : ''}`;
+      };
+      return {
+        score: h.score,
+        counts: h.counts,
+        doneThisYear: h.doneThisYear,
+        xpThisYear: h.xpThisYear,
+        checkups: list<import('../types').CheckupData>('health', 'checkup')
+          .filter((c) => h.checkups[c.id])
+          .map((c) => {
+            const st = h.checkups[c.id];
+            return {
+              id: c.id,
+              name: st.name,
+              category: st.category,
+              everyMonths: st.everyMonths,
+              active: st.active,
+              status: st.status,
+              lastDone: st.lastDone,
+              nextDue: st.nextDue,
+              daysLeft: st.daysLeft,
+              xp: st.xp,
+              doneToday: st.doneToday,
+              suggestionId: c.data.suggestionId ?? null,
+            };
+          }),
+        metrics: Object.values(h.metrics)
+          .filter((series) => series.length > 0)
+          .map((series) => {
+            const last = series[series.length - 1];
+            const prev = series.length > 1 ? series[series.length - 2] : null;
+            return {
+              key: last.key,
+              kind: last.kind,
+              label: last.label,
+              count: series.length,
+              last: { date: last.date, text: fmt(last), levelText: last.levelText },
+              prev: prev ? { date: prev.date, text: fmt(prev) } : null,
+            };
+          }),
+        card: h.card,
+      };
+    })(),
 
     // [[habitos]]
 

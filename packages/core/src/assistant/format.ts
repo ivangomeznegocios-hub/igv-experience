@@ -78,6 +78,8 @@ export const EVENT_TEXT: Record<string, string> = {
   // [[aprendizaje]]
 
   // [[salud]]
+  'health.checkup_done': 'Chequeo de salud',
+  'health.metric': 'Medición de salud',
 
   // [[habitos]]
 
@@ -184,6 +186,15 @@ export function describeEvent(e: GameEvent, byId: Map<string, Entity>, currency 
     // [[aprendizaje]]
 
     // [[salud]]
+    case 'health.checkup_done':
+      detail = [p.name ?? name(p.checkupId), p.result ? String(p.result).slice(0, 100) : '', p.note ? String(p.note).slice(0, 100) : ''].filter(Boolean).join(' · ');
+      break;
+    case 'health.metric': {
+      const names: Record<string, [string, string]> = { presion: ['Presión', 'mmHg'], glucosa: ['Glucosa', 'mg/dL'], colesterol: ['Colesterol', 'mg/dL'], frecuencia_reposo: ['Pulso en reposo', 'lpm'] };
+      const [label, unit] = names[p.kind] ?? [p.label ?? 'Medición', p.unit ?? ''];
+      detail = `${label} ${p.kind === 'presion' && p.value2 !== undefined ? `${p.value}/${p.value2}` : p.value}${unit ? ` ${unit}` : ''}${p.note ? ` · ${String(p.note).slice(0, 100)}` : ''}`;
+      break;
+    }
 
     // [[habitos]]
 
