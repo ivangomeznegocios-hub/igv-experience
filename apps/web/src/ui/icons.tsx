@@ -65,6 +65,11 @@ const P: Record<string, string> = {
   // [[entreno]]
 
   // [[gente]]
+  call: 'M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z',
+  videocall: 'M3 7h12v10H3zM15 10.5l6-3.5v10l-6-3.5',
+  cake: 'M4 21h16M5 21v-7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v7M5 16c1.5 1 3 1 4.5 0s3-1 4.5 0 3 1 4.5 0M12 12V8M12 5.5c.8-.8 1-1.6 0-2.5-1 .9-.8 1.7 0 2.5z',
+  warming: 'M3 17l6-6 4 4 8-8M15 7h6v6',
+  cooling: 'M3 7l6 6 4-4 8 8M15 17h6v-6',
 
   // [[mapa]]
 

@@ -45,6 +45,8 @@ export * from './assistant/toolkit';
 // [[entreno]]
 
 // [[gente]]
+export * from './engine/modules/gente';
+export * from './assistant/tools-gente';
 
 // [[mapa]]
 

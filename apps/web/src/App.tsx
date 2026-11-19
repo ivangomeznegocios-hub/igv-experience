@@ -46,6 +46,8 @@ const ConectarIA = lazy(() => import('./screens/ConectarIA'));
 // [[entreno]]
 
 // [[gente]]
+const Persona = lazy(() => import('./screens/Persona'));
+import { PeopleWatcher } from './ui/people';
 
 // [[mapa]]
 
@@ -221,6 +223,7 @@ export default function App() {
                 {/* [[entreno]] */}
 
                 {/* [[gente]] */}
+                <Route path="/npcs/:id" element={<Persona />} />
 
                 {/* [[mapa]] */}
 
@@ -253,6 +256,7 @@ export default function App() {
       {/* [[entreno]] */}
 
       {/* [[gente]] */}
+      {store.ready && <PeopleWatcher />}
 
       {/* [[mapa]] */}
 

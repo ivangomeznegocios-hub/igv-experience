@@ -72,6 +72,7 @@ export type { EventQuery, AssistantStore, ActivityRefs, ToolResult, ToolGroup, A
 // [[entreno]]
 
 // [[gente]]
+import { GENTE_GUIDE, GENTE_TOOLS, guardarPersonaTool, registrarContactoTool, renderPeopleOverview } from './tools-gente';
 
 // [[mapa]]
 
@@ -145,7 +146,7 @@ export function renderOverview(s: AssistantSnapshot): string {
     for (const v of s.vices) L.push(`- ${v.name} [${v.id}]: ${v.current} ${v.current === 1 ? 'día' : 'días'} sin recaer (mejor ${v.best})`);
   }
   if (s.people.overdue.length)
-    L.push('', `Personas clave sin contacto (30+ días; para registrar que le escribió usa completar_mision con el id de la misión): ${s.people.overdue.map((p) => `${p.name} ${p.daysSince ?? '?'} días [misión ${p.id}]`).join('; ')}.`);
+    L.push('', `Personas clave a las que toca escribir (se enfriaron o llevan 30+ días sin contacto; para registrar que le escribió usa completar_mision con el id de la misión): ${s.people.overdue.map((p) => `${p.name} ${p.daysSince ?? '?'} días [misión ${p.id}]`).join('; ')}.`);
   if (s.pledges.length) L.push(`Compromisos abiertos: ${s.pledges.map((p) => `${p.title} (${p.stake} de oro, vence ${p.deadline}) [${p.id}]`).join('; ')}.`);
   if (s.library.reading.length) L.push(`Leyendo: ${s.library.reading.map((b) => `${b.title} [${b.id}]`).join('; ')}.`);
   if (s.lastJournal) L.push(`Último diario semanal (${s.lastJournal.weekStart}): pasó "${s.lastJournal.happened}"; aprendió "${s.lastJournal.learned}"; sigue "${s.lastJournal.next}".`);
@@ -155,6 +156,7 @@ export function renderOverview(s: AssistantSnapshot): string {
   // [[entreno]]
 
   // [[gente]]
+  L.push(...renderPeopleOverview(s));
 
   // [[mapa]]
 
@@ -488,6 +490,7 @@ const GUIDE_SYSTEMS: string[] = [
   // [[entreno]]
 
   // [[gente]]
+  GENTE_GUIDE,
 
   // [[mapa]]
 
@@ -690,21 +693,8 @@ const registrarLeccion = tool({
   },
 });
 
-const registrarContacto = tool({
-  name: 'registrar_contacto',
-  title: 'Registrar contacto con una persona',
-  group: 'registrar',
-  writes: true,
-  description: 'Registra que habló o convivió con una persona de "Mi gente" (reinicia su contador de días sin contacto). No da XP por sí solo; si era persona clave olvidada, mejor usa completar_mision con "npc-<id>".',
-  input: z.object({ persona_id: zId, nota: z.string().trim().max(2000).optional(), fecha: zFecha }),
-  async run({ persona_id, nota, fecha }, store) {
-    const date = pastDate(store, fecha);
-    const npc = find<NpcData>(await store.catalog(), persona_id, 'npcs', ['npc'], 'la persona');
-    const ev = makeEvent(store, 'npc.interaction', { npcId: npc.id, note: nota || undefined }, date);
-    await store.addEvents([ev]);
-    return ok(`Registré el contacto con ${npc.data.name} (${date === store.today ? 'hoy' : fmtDay(date)}). Registro [${ev.id}].`, `Contacto con ${npc.data.name}`, { events: [ev.id] });
-  },
-});
+/** Registrar contacto (una o varias personas, canal y lugar): vive en tools-gente.ts. */
+const registrarContacto = registrarContactoTool;
 
 const avanzarMeta = tool({
   name: 'avanzar_meta',
@@ -1284,40 +1274,8 @@ const guardarReto = tool({
   },
 });
 
-const guardarPersona = tool({
-  name: 'guardar_persona',
-  title: 'Agregar o editar persona',
-  group: 'organizar',
-  writes: true,
-  description: 'Agrega o edita una persona de "Mi gente". tipo: party (cercano: familia, pareja, amigos íntimos), aliado, mentor, cliente, rival. Persona clave = aviso si pasan 30 días sin contacto.',
-  input: z.object({
-    id: zEditId,
-    nombre: zText(120).optional(),
-    tipo: z.enum(NPC_TYPES).optional(),
-    clave: z.boolean().optional(),
-    relacion: z.number().int().min(1).max(5).optional().describe('Qué tan buena es la relación, 1 a 5.'),
-    notas: z.string().max(2000).optional(),
-  }),
-  async run(i, store) {
-    const catalog = await store.catalog();
-    const prev = existingOf(catalog, i.id, 'npcs', ['npc'], 'la persona') as Entity<NpcData> | null;
-    const p: Partial<NpcData> = prev?.data ?? {};
-    const name = i.nombre ?? p.name;
-    if (!name) throw new ToolError('Falta "nombre".');
-    const data: NpcData = {
-      ...p,
-      name,
-      npcType: i.tipo ?? p.npcType ?? 'aliado',
-      key: i.clave ?? p.key ?? false,
-      relation: i.relacion ?? p.relation ?? 3,
-      guildId: p.guildId ?? null,
-      notes: i.notas ?? p.notes ?? '',
-      lastContact: p.lastContact ?? (prev ? null : store.today),
-    };
-    const { saved, ref } = await upsert(store, prev, { id: prev?.id ?? newEntityId(store, 'npc'), module: 'npcs', kind: 'npc', data });
-    return ok(`${prev ? 'Actualizada' : 'Agregada'}: ${data.name}${data.key ? ' (persona clave)' : ''}. Id [${saved.id}].`, `${prev ? 'Editó' : 'Agregó'} a ${data.name}`, { entities: [ref] });
-  },
-});
+/** Ficha completa de una persona de Mi gente: vive en tools-gente.ts. */
+const guardarPersona = guardarPersonaTool;
 
 const guardarPremio = tool({
   name: 'guardar_premio',
@@ -1473,6 +1431,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
   // [[entreno]]
 
   // [[gente]]
+  ...GENTE_TOOLS,
 
   // [[mapa]]
 

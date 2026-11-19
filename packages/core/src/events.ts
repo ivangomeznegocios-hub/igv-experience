@@ -74,7 +74,15 @@ export const EVENT_SCHEMAS = {
   }),
 
   // --- Mundo ---
-  'npc.interaction': z.object({ npcId: id, note: z.string().max(2000).optional() }),
+  /** Contacto con una persona (uno por persona). Sin canal = sin especificar: cuenta como contacto, no como convivencia en persona. */
+  'npc.interaction': z.object({
+    npcId: id,
+    note: z.string().max(2000).optional(),
+    /** Igual que CONTACT_CHANNELS en types.ts. */
+    channel: z.enum(['persona', 'llamada', 'videollamada', 'mensaje']).optional(),
+    /** Dónde convivieron (lugar del mapa). Con lugar, cuenta como en persona. */
+    placeId: id.optional(),
+  }),
   'map.status_changed': z.object({ placeId: id, status: z.enum(PLACE_STATUSES), note: z.string().max(2000).optional() }),
 
   // --- Inmersión ---
