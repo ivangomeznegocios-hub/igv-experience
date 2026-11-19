@@ -4,6 +4,7 @@ import { energyFromSleep } from '../engine/energy';
 import { quickMissionId } from '../engine/reports';
 import { REPEATABLE_KINDS } from '../engine/modules/missions';
 import { challengeAttempts } from '../engine/modules/challenges';
+import { foldMapEvents } from '../engine/modules/map';
 import {
   ATTRIBUTE_IDS,
   ATTRIBUTE_NAMES,
@@ -389,12 +390,15 @@ const verCatalogo = tool({
         break;
       }
       case 'lugares': {
-        const changes = await store.events({ types: ['map.status_changed'], order: 'asc' });
-        const status = new Map<string, string>();
-        for (const e of changes) status.set(e.payload.placeId, e.payload.status);
+        // Estado con visitas y cambios manuales (mismo pliegue que el motor). Para más detalle: ver_mapa.
+        const changes = await store.events({ types: ['map.status_changed', 'place.visited'], order: 'asc' });
+        const fold = foldMapEvents(changes, GAME_CONFIG.mapa.habitualVisits);
         const names: Record<string, string> = { inexplorado: 'por conocer', descubierto: 'conocido', dominado: 'habitual' };
-        L.push('Mapa:');
-        for (const p of list<PlaceData>(catalog, 'map', 'place')) L.push(`- [${p.id}] ${p.data.name} (${p.data.placeType}): ${names[status.get(p.id) ?? 'inexplorado']}`);
+        L.push('Mapa (detalle de visitas con ver_mapa):');
+        for (const p of list<PlaceData>(catalog, 'map', 'place')) {
+          const st = fold.places[p.id];
+          L.push(`- [${p.id}] ${p.data.name} (${p.data.placeType}): ${names[st?.status ?? 'inexplorado']}${st?.visits ? ` · ${st.visits} ${st.visits === 1 ? 'visita' : 'visitas'}` : ''}`);
+        }
         break;
       }
     }
@@ -407,14 +411,21 @@ const HISTORY_CATEGORIES: Record<string, string[]> = {
   misiones: ['mission.completed'],
   dinero: ['income.recorded', 'expense.recorded', 'savings.moved'],
   lecciones: ['lesson.written'],
-  personas: ['npc.interaction'],
+  personas: ['npc.interaction', 'place.visited'],
   metas: ['goal.progress'],
-  cuerpo: ['body.logged', 'checkin.morning'],
+  cuerpo: ['body.logged', 'checkin.morning', 'workout.logged', 'health.metric'],
   descansos: ['rest_day.marked'],
   retos: ['challenge.started', 'challenge.checked', 'boss.phase_completed', 'boss.recurring_defeated', 'pledge.made', 'pledge.resolved'],
   cierres: ['day.closed', 'journal.weekly', 'plan.set'],
   habitos: ['vice.relapse'],
   premios: ['reward.redeemed'],
+  lugares: ['place.visited', 'map.status_changed'],
+  tiempo: ['time.logged'],
+  lectura: ['library.finished', 'library.progress', 'library.note'],
+  aprendizaje: ['learning.test_taken', 'learning.reviewed'],
+  salud: ['health.checkup_done', 'health.metric'],
+  entrenamiento: ['workout.logged'],
+  notas: ['note.captured'],
 };
 
 const verHistorial = tool({
@@ -1395,6 +1406,9 @@ const DELETABLE: Record<string, { kinds: string[]; guard?: { type: string; key: 
   shop: { kinds: ['reward'] },
   habits: { kinds: ['vice'] },
   library: { kinds: ['book'] },
+  map: { kinds: ['place'], guard: { type: 'place.visited', key: 'placeId', hint: 'Tiene visitas registradas: mejor desactívalo con guardar_lugar para conservar su historia.' } },
+  health: { kinds: ['checkup'], guard: { type: 'health.checkup_done', key: 'checkupId', hint: 'Ya tiene chequeos registrados: mejor pausarlo con guardar_chequeo (activo=false) para conservar su historia.' } },
+  learning: { kinds: ['item'], guard: { type: 'learning.reviewed', key: 'itemId', hint: 'Ya tiene repasos: borrarla cambiaría lo que sabes; mejor déjala.' } },
 };
 
 const borrarElemento = tool({
@@ -1403,7 +1417,7 @@ const borrarElemento = tool({
   group: 'organizar',
   writes: true,
   destructive: true,
-  description: 'Borra un elemento del catálogo (misión diaria/secundaria/evento, pendiente, meta o reto sin avances, persona, premio, hábito, libro). La XP ya ganada se conserva. Confirma con él antes de borrar.',
+  description: 'Borra un elemento del catálogo (misión diaria/secundaria/evento, pendiente, meta o reto sin avances, persona, premio, hábito, libro, lugar sin visitas, chequeo sin registros, frase sin repasos). La XP ya ganada se conserva. Confirma con él antes de borrar.',
   input: z.object({ id: zId }),
   async run({ id }, store) {
     const catalog = await store.catalog();

@@ -286,6 +286,27 @@ describe('deshacer respeta lo que pasó después', () => {
   });
 });
 
+describe('deshacer: lugares que la IA creó', () => {
+  it('no borra un lugar si Iván ya registró visitas ahí', async () => {
+    const e = { DB: fakeD1(), DEV_BYPASS_AUTH: 'true' } as any;
+    const m = (path: string, init?: RequestInit) => app.request(path, init, e);
+    const key = ((await (await m('/api/ai/keys', json({ name: 'k' }))).json()) as any).token;
+    const call2 = async (name: string, args: unknown) => {
+      const res = await mcpApp.request('/mcp', json({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, { authorization: `Bearer ${key}` }), e);
+      return ((await res.json()) as any).result;
+    };
+    const created = await call2('guardar_lugar', { nombre: 'Café de la esquina' });
+    expect(created.isError).toBeFalsy();
+    const placeId = /\[([^\]]+)\]\./.exec(created.content[0].text)![1];
+    await m('/api/events', json({ id: 'evt-visit-0001', type: 'place.visited', occurredAt: new Date().toISOString(), localDate: '2026-11-19', payload: { placeId, company: 'pareja' } }));
+    const items = ((await (await m('/api/ai/activity')).json()) as any).items as { id: string }[];
+    const r = (await (await m(`/api/ai/activity/${items[0].id}/undo`, { method: 'POST' })).json()) as any;
+    expect(r).toMatchObject({ ok: true, kept: 1 });
+    const sync = (await (await m('/api/sync?since=0')).json()) as { entities: { id: string; deletedAt: number | null }[] };
+    expect(sync.entities.find((x) => x.id === placeId)!.deletedAt).toBeNull();
+  });
+});
+
 describe('deshacer: retos iniciados por la IA y orden', () => {
   it('no borra los días que Iván marcó en un reto que la IA creó e inició', async () => {
     const e = { DB: fakeD1(), DEV_BYPASS_AUTH: 'true' } as any;

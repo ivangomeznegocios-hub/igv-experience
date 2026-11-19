@@ -229,11 +229,11 @@ export async function undoActivity(d1: D1Database, id: string): Promise<{ ok: bo
       if (ent.prev.updatedAt !== undefined) await remapSavedAt(d1, id, ent.id, ent.prev.updatedAt, restored.updatedAt ?? Date.now());
       continue;
     }
-    const guard = current?.module === 'goals' ? { types: ['goal.progress'], key: 'goalId' } : current?.module === 'challenges' ? { types: ['challenge.started', 'challenge.checked'], key: 'challengeId' } : null;
+    const guard = current ? UNDO_GUARDS[`${current.module}/${current.kind}`] : undefined;
     const used = guard ? (await store.events({ types: guard.types, match: { [guard.key]: ent.id } })).some((e) => !own.has(e.id)) : false;
     if (used && current) {
-      // Tiene avances de Iván: se archiva (su XP depende de que exista).
-      await store.putEntity({ ...current, data: { ...current.data, archived: true } });
+      // Tiene registros de Iván: metas y retos se archivan (su XP depende de que existan); lo demás se queda.
+      if (guard!.archive) await store.putEntity({ ...current, data: { ...current.data, archived: true } });
       kept++;
     } else {
       await store.deleteEntity(ent.id);
@@ -242,6 +242,22 @@ export async function undoActivity(d1: D1Database, id: string): Promise<{ ok: bo
   await db.update(aiActivity).set({ undoneAt: Date.now() }).where(eq(aiActivity.id, id));
   return { ok: true, kept };
 }
+
+/**
+ * Elementos que la IA creó y en los que Iván registró algo después: deshacer no los borra. `archive` = se archivan
+ * (metas y retos: su XP depende de la entidad); si no, se quedan tal cual (lugares, chequeos, personas, frases…).
+ */
+const UNDO_GUARDS: Record<string, { types: string[]; key: string; archive: boolean }> = {
+  'goals/goal': { types: ['goal.progress'], key: 'goalId', archive: true },
+  'challenges/challenge': { types: ['challenge.started', 'challenge.checked'], key: 'challengeId', archive: true },
+  'map/place': { types: ['place.visited', 'map.status_changed'], key: 'placeId', archive: false },
+  'npcs/npc': { types: ['npc.interaction'], key: 'npcId', archive: false },
+  'health/checkup': { types: ['health.checkup_done'], key: 'checkupId', archive: false },
+  'learning/topic': { types: ['learning.test_taken'], key: 'topicId', archive: false },
+  'learning/item': { types: ['learning.reviewed'], key: 'itemId', archive: false },
+  'library/book': { types: ['library.progress', 'library.note', 'library.finished'], key: 'bookId', archive: false },
+  'skills/skill': { types: ['skill.rank_unlocked', 'time.logged'], key: 'skillId', archive: false },
+};
 
 /**
  * Retos de N días: un día marcado depende de que el intento siga vivo. Si la IA inició o marcó días de un intento
