@@ -22,7 +22,6 @@ export function describeEvent(e: GameEvent, currency = 'MXN', byId?: Map<string,
     case 'lesson.written':
       return String(p.text ?? '').slice(0, 80);
     case 'boss.recurring_defeated':
-    case 'npc.interaction':
       return String(p.note ?? '').slice(0, 80);
     case 'day.closed':
       return `${p.mood ? MOODS[p.mood - 1] + ' ' : ''}${p.note ?? ''}`;

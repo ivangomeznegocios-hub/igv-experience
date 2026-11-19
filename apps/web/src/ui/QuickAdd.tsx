@@ -16,7 +16,6 @@ import {
   type MissionData,
   type MissionInference,
   type MissionSize,
-  type NpcData,
 } from '@igv/core';
 import { addEvent, saveEntity, useGame } from '../data/store';
 import { completeMission, completeQuick, saveTodo, writeLesson } from '../lib/actions';
@@ -32,16 +31,21 @@ import '../styles/voz.css';
 
 // ---- Registro rápido de los sistemas nuevos: cada uno importa aquí su `ui/quick/<X>Quick.tsx` ----
 // [[entreno]]
+import { WorkoutQuick } from './quick/WorkoutQuick';
 
 // [[gente]]
+import { PeopleQuick } from './quick/PeopleQuick';
 
 // [[mapa]]
+import { VisitQuick } from './quick/VisitQuick';
 
 // [[habilidades]]
+import { TimeQuick } from './quick/TimeQuick';
 
 // [[aprendizaje]]
 
 // [[salud]]
+import { HealthQuick } from './quick/HealthQuick';
 
 // [[habitos]]
 
@@ -55,7 +59,7 @@ export function openQuickAdd(o: Opts = {}) {
   bus.forEach((f) => f(o));
 }
 
-const ACTION_MODES: Record<string, QuickMode> = { mision: 'did', ingreso: 'income', gasto: 'expense', leccion: 'lesson', npc: 'npc', plan: 'todo', menu: 'menu' };
+const ACTION_MODES: Record<string, QuickMode> = { mision: 'did', ingreso: 'income', gasto: 'expense', leccion: 'lesson', npc: 'npc', plan: 'todo', menu: 'menu', entreno: 'workout', tiempo: 'time', visita: 'visit' };
 
 /** Botón flotante "+" y hoja de registro rápido. */
 export function QuickAdd() {
@@ -119,30 +123,19 @@ export interface QuickEntry {
  */
 const QUICK_ENTRIES: QuickEntry[] = [
   { mode: 'did', icon: 'check', label: 'Hice algo', Form: DidForm },
-  { mode: 'income', icon: 'coin', label: 'Ingreso', Form: IncomeForm },
   { mode: 'expense', icon: 'backpack', label: 'Gasto', Form: ExpenseForm },
-  { mode: 'npc', icon: 'chat', label: 'Hablé con…', Form: NpcForm },
+  { mode: 'income', icon: 'coin', label: 'Ingreso', Form: IncomeForm },
+  // Mi gente: varias personas a la vez, canal (en persona, llamada, mensaje…) y lugar.
+  { mode: 'npc', icon: 'chat', label: 'Hablé con…', Form: PeopleQuick },
+  { mode: 'workout', icon: 'bolt', label: 'Entreno', title: 'Entrenamiento', Form: WorkoutQuick },
+  { mode: 'time', icon: 'clock', label: 'Tiempo', title: 'Tu tiempo', Form: TimeQuick },
+  { mode: 'visit', icon: 'pin', label: 'Fui a…', Form: VisitQuick },
   { mode: 'todo', icon: 'calendar', label: 'Por hacer', Form: TodoForm, ownDate: true },
+  { mode: 'body', icon: 'heart', label: 'Cuerpo', Form: BodyForm },
+  { mode: 'health', icon: 'salud-cross', label: 'Salud', Form: HealthQuick },
   { mode: 'lesson', icon: 'feather', label: 'Lección', Form: LessonQuick },
   { mode: 'goal', icon: 'target', label: 'Meta', title: 'Avance de meta', Form: GoalForm },
-  { mode: 'body', icon: 'heart', label: 'Cuerpo', Form: BodyForm },
   { mode: 'rest', icon: 'moon', label: 'Día de descanso', Form: RestForm, tile: false },
-
-  // ---- Sistemas nuevos: cada uno agrega su entrada DEBAJO de su ancla ----
-  // [[entreno]]
-
-  // [[gente]]
-
-  // [[mapa]]
-
-  // [[habilidades]]
-
-  // [[aprendizaje]]
-
-  // [[salud]]
-
-  // [[habitos]]
-
 ];
 
 function QuickSheet({ initial, today, onClose }: { initial: Opts; today: string; onClose: () => void }) {
@@ -514,50 +507,6 @@ function LessonQuick({ date, setDate, today, onDone }: QuickFormProps) {
         }}
       >
         Guardar · +{GAME_CONFIG.rewards.lesson} XP
-      </button>
-    </>
-  );
-}
-
-function NpcForm({ date, setDate, today, onDone }: QuickFormProps) {
-  const { list, state } = useGame();
-  const npcs = list<NpcData>('npcs', 'npc').sort((a, b) => (state.npcs.npcs[b.id]?.daysSince ?? 9999) - (state.npcs.npcs[a.id]?.daysSince ?? 9999));
-  const [npcId, setNpcId] = useState<string | null>(null);
-  const [note, setNote] = useState('');
-  const mic = useFieldMic((t) => setNote((prev) => appendSpeech(prev, t)));
-  if (!npcs.length) return <p className="muted">Aún no tienes personas registradas. Agrégalas en Más → Mi gente.</p>;
-  return (
-    <>
-      <Field label="¿Con quién?">
-        <Chips
-          value={npcId}
-          onChange={setNpcId}
-          options={npcs.map((n) => {
-            const d = state.npcs.npcs[n.id]?.daysSince;
-            return { value: n.id, label: `${n.data.name}${d !== null && d !== undefined && d >= 14 ? ` · ${d} d` : ''}`, tone: state.npcs.npcs[n.id]?.overdue ? 'warn' : undefined };
-          })}
-        />
-      </Field>
-      <Field label="Nota (opcional)">
-        <div className="row" style={{ gap: 6 }}>
-          <input className="input grow" value={note} onChange={(e) => setNote(e.target.value)} placeholder="De qué hablaron" />
-          {mic.button}
-        </div>
-      </Field>
-      {mic.hint}
-      <Field label="¿Cuándo?">
-        <DateChips value={date} onChange={setDate} today={today} />
-      </Field>
-      <button
-        className="btn primary block"
-        disabled={!npcId}
-        onClick={() => {
-          addEvent('npc.interaction', { npcId: npcId!, note: note.trim() || undefined }, { localDate: date });
-          toast(`Interacción registrada con ${npcs.find((n) => n.id === npcId)?.data.name}`);
-          onDone();
-        }}
-      >
-        Registrar
       </button>
     </>
   );

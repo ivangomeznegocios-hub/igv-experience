@@ -21,6 +21,7 @@ export default defineConfig({
         theme_color: '#0a0e16',
         // Accesos directos al mantener presionado el ícono de la app.
         shortcuts: [
+          { name: 'Hablar', short_name: 'Hablar', url: '/?accion=hablar', icons: [{ src: '/pwa-192.png', sizes: '192x192' }] },
           { name: 'Registrar misión', short_name: 'Misión', url: '/?accion=mision', icons: [{ src: '/pwa-192.png', sizes: '192x192' }] },
           { name: 'Registrar gasto', short_name: 'Gasto', url: '/?accion=gasto', icons: [{ src: '/pwa-192.png', sizes: '192x192' }] },
           { name: 'Registrar ingreso', short_name: 'Ingreso', url: '/?accion=ingreso', icons: [{ src: '/pwa-192.png', sizes: '192x192' }] },

@@ -120,9 +120,11 @@ export function describeEvent(e: GameEvent, byId: Map<string, Entity>, currency 
     case 'lesson.written':
       detail = String(p.text ?? '').slice(0, 140);
       break;
-    case 'npc.interaction':
-      detail = `${name(p.npcId)}${p.note ? ` · ${String(p.note).slice(0, 100)}` : ''}`;
+    case 'npc.interaction': {
+      const channel: Record<string, string> = { persona: 'en persona', llamada: 'llamada', mensaje: 'mensaje', videollamada: 'videollamada' };
+      detail = `${name(p.npcId)}${p.channel && channel[p.channel] ? ` (${channel[p.channel]})` : ''}${p.placeId ? ` en ${name(p.placeId)}` : ''}${p.note ? ` · ${String(p.note).slice(0, 100)}` : ''}`;
       break;
+    }
     case 'boss.phase_completed':
       detail = `${name(p.bossId)} · fase ${Number(p.phaseIndex) + 1}`;
       break;
