@@ -28,6 +28,7 @@ import { Hero } from '../ui/Hero';
 import { Icon } from '../ui/icons';
 import { AttrBadge, Badge, Bar, Chips, Collapse, Empty, Field, Sheet, SizeBadge, SwipeRow, confirmAction, toast, undoToast, useAutoFocus } from '../ui/kit';
 import { LessonForm } from '../ui/MissionForm';
+import { PeopleTodayCard } from '../ui/people';
 import { startMissionQuest, startQuest, startTodoQuest } from '../ui/QuestMode';
 import { openQuickAdd } from '../ui/QuickAdd';
 import { SyncPill } from '../ui/SyncPill';
@@ -75,6 +76,7 @@ export default function Hoy() {
       <MorningRitualCard />
       <NarratorBriefing />
       <DayReviewRow />
+      <HeadsUpCard />
       <TodayPlanCard />
       <WeekReportCard />
       <BountyCard />
@@ -89,6 +91,7 @@ export default function Hoy() {
       <CampfireCard />
 
       <Collapse title="Más en tu jornada">
+        <PeopleTodayCard />
         <FavoritesSection />
         <VicesMini />
         <div className="grid2" style={{ marginTop: 10 }}>
@@ -755,6 +758,38 @@ function CloseDaySheet({ onClose }: { onClose: () => void }) {
       </Field>
       <p className="tiny muted">Tu nota aparece en el Historial y en Mi vida en semanas.</p>
     </Sheet>
+  );
+}
+
+/** Avisos de hoy que vienen de otras áreas: cumpleaños y chequeos que ya te tocan (solo si hay). */
+function HeadsUpCard() {
+  const { state, byId } = useGame();
+  const name = (id: string) => (byId.get(id)?.data as { name?: string } | undefined)?.name ?? 'Alguien';
+  const items: { key: string; to: string; icon: string; text: string; sub: string }[] = [];
+  for (const b of state.npcs.birthdays.filter((x) => x.inDays === 0))
+    items.push({ key: `b-${b.npcId}`, to: `/npcs/${b.npcId}`, icon: 'cake', text: `Hoy cumple ${name(b.npcId)}`, sub: b.turns ? `${b.turns} años · escríbele o llámale` : 'Escríbele o llámale' });
+  for (const d of state.health.due.filter((x) => x.status === 'atrasado' || x.daysLeft <= 7).slice(0, 2))
+    items.push({
+      key: `h-${d.checkupId}`,
+      to: '/salud',
+      icon: 'salud-cross',
+      text: `Ya te toca: ${d.name}`,
+      sub: d.status === 'atrasado' ? `Atrasado desde ${fmtDate(d.nextDue)} · agéndalo` : `Toca el ${fmtDate(d.nextDue)}`,
+    });
+  if (!items.length) return null;
+  return (
+    <div className="card">
+      {items.map((it) => (
+        <Link key={it.key} to={it.to} className="item" style={{ textDecoration: 'none', color: 'inherit', gap: 10 }}>
+          <Icon name={it.icon} width={20} style={{ color: 'var(--gold)', flex: 'none' }} />
+          <div className="grow">
+            <div className="item-title">{it.text}</div>
+            <div className="tiny muted">{it.sub}</div>
+          </div>
+          <Icon name="right" width={16} />
+        </Link>
+      ))}
+    </div>
   );
 }
 
