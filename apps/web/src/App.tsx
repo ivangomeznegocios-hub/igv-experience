@@ -54,6 +54,12 @@ function Nav() {
 
 function StatusBanner() {
   const store = useStore();
+  if (store.status === 'auth' && store.authMessage === 'access_disabled')
+    return (
+      <div className="banner warn">
+        <Icon name="lock" width={18} /> Falta activar Cloudflare Access en el Worker (Settings → Domains &amp; Routes → workers.dev). Mientras tanto la app no muestra datos.
+      </div>
+    );
   if (store.status === 'auth')
     return (
       <div className="banner warn">
@@ -104,7 +110,7 @@ export default function App() {
                 'Cargando tu partida…'
               ) : (
                 <>
-                  <p>No pude conectar con el servidor.</p>
+                  <p>{store.authMessage === 'access_disabled' ? 'Activa Cloudflare Access en el Worker para entrar.' : 'No pude conectar con el servidor.'}</p>
                   <button className="btn primary" onClick={() => (store.status === 'auth' ? window.location.reload() : sync())}>
                     Reintentar
                   </button>

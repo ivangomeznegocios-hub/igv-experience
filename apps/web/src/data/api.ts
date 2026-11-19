@@ -15,7 +15,11 @@ async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
     headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}) },
   });
   // Cloudflare Access redirige al login cuando la sesión expira.
-  if (res.type === 'opaqueredirect' || res.status === 401 || res.status === 403) throw new AuthError('Sesión expirada');
+  if (res.type === 'opaqueredirect') throw new AuthError('Sesión expirada');
+  if (res.status === 401 || res.status === 403) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
+    throw new AuthError(body.code === 'access_disabled' ? 'access_disabled' : body.error ?? 'Sesión expirada');
+  }
   const ct = res.headers.get('content-type') ?? '';
   if (!ct.includes('application/json')) {
     if (res.ok) throw new AuthError('Respuesta inesperada (¿sesión expirada?)');

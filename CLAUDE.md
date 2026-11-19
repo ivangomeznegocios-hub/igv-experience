@@ -20,7 +20,7 @@ packages/core   Reglas del juego en TypeScript puro (sin red ni DOM). Probadas c
   src/engine/modules/  Un reductor por sistema (misiones, racha, lecciones, dinero, jefes,
                        habilidades, mapa/NPCs, temporadas, logros, atributos).
   src/seed/            Datos iniciales (IDs fijos) y guía de atributos (30/70).
-packages/db     Esquema Drizzle (2 tablas) y migraciones SQL de D1.
+packages/db     Esquema Drizzle (events, entities, server_meta) y migraciones SQL de D1.
 apps/api        Worker de Cloudflare con Hono: /api/* (sync, eventos, catálogo, respaldo, Game Master).
                 El mismo Worker sirve el frontend (Workers Static Assets, SPA).
 apps/web        React + Vite + PWA. Calcula el estado en el dispositivo con @igv/core.
@@ -47,10 +47,16 @@ Los eventos llevan id generado en el cliente → reintentar es seguro (`INSERT �
 
 ### Seguridad
 
-Cloudflare Access protege todo el dominio *.workers.dev del Worker. Además la API verifica el JWT de
-Access (`Cf-Access-Jwt-Assertion`, con `jose`) y que el correo esté en `ALLOWED_EMAILS`. Si faltan las
-variables, la API responde 503 (falla cerrada). `DEV_BYPASS_AUTH=true` solo funciona si `ACCESS_AUD`
-NO está definido (desarrollo local con `.dev.vars`).
+Cloudflare Access protege todo el dominio *.workers.dev del Worker (se activa con un interruptor). Además
+la API exige el JWT de Access (`Cf-Access-Jwt-Assertion`, verificado con `jose`) y aplica un **anclaje en
+el primer uso** (`apps/api/src/auth.ts`): el primer ingreso válido guarda en la tabla `server_meta`
+(clave `access_pin`, nunca se sincroniza al cliente) el equipo de Access, el AUD de la aplicación y el
+correo; desde ahí solo se acepta exactamente eso. Solo se aceptan emisores `https://<equipo>.cloudflareaccess.com`.
+Las variables `ACCESS_TEAM_DOMAIN` + `ACCESS_AUD` (+ `ALLOWED_EMAILS`) son opcionales y, si existen,
+reemplazan al anclaje. Sin token, la API responde 401 con `code: "access_disabled"`.
+Reiniciar el anclaje: `DELETE FROM server_meta WHERE key='access_pin'` (ver CONFIGURAR-CON-CLAUDE-CODE.md).
+`DEV_BYPASS_AUTH=true` solo funciona si `ACCESS_AUD` NO está definido (desarrollo local con `.dev.vars`).
+Pruebas: `apps/api/test/access.test.ts` (tokens firmados reales + D1 en memoria sobre `node:sqlite`).
 
 ## Reglas de oro (nunca se rompen; hay pruebas en `packages/core/test/golden-rules.test.ts`)
 
@@ -131,7 +137,7 @@ pnpm --filter @igv/web dev  # Vite en :5173 con proxy de /api a :8787
   (`fallbacks: "default"`). El cliente arma un resumen del estado; la clave es el secreto
   `ANTHROPIC_API_KEY` del Worker. El GM solo propone; no registra nada por sí mismo.
 - Despliegue: GitHub Actions (`.github/workflows/deploy.yml`) → pruebas → crea la base D1 si no existe
-  (por nombre `igv-experience`) → migraciones D1 → `wrangler deploy`. Secretos: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`.
+  (por nombre `igv-experience`) → migraciones D1 → `wrangler deploy`. Secreto: `CLOUDFLARE_API_TOKEN` (`CLOUDFLARE_ACCOUNT_ID` opcional).
   `keep_vars: true` conserva las variables configuradas en el panel de Cloudflare.
 
 ## Convenciones

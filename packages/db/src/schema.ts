@@ -40,3 +40,13 @@ export const entities = sqliteTable(
 
 export type EventRow = typeof events.$inferSelect;
 export type EntityRow = typeof entities.$inferSelect;
+
+/**
+ * Configuración interna del servidor (nunca se sincroniza al cliente).
+ * Guarda el equipo de Cloudflare Access y el correo "anclados" en el primer ingreso.
+ */
+export const serverMeta = sqliteTable('server_meta', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});

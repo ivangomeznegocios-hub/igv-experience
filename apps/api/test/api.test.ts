@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import app from '../src/index';
+import { parseAccessTeam } from '../src/auth';
 
 const req = (path: string, env: Record<string, unknown>, init?: RequestInit) => app.request(path, init, env as any);
 
@@ -9,9 +10,17 @@ describe('seguridad de la API', () => {
     expect(res.status).toBe(200);
   });
 
-  it('falla cerrada si Access no está configurado', async () => {
+  it('sin token de Access no entrega nada y explica cómo activarlo', async () => {
     const res = await req('/api/me', {});
-    expect(res.status).toBe(503);
+    expect(res.status).toBe(401);
+    expect(((await res.json()) as { code: string }).code).toBe('access_disabled');
+  });
+
+  it('rechaza tokens que no son de Cloudflare Access', async () => {
+    // JWT sin firma válida con emisor ajeno
+    const fake = ['eyJhbGciOiJSUzI1NiJ9', btoa(JSON.stringify({ iss: 'https://evil.example.com', aud: 'x', email: 'a@b.c' })).replace(/=/g, ''), 'sig'].join('.');
+    const res = await req('/api/me', {}, { headers: { 'Cf-Access-Jwt-Assertion': fake } });
+    expect(res.status).toBe(401);
   });
 
   it('rechaza solicitudes sin token cuando Access está configurado', async () => {
@@ -41,5 +50,16 @@ describe('seguridad de la API', () => {
   it('el Game Master se niega sin clave', async () => {
     const res = await req('/api/gm/ask', { DEV_BYPASS_AUTH: 'true' }, { method: 'POST', body: '{}' });
     expect(res.status).toBe(503);
+  });
+});
+
+describe('emisor de Cloudflare Access', () => {
+  it('acepta solo <equipo>.cloudflareaccess.com', () => {
+    expect(parseAccessTeam('https://miequipo.cloudflareaccess.com')).toBe('miequipo.cloudflareaccess.com');
+    expect(parseAccessTeam('https://miequipo.cloudflareaccess.com/')).toBe('miequipo.cloudflareaccess.com');
+    expect(parseAccessTeam('https://evil.com/miequipo.cloudflareaccess.com')).toBeNull();
+    expect(parseAccessTeam('https://miequipo.cloudflareaccess.com.evil.com')).toBeNull();
+    expect(parseAccessTeam('http://miequipo.cloudflareaccess.com')).toBeNull();
+    expect(parseAccessTeam(undefined)).toBeNull();
   });
 });

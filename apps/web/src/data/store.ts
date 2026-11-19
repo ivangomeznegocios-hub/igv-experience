@@ -32,6 +32,7 @@ interface Snapshot {
   today: string;
   /** Marca de tiempo de la última acción local (para animaciones de XP). */
   lastLocalAction: number;
+  authMessage: string | null;
 }
 
 const KEY = 'igv-data-v1';
@@ -46,6 +47,7 @@ let snap: Snapshot = {
   lastSync: null,
   today: todayLocal(),
   lastLocalAction: 0,
+  authMessage: null,
 };
 let cursor = 0;
 let pending: PendingOp[] = [];
@@ -110,7 +112,7 @@ async function flush(): Promise<void> {
         emit();
       } catch (err) {
         if (err instanceof AuthError) {
-          emit({ status: 'auth' });
+          emit({ status: 'auth', authMessage: err.message });
           throw err;
         }
         if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
@@ -157,7 +159,7 @@ export function sync(): Promise<void> {
       persist();
       emit({ status: 'idle', lastSync: Date.now(), ready: snap.ready || snap.entities.size > 0 });
     } catch (err) {
-      if (err instanceof AuthError) emit({ status: 'auth' });
+      if (err instanceof AuthError) emit({ status: 'auth', authMessage: err.message });
       else emit({ status: navigator.onLine ? 'error' : 'offline' });
     }
   })().finally(() => {
