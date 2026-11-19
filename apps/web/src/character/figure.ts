@@ -464,9 +464,9 @@ export function buildFigure(spec: FigureSpec): Figure {
   };
   const eyeHW = 0.0162 * ws * (1 + 0.15 * trait('eyes'));
   const eyeHH = 0.0052 * ws * (1 + 0.1 * trait('eyes') + 0.25 * trait('eyeOpen'));
-  const irisR = 0.0063 * ws;
+  const irisR = 0.0068 * ws;
   const pupilR = 0.0023 * ws;
-  const scleraC = new Color('#c8bfb6');
+  const scleraC = new Color('#bfb5ac');
   const irisC = new Color(look.eyeColor);
   const limbC = irisC.clone().multiplyScalar(0.4);
   const pupilC = new Color('#0b0908');
@@ -490,7 +490,7 @@ export function buildFigure(spec: FigureSpec): Figure {
       c.lerp(irisC, 1 - smoothstep(irisR * 0.72, irisR * 0.92, r));
       c.lerp(pupilC, 1 - smoothstep(pupilR * 0.8, pupilR * 1.25, r));
       c.multiplyScalar(1 - 0.3 * smoothstep(0.2, 0.8, v));
-      c.lerp(lidC, smoothstep(0.72, 0.93, v));
+      c.lerp(lidC, smoothstep(0.66, 0.9, v));
       c.lerp(creaseC, smoothstep(-0.84, -1, v) * 0.6);
       return { p: facePoint(cx + dx, tEye + dy / hh, 0.0006), c };
     });
@@ -515,7 +515,14 @@ export function buildFigure(spec: FigureSpec): Figure {
     patch(9, 7, (i, j) => {
       const a = (i / 8) * 2 - 1;
       const b = (j / 6) * 2 - 1;
-      return { p: facePoint(side * (0.0078 * noseW + a * 0.0042) * ws, tNose - 0.001 + (b * 0.0026 * ws) / hh, 0.0006), c: nostrilC, a: 0.5 * (1 - smoothstep(0.2, 1, Math.hypot(a, b))) };
+      return { p: facePoint(side * (0.0078 * noseW + a * 0.0045) * ws, tNose - 0.001 + (b * 0.0028 * ws) / hh, 0.0006), c: nostrilC, a: 0.62 * (1 - smoothstep(0.2, 1, Math.hypot(a, b))) };
+    });
+    // Pliegue de la aleta: una sombra tenue que dibuja el ancho de la nariz vista de frente.
+    patch(7, 11, (i, j) => {
+      const a = (i / 6) * 2 - 1;
+      const b = (j / 10) * 2 - 1;
+      const x = (0.0178 * noseW + a * 0.0028 - 0.0022 * b * b) * ws;
+      return { p: facePoint(side * x, tNose + 0.02 + (b * 0.0075 * ws) / hh, 0.0006), c: creaseC, a: 0.3 * (1 - smoothstep(0.15, 1, Math.hypot(a, b))) };
     });
   }
   // Labios: superior delgado con arco, inferior más lleno, comisuras apenas levantadas.
@@ -669,7 +676,7 @@ export function buildFigure(spec: FigureSpec): Figure {
       if (sombra) {
         // Barba de uno o dos días: bigote (más a los lados que al centro), mentón, mosca y un rastro
         // por el borde de la mandíbula; las mejillas quedan casi limpias.
-        const moustache = smoothstep(tMouth + 0.012, tMouth + 0.03, t) * (1 - smoothstep(tNose - 0.05, tNose - 0.03, t)) * (1 - smoothstep(0.03, 0.04, xs)) * (0.4 + 0.6 * smoothstep(0.004, 0.013, xs));
+        const moustache = smoothstep(tMouth + 0.012, tMouth + 0.03, t) * (1 - smoothstep(tNose - 0.05, tNose - 0.03, t)) * (1 - smoothstep(0.03, 0.04, xs)) * (0.25 + 0.6 * smoothstep(0.005, 0.016, xs));
         const chin = (1 - smoothstep(0.08 * lowerF, 0.12 * lowerF, t)) * (1 - smoothstep(0.26 * PI, 0.36 * PI, phi));
         const soul = 0.5 * gauss(xs, 0.006) * gauss(t - (tMouth - 0.04), 0.012);
         const jawEdge = lerp(0.1 * lowerF, tNose, clamp(phi / (0.42 * PI)) ** 1.6);

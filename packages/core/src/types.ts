@@ -161,15 +161,49 @@ export interface CharacterData {
   outfit: CharacterOutfit;
 }
 
+/**
+ * Apariencia por defecto = la del usuario, afinada contra una foto suya (ver "Parecido con el usuario" en
+ * CLAUDE.md). Lo que guarde en Perfil → Apariencia / Ropa (`settings.character`) gana sobre esto.
+ */
 export const DEFAULT_CHARACTER: CharacterData = {
-  look: { skin: '#c68d67', hair: 'corto', hairColor: '#1f1713', beard: 'sombra', eyeColor: '#3b2a1e', glasses: false },
+  look: {
+    skin: '#d8a58e',
+    hair: 'copete',
+    hairColor: '#1a1514',
+    beard: 'sombra',
+    beardTone: -0.5,
+    eyeColor: '#2f1f1a',
+    glasses: false,
+    face: {
+      jaw: 0.3,
+      chin: 0,
+      fullness: 0.3,
+      faceLength: -0.3,
+      midFace: -0.8,
+      lowerFace: 0.25,
+      cheeks: 0.5,
+      crown: -0.2,
+      forehead: 0.3,
+      nose: -0.3,
+      noseWidth: 0.05,
+      brows: 0.2,
+      browHeight: 0.1,
+      eyes: 0.35,
+      eyeOpen: 0.3,
+      eyeSpacing: 0.2,
+      lips: 0.7,
+      mouthWidth: 0.5,
+      ears: 0,
+    },
+    hairShape: { top: -0.1, front: 0, sides: 0.5 },
+  },
   outfit: {
-    top: 'playera',
-    topColor: '#23272f',
-    bottom: 'jeans',
-    bottomColor: '#2f4466',
-    shoes: 'tenis',
-    shoesColor: '#f1efe9',
+    top: 'camisa',
+    topColor: '#f1efe9',
+    bottom: 'pantalon',
+    bottomColor: '#23272f',
+    shoes: 'zapato',
+    shoesColor: '#3b2416',
     watch: true,
     cap: false,
     capColor: '#23272f',
