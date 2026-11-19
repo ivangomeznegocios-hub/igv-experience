@@ -1,0 +1,25 @@
+{
+  "name": "igv-experience",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.28.0",
+  "scripts": {
+    "dev": "pnpm --parallel -r dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "db:generate": "pnpm --filter @igv/db generate",
+    "db:migrate:local": "pnpm --filter @igv/api db:migrate:local",
+    "deploy": "pnpm --filter @igv/web build && pnpm --filter @igv/api deploy"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "workerd",
+      "sharp"
+    ]
+  }
+}
