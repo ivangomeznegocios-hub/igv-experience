@@ -35,6 +35,7 @@ import { reduceBody, reduceDayClosures, reduceSavings, type BodyState, type DayC
 // [[habilidades]]
 
 // [[aprendizaje]]
+import { reduceLearning, type LearningState } from './modules/learning';
 
 // [[salud]]
 import { reduceHealth, type HealthState } from './modules/health';
@@ -97,6 +98,7 @@ export interface GameState {
   // [[habilidades]]
 
   // [[aprendizaje]]
+  learning: LearningState;
 
   // [[salud]]
   /** Salud: chequeos preventivos (qué ya toca), mediciones y ficha médica. */
@@ -190,6 +192,7 @@ export function project(input: ProjectInput): GameState {
   // [[habilidades]]
 
   // [[aprendizaje]]
+  const learning = reduceLearning(ctx);
 
   // [[salud]]
   const health = reduceHealth(ctx);
@@ -248,6 +251,7 @@ export function project(input: ProjectInput): GameState {
     // [[habilidades]]
 
     // [[aprendizaje]]
+    learning,
 
     // [[salud]]
     health,

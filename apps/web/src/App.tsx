@@ -52,6 +52,7 @@ const ConectarIA = lazy(() => import('./screens/ConectarIA'));
 // [[habilidades]]
 
 // [[aprendizaje]]
+const Aprendizaje = lazy(() => import('./screens/Aprendizaje'));
 
 // [[salud]]
 const Salud = lazy(() => import('./screens/Salud'));
@@ -228,6 +229,7 @@ export default function App() {
                 {/* [[habilidades]] */}
 
                 {/* [[aprendizaje]] */}
+                <Route path="/aprendizaje" element={<Aprendizaje />} />
 
                 {/* [[salud]] */}
                 <Route path="/salud" element={<Salud />} />

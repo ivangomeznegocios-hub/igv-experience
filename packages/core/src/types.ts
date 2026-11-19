@@ -470,6 +470,7 @@ export const ENTITY_KINDS: Record<string, readonly string[]> = {
   // [[habilidades]]
 
   // [[aprendizaje]]
+  learning: ['topic', 'item'],
 
   // [[salud]]
   health: ['checkup', 'profile'],
@@ -497,6 +498,76 @@ export function isValidEntityKind(module: string, kind: string): boolean {
 // [[habilidades]]
 
 // [[aprendizaje]]
+
+// ---------- Aprendizaje (idiomas y temas) ----------
+
+export const LEARNING_TOPIC_KINDS = ['idioma', 'materia', 'otro'] as const;
+export type LearningTopicKind = (typeof LEARNING_TOPIC_KINDS)[number];
+export const LEARNING_TOPIC_KIND_NAMES: Record<LearningTopicKind, string> = { idioma: 'Idioma', materia: 'Materia', otro: 'Otro' };
+/** Niveles del Marco Común Europeo (idiomas). */
+export const CEFR_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const;
+export type CefrLevel = (typeof CEFR_LEVELS)[number];
+export const LEARNING_ITEM_TYPES = ['frase', 'palabra', 'concepto'] as const;
+export type LearningItemType = (typeof LEARNING_ITEM_TYPES)[number];
+export const LEARNING_RESULTS = ['bien', 'dude', 'mal'] as const;
+export type LearningResult = (typeof LEARNING_RESULTS)[number];
+export const LEARNING_RESULT_NAMES: Record<LearningResult, string> = { bien: 'Bien', dude: 'Dudé', mal: 'Mal' };
+/** De dónde viene un test: generado por IA, sesión de tarjetas o práctica en voz alta. */
+export const LEARNING_TEST_SOURCES = ['ia', 'tarjetas', 'voz'] as const;
+export type LearningTestSource = (typeof LEARNING_TEST_SOURCES)[number];
+export const LEARNING_TEST_SOURCE_NAMES: Record<LearningTestSource, string> = { ia: 'Test con IA', tarjetas: 'Tarjetas', voz: 'En voz alta' };
+/** Etiquetas sugeridas (de frases y de errores). Se aceptan otras. */
+export const LEARNING_TAGS = [
+  'vocabulario',
+  'gramática',
+  'tiempos verbales',
+  'preposiciones',
+  'artículos',
+  'phrasal verbs',
+  'orden de palabras',
+  'falsos amigos',
+  'ortografía',
+  'pronunciación',
+  'registro',
+  'negocios',
+  'negociación',
+  'juntas',
+  'presentaciones',
+  'small talk',
+  'concepto',
+  'otro',
+] as const;
+
+/** Tema que estás aprendiendo ("Inglés"). */
+export interface LearningTopicData {
+  name: string;
+  topicKind: LearningTopicKind;
+  /** Nivel autoevaluado: A1–C2 en idiomas; texto libre en otros temas. */
+  level?: string | null;
+  /** Para qué lo aprendes ("Negociar y presentar en inglés"). */
+  goal?: string;
+  /** Idioma para la voz (BCP-47, p. ej. "en-US"). Solo idiomas. */
+  lang?: string;
+  /** Atributo al que suma la XP de practicar (por defecto el de config). */
+  attribute?: AttributeId;
+  archived?: boolean;
+  notes?: string;
+}
+
+/** Algo que quieres saber decir o entender: frase, palabra o concepto. */
+export interface LearningItemData {
+  topicId: string;
+  itemType: LearningItemType;
+  /** En el idioma que aprendes (o el concepto). */
+  text: string;
+  /** Traducción o significado (en español). */
+  meaning: string;
+  example?: string;
+  tags: string[];
+  notes?: string;
+  /** De dónde salió: a mano, paquete inicial, error de un test o propuesta de la IA. */
+  origin?: 'manual' | 'inicial' | 'test' | 'ia';
+}
 
 // [[salud]]
 

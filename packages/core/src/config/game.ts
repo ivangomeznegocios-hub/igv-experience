@@ -147,6 +147,30 @@ export const GAME_CONFIG = {
   // [[habilidades]]
 
   // [[aprendizaje]]
+  /** Aprendizaje (idiomas y temas): tarjetas con repaso espaciado (Leitner) y tests. */
+  learning: {
+    /** Días hasta el siguiente repaso según la caja (1 a 5). */
+    intervals: [1, 2, 4, 8, 16],
+    /** Desde esta caja una tarjeta cuenta como "Lo sé". */
+    masteredBox: 4,
+    /** Tarjetas nuevas por sesión de repaso. */
+    newPerSession: 10,
+    /** "Te cuesta": al menos `strugglingMal` respuestas "mal" en los últimos `strugglingWindow` repasos. */
+    strugglingMal: 2,
+    strugglingWindow: 5,
+    /** Un error que repites pasa a "mejorando" si no aparece en los siguientes N tests del mismo tipo. */
+    errorClearTests: 2,
+    /** Un test o sesión da la XP de una misión de este tamaño, una vez por día y tema. */
+    sessionSize: 'chica',
+    /** Atributo por defecto de la XP de aprendizaje (cada tema puede tener el suyo). */
+    attribute: 'inteligencia',
+    /** Hitos de "Lo sé" (máximo alcanzado, nunca baja) y la XP de cada uno (como un logro). */
+    masteryMilestones: [25, 100, 250, 500, 1000],
+    masteryXp: 50,
+    /** Práctica en voz alta: similitud mínima para "bien" y para "casi". */
+    voicePass: 0.85,
+    voiceClose: 0.6,
+  },
 
   // [[salud]]
   /** Salud: hacer un chequeo preventivo da la XP de una misión de su tamaño (una vez por chequeo por día). */

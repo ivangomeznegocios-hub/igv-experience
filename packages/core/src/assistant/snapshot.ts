@@ -151,6 +151,8 @@ export interface AssistantSnapshot {
   // [[habilidades]]
 
   // [[aprendizaje]]
+  /** Aprendizaje (idiomas y temas). Opcional: las fotos guardadas por versiones anteriores no lo traen. */
+  aprendizaje?: import('./tools-aprendizaje').LearningSnapshot;
 
   // [[salud]]
   /** Salud: chequeos preventivos (estado y siguiente fecha), última medición de cada serie y ficha médica. */
@@ -445,6 +447,39 @@ export function buildSnapshot(
     // [[habilidades]]
 
     // [[aprendizaje]]
+    aprendizaje: (() => {
+      const lg = state.learning;
+      if (!lg) return undefined;
+      const texts = new Map(list<import('../types').LearningItemData>('learning', 'item').map((i) => [i.id, i.data.text]));
+      const topics = list<import('../types').LearningTopicData>('learning', 'topic')
+        .filter((t) => !t.data.archived)
+        .map((t) => {
+          const st = lg.topics[t.id];
+          return {
+            id: t.id,
+            name: t.data.name,
+            kind: t.data.topicKind,
+            level: t.data.level ?? null,
+            estimatedLevel: st?.estimatedLevel ?? null,
+            goal: t.data.goal ?? null,
+            total: st?.counts.total ?? 0,
+            known: st?.counts.loSe ?? 0,
+            learning: st?.counts.aprendiendo ?? 0,
+            struggling: st?.counts.teCuesta ?? 0,
+            fresh: st?.counts.nuevo ?? 0,
+            due: st?.due.length ?? 0,
+            streak: st?.streak ?? 0,
+            sessionToday: !!st?.sessionToday,
+            lastScores: (st?.tests ?? []).slice(-5).map((x) => ({ date: x.date, pct: x.pct, score: x.score, total: x.total, source: x.source })),
+            errors: (st?.errors ?? [])
+              .filter((e) => e.repeated)
+              .slice(0, 6)
+              .map((e) => ({ tag: e.tag, answer: e.answer.slice(0, 120), correction: e.correction.slice(0, 120), count: e.count, lastSeen: e.lastSeen, improving: e.improving })),
+            struggles: (st?.struggling ?? []).slice(0, 5).map((id) => (texts.get(id) ?? id).slice(0, 120)),
+          };
+        });
+      return { mastered: lg.mastered, masteredEver: lg.masteredEver, nextMilestone: lg.nextMilestone, streak: lg.streak, studiedToday: lg.studiedToday, topics };
+    })(),
 
     // [[salud]]
     health: (() => {
