@@ -191,3 +191,20 @@ export interface PlaceData {
   placeType: (typeof PLACE_TYPES)[number];
   notes?: string;
 }
+
+/** Tipos de entidad permitidos por módulo (la API rechaza cualquier otro). */
+export const ENTITY_KINDS: Record<string, readonly string[]> = {
+  profile: ['settings'],
+  missions: ['main', 'chapter', 'side', 'daily', 'event'],
+  bosses: ['boss', 'recurring'],
+  achievements: ['achievement'],
+  skills: ['skill'],
+  seasons: ['season'],
+  inventory: ['tool', 'knowledge'],
+  npcs: ['npc', 'guild'],
+  map: ['place'],
+};
+
+export function isValidEntityKind(module: string, kind: string): boolean {
+  return !!ENTITY_KINDS[module]?.includes(kind);
+}

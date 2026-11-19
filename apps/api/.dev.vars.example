@@ -1,0 +1,5 @@
+# Copia este archivo como .dev.vars para desarrollo local.
+# Desactiva la verificación de Cloudflare Access SOLO en tu computadora.
+DEV_BYPASS_AUTH=true
+# Opcional, para probar el Game Master en local:
+# ANTHROPIC_API_KEY=sk-ant-...

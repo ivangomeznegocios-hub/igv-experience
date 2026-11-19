@@ -1,0 +1,28 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "igv-experience",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  // Un solo Worker sirve el frontend (Workers Static Assets) y la API (/api/*).
+  "assets": {
+    "directory": "../web/dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "igv-experience",
+      // El despliegue automático reemplaza este valor con el secreto D1_DATABASE_ID de GitHub.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "../../packages/db/migrations"
+    }
+  ],
+  // Las variables de Access (ACCESS_TEAM_DOMAIN, ACCESS_AUD, ALLOWED_EMAILS) y el secreto
+  // ANTHROPIC_API_KEY se configuran en el panel de Cloudflare y se conservan en cada despliegue.
+  "keep_vars": true,
+  // Sin URLs de vista previa: solo existe la URL principal, protegida por Access.
+  "preview_urls": false,
+  "observability": { "enabled": true }
+}
