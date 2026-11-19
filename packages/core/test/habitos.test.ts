@@ -214,9 +214,10 @@ describe('"¿Cómo fue tu día?": revisiones del día', () => {
       quick(TODAY, 'Llamada con cliente'),
       ev('bounty.drawn', TODAY, { missionId: 'x', title: 'x', size: 'chica', attribute: 'fuerza' }),
     ]);
-    expect(r.checks.map((c) => c.id)).toEqual(['sueno', 'actividad', 'gastos', 'gente', 'cierre']);
-    expect(r.score).toBe(60);
-    expect(r.missing.map((c) => c.id)).toEqual(['gente', 'cierre']);
+    // TODAY es jueves: también aplica "tiempo" (días hábiles sin descanso).
+    expect(r.checks.map((c) => c.id)).toEqual(['sueno', 'actividad', 'tiempo', 'gastos', 'gente', 'cierre']);
+    expect(r.score).toBe(50);
+    expect(r.missing.map((c) => c.id)).toEqual(['tiempo', 'gente', 'cierre']);
     expect(r.checks.find((c) => c.id === 'sueno')!.detail).toBe('7.5 h');
     expect(r.checks.find((c) => c.id === 'gastos')!.detail).toContain('450');
     expect(r.logged.map((g) => g.area.id)).toEqual(['misiones', 'dinero', 'cuerpo']);

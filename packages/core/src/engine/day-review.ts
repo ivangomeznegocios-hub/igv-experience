@@ -231,6 +231,24 @@ export const DAY_CHECKS: DayCheck[] = [
     },
     pending: (c) => routineForDay(c).filter((m) => !isDailyDone(c, m)).map((m) => m.data.title),
   },
+  eventCheck({
+    id: 'tiempo',
+    area: 'trabajo',
+    label: 'Tiempo',
+    short: 'cuánto tiempo trabajaste',
+    question: '¿Cuánto tiempo estuviste en la oficina o trabajando, y en qué?',
+    types: ['time.logged'],
+    applies: (c) => c.weekday < 5 && !c.restDay,
+    detail: (c) => {
+      const min = c.of<{ minutes: number }>('time.logged').reduce((s, e) => s + (e.payload.minutes || 0), 0);
+      if (!min) return null;
+      const h = Math.floor(min / 60);
+      const m = min % 60;
+      return h ? `${h} h${m ? ` ${m} min` : ''}` : `${m} min`;
+    },
+    skipLabel: 'Hoy no trabajé',
+    tool: 'registrar_tiempo',
+  }),
   {
     id: 'gastos',
     area: 'dinero',
@@ -327,24 +345,6 @@ export const DAY_CHECKS: DayCheck[] = [
   },
 
   // Sistemas integrados después: una entrada cada uno (ver docs/sistemas/habitos.md).
-  eventCheck({
-    id: 'tiempo',
-    area: 'trabajo',
-    label: 'Tiempo',
-    short: 'cuánto tiempo trabajaste',
-    question: '¿Cuánto tiempo estuviste en la oficina o trabajando, y en qué?',
-    types: ['time.logged'],
-    applies: (c) => c.weekday < 5 && !c.restDay,
-    detail: (c) => {
-      const min = c.of<{ minutes: number }>('time.logged').reduce((s, e) => s + (e.payload.minutes || 0), 0);
-      if (!min) return null;
-      const h = Math.floor(min / 60);
-      const m = min % 60;
-      return h ? `${h} h${m ? ` ${m} min` : ''}` : `${m} min`;
-    },
-    skipLabel: 'Hoy no trabajé',
-    tool: 'registrar_tiempo',
-  }),
 ];
 
 export function getDayCheck(id: string): DayCheck | undefined {
