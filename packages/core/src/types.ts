@@ -96,8 +96,9 @@ export type ShoeStyle = (typeof SHOE_STYLES)[number];
 
 /**
  * Rasgos del rostro, cada uno de −1 a 1 (0 = promedio). Pensados para afinarse a partir de fotos:
- * `jaw` mandíbula angosta ↔ ancha · `chin` mentón angosto ↔ ancho · `faceLength` cara corta ↔ larga ·
- * `lowerFace` tercio inferior (nariz a mentón) corto ↔ largo · `cheeks` pómulos · `crown` cráneo bajo ↔ alto ·
+ * `jaw` mandíbula angosta ↔ ancha · `chin` mentón angosto ↔ ancho · `fullness` cara afilada ↔ llena ·
+ * `faceLength` cara corta ↔ larga · `midFace` de los ojos a la nariz corto ↔ largo ·
+ * `lowerFace` de la nariz al mentón corto ↔ largo · `cheeks` pómulos · `crown` cráneo bajo ↔ alto ·
  * `forehead` frente corta ↔ amplia (altura del nacimiento del pelo) · `nose` nariz chica ↔ grande ·
  * `noseWidth` nariz fina ↔ ancha · `brows` cejas delgadas ↔ pobladas · `browHeight` cejas bajas ↔ altas ·
  * `eyes` ojos chicos ↔ grandes · `eyeSpacing` ojos juntos ↔ separados · `lips` labios delgados ↔ gruesos ·
@@ -106,7 +107,9 @@ export type ShoeStyle = (typeof SHOE_STYLES)[number];
 export const FACE_TRAITS = [
   'jaw',
   'chin',
+  'fullness',
   'faceLength',
+  'midFace',
   'lowerFace',
   'cheeks',
   'crown',

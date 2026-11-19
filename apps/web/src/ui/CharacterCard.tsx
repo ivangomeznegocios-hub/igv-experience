@@ -45,7 +45,9 @@ const SHOE_LABEL: Record<ShoeStyle, string> = { tenis: 'Tenis', zapato: 'Zapatos
 const FACE_LABEL: Record<FaceTrait, [string, string, string]> = {
   jaw: ['Mandíbula', 'Angosta', 'Ancha'],
   chin: ['Mentón', 'Angosto', 'Ancho'],
+  fullness: ['Cara', 'Afilada', 'Llena'],
   faceLength: ['Largo de cara', 'Corta', 'Larga'],
+  midFace: ['De los ojos a la nariz', 'Corto', 'Largo'],
   lowerFace: ['De la nariz al mentón', 'Corto', 'Largo'],
   cheeks: ['Pómulos', 'Suaves', 'Marcados'],
   crown: ['Altura del cráneo', 'Bajo', 'Alto'],

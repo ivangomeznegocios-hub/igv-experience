@@ -1,5 +1,4 @@
 import {
-  ACESFilmicToneMapping,
   CanvasTexture,
   CircleGeometry,
   Color,
@@ -8,6 +7,7 @@ import {
   HemisphereLight,
   Mesh,
   MeshBasicMaterial,
+  NeutralToneMapping,
   PCFSoftShadowMap,
   PerspectiveCamera,
   RingGeometry,
@@ -82,13 +82,14 @@ export class Stage {
   ) {
     this.renderer = new WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    this.renderer.toneMapping = ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    // Mapeo de tonos neutro: los colores elegidos (piel, ropa) se ven como se eligieron.
+    this.renderer.toneMapping = NeutralToneMapping;
+    this.renderer.toneMappingExposure = 1;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = PCFSoftShadowMap;
 
-    this.scene.add(new HemisphereLight('#f3f1ea', '#8a7d70', 1.35));
-    const key = new DirectionalLight('#fff4e4', 2.6);
+    this.scene.add(new HemisphereLight('#f4f4f2', '#8f8b86', 1.35));
+    const key = new DirectionalLight('#fffaf3', 2.5);
     key.position.set(2.2, 3.6, 3.2);
     key.castShadow = true;
     key.shadow.mapSize.set(1024, 1024);
@@ -105,9 +106,13 @@ export class Stage {
     const rim = new DirectionalLight('#bcd3ff', 1.5);
     rim.position.set(-2.6, 2.4, -2.8);
     this.scene.add(rim);
-    const fill = new DirectionalLight('#ffe9d2', 0.7);
+    const fill = new DirectionalLight('#fff4ec', 0.7);
     fill.position.set(-2.2, 0.4, 3);
     this.scene.add(fill);
+    // Un poco de luz desde abajo para que mentón y cuello no se pierdan en sombra.
+    const under = new DirectionalLight('#fff4ec', 0.4);
+    under.position.set(0.4, -1.4, 2.6);
+    this.scene.add(under);
 
     // Piso: sombra de contacto suave y anillo de avance de nivel.
     const shadow = new Mesh(new CircleGeometry(0.5, 48), new MeshBasicMaterial({ map: blobTexture(), transparent: true, depthWrite: false }));
