@@ -78,6 +78,7 @@ export type { EventQuery, AssistantStore, ActivityRefs, ToolResult, ToolGroup, A
 // [[habilidades]]
 
 // [[aprendizaje]]
+import { APRENDIZAJE_GUIDE, APRENDIZAJE_TOOLS, renderLearningOverview } from './tools-aprendizaje';
 
 // [[salud]]
 
@@ -161,6 +162,7 @@ export function renderOverview(s: AssistantSnapshot): string {
   // [[habilidades]]
 
   // [[aprendizaje]]
+  L.push(...renderLearningOverview(s));
 
   // [[salud]]
 
@@ -494,6 +496,7 @@ const GUIDE_SYSTEMS: string[] = [
   // [[habilidades]]
 
   // [[aprendizaje]]
+  APRENDIZAJE_GUIDE,
 
   // [[salud]]
 
@@ -1479,6 +1482,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
   // [[habilidades]]
 
   // [[aprendizaje]]
+  ...APRENDIZAJE_TOOLS,
 
   // [[salud]]
 

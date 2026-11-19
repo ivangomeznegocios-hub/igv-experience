@@ -76,6 +76,8 @@ export const EVENT_TEXT: Record<string, string> = {
   // [[habilidades]]
 
   // [[aprendizaje]]
+  'learning.reviewed': 'Repaso de tarjeta',
+  'learning.test_taken': 'Test de aprendizaje',
 
   // [[salud]]
 
@@ -182,6 +184,17 @@ export function describeEvent(e: GameEvent, byId: Map<string, Entity>, currency 
     // [[habilidades]]
 
     // [[aprendizaje]]
+    case 'learning.reviewed': {
+      const it = byId.get(String(p.itemId))?.data as { text?: string } | undefined;
+      detail = `${it?.text ? `"${String(it.text).slice(0, 80)}"` : p.itemId} · ${p.result === 'bien' ? 'bien' : p.result === 'dude' ? 'dudé' : 'mal'}`;
+      break;
+    }
+    case 'learning.test_taken': {
+      const src = p.source === 'voz' ? 'en voz alta' : p.source === 'tarjetas' ? 'tarjetas' : 'con IA';
+      const errs = Array.isArray(p.errors) ? p.errors.length : 0;
+      detail = `${name(p.topicId)} · ${p.score}/${p.total} ${src}${p.level ? ` · nivel ${p.level}` : ''}${errs ? ` · ${errs} ${errs === 1 ? 'error' : 'errores'}` : ''}`;
+      break;
+    }
 
     // [[salud]]
 

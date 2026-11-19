@@ -71,6 +71,7 @@ const P: Record<string, string> = {
   // [[habilidades]]
 
   // [[aprendizaje]]
+  translate: 'M3 5h9M7.5 3v2M5 5c.7 2.8 2.7 5.3 5.5 6.8M10 5c-.8 3.4-2.9 6.4-6.5 8.2M13 21l4.2-10h.6L22 21M14.6 17.5h6.8',
 
   // [[salud]]
 

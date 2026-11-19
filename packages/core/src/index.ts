@@ -51,6 +51,10 @@ export * from './assistant/toolkit';
 // [[habilidades]]
 
 // [[aprendizaje]]
+export * from './engine/modules/learning';
+export * from './engine/learning-text';
+export * from './seed/learning-starter';
+export * from './assistant/tools-aprendizaje';
 
 // [[salud]]
 

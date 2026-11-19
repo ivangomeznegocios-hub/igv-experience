@@ -35,6 +35,7 @@ import { reduceBody, reduceDayClosures, reduceSavings, type BodyState, type DayC
 // [[habilidades]]
 
 // [[aprendizaje]]
+import { reduceLearning, type LearningState } from './modules/learning';
 
 // [[salud]]
 
@@ -96,6 +97,7 @@ export interface GameState {
   // [[habilidades]]
 
   // [[aprendizaje]]
+  learning: LearningState;
 
   // [[salud]]
 
@@ -187,6 +189,7 @@ export function project(input: ProjectInput): GameState {
   // [[habilidades]]
 
   // [[aprendizaje]]
+  const learning = reduceLearning(ctx);
 
   // [[salud]]
 
@@ -244,6 +247,7 @@ export function project(input: ProjectInput): GameState {
     // [[habilidades]]
 
     // [[aprendizaje]]
+    learning,
 
     // [[salud]]
 

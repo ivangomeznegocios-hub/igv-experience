@@ -138,6 +138,30 @@ export const EVENT_SCHEMAS = {
   // [[habilidades]]
 
   // [[aprendizaje]]
+  /** Repaso de una tarjeta (Leitner): bien, dudé o mal. No da XP por sí solo. */
+  'learning.reviewed': z.object({ itemId: id, result: z.enum(['bien', 'dude', 'mal']) }),
+  /** Test o sesión de práctica de un tema (IA, tarjetas o voz). Da XP una vez por día y tema. */
+  'learning.test_taken': z
+    .object({
+      topicId: id,
+      source: z.enum(['ia', 'tarjetas', 'voz']),
+      score: z.number().int().min(0).max(200),
+      total: z.number().int().min(1).max(200),
+      level: z.string().trim().max(12).optional(),
+      errors: z
+        .array(
+          z.object({
+            tag: z.string().trim().min(1).max(40),
+            prompt: z.string().max(500),
+            answer: z.string().max(500),
+            correction: z.string().trim().min(1).max(500),
+            explanation: z.string().max(500).optional(),
+          }),
+        )
+        .max(50)
+        .default([]),
+    })
+    .refine((p) => p.score <= p.total, 'score no puede ser mayor que total'),
 
   // [[salud]]
 
@@ -191,6 +215,8 @@ export const EVENT_LABELS: Record<EventType, string> = {
   // [[habilidades]]
 
   // [[aprendizaje]]
+  'learning.reviewed': 'Repaso de tarjeta',
+  'learning.test_taken': 'Test de aprendizaje',
 
   // [[salud]]
 
