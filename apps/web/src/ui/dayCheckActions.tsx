@@ -42,7 +42,8 @@ export const DAY_CHECK_UI: Record<string, DayCheckUi> = {
   'habitos-dejar': { icon: 'shield', Inline: ViceInline },
   cierre: { icon: 'campfire', action: { label: 'Cerrar el día', run: () => document.getElementById('cierre')?.scrollIntoView({ behavior: 'smooth', block: 'center' }) } },
 
-  // Sistemas que se integren después: su entrada aquí (ver docs/sistemas/habitos.md).
+  // Sistemas integrados después: su entrada aquí (ver docs/sistemas/habitos.md).
+  tiempo: { icon: 'clock', action: { label: 'Registrar tiempo', run: ({ date, navigate }) => navigate(`/tiempo?registrar=1&area=trabajo&fecha=${date}`) } },
 };
 
 // ---------------------------------------------------------------------------------------------

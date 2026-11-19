@@ -65,6 +65,16 @@ export const EVENT_AREAS: Record<string, string> = {
   'map.status_changed': 'otros',
   'vice.relapse': 'habitos',
   'day.closed': 'cierre',
+  // Sistemas integrados después
+  'time.logged': 'trabajo',
+  'library.progress': 'aprendizaje',
+  'library.note': 'aprendizaje',
+  'learning.reviewed': 'aprendizaje',
+  'learning.test_taken': 'aprendizaje',
+  'health.checkup_done': 'cuerpo',
+  'health.metric': 'cuerpo',
+  'workout.logged': 'cuerpo',
+  'place.visited': 'gente',
 };
 
 /** Registros internos que no se listan en la revisión. */
@@ -316,7 +326,25 @@ export const DAY_CHECKS: DayCheck[] = [
     },
   },
 
-  // Sistemas que se integren después: agrega aquí su revisión (una entrada). Ejemplos en docs/sistemas/habitos.md.
+  // Sistemas integrados después: una entrada cada uno (ver docs/sistemas/habitos.md).
+  eventCheck({
+    id: 'tiempo',
+    area: 'trabajo',
+    label: 'Tiempo',
+    short: 'cuánto tiempo trabajaste',
+    question: '¿Cuánto tiempo estuviste en la oficina o trabajando, y en qué?',
+    types: ['time.logged'],
+    applies: (c) => c.weekday < 5 && !c.restDay,
+    detail: (c) => {
+      const min = c.of<{ minutes: number }>('time.logged').reduce((s, e) => s + (e.payload.minutes || 0), 0);
+      if (!min) return null;
+      const h = Math.floor(min / 60);
+      const m = min % 60;
+      return h ? `${h} h${m ? ` ${m} min` : ''}` : `${m} min`;
+    },
+    skipLabel: 'Hoy no trabajé',
+    tool: 'registrar_tiempo',
+  }),
 ];
 
 export function getDayCheck(id: string): DayCheck | undefined {

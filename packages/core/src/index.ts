@@ -6,6 +6,7 @@ export * from './engine/levels';
 export * from './engine/energy';
 export * from './engine/life';
 export * from './engine/context';
+export * from './engine/xp-sources';
 export * from './engine/project';
 export * from './engine/reports';
 export type { MissionsState, CompletionInfo } from './engine/modules/missions';

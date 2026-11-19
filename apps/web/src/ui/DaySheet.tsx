@@ -1,28 +1,15 @@
-import { EVENT_LABELS, MISSION_SIZE_NAMES, addDays, describeMeasures, type EventType, type GameEvent } from '@igv/core';
+import { useMemo } from 'react';
+import { EVENT_LABELS, EVENT_TEXT, MISSION_SIZE_NAMES, addDays, describeEvent as describeCoreEvent, describeMeasures, xpSourceLabel, type Entity, type EventType, type GameEvent } from '@igv/core';
 import { restoreEvent, useGame, voidEvent } from '../data/store';
 import { fmtDate, fmtMoney, fmtWeekday } from '../lib/time';
 import { Badge, Empty, Sheet, confirmAction } from './kit';
 import { Icon } from './icons';
 import { openQuickAdd } from './QuickAdd';
 
-const SOURCE_LABEL: Record<string, string> = {
-  mission: 'Misión',
-  streak: 'Racha',
-  lesson: 'Lección',
-  achievement: 'Logro',
-  skill: 'Habilidad',
-  boss_phase: 'Gran reto',
-  recurring_boss: 'Reto recurrente',
-  discovery: 'Mapa',
-  bounty: 'Sorpresa',
-  goal: 'Meta',
-  library: 'Biblioteca',
-  challenge: 'Reto completado',
-};
 const MOODS = ['😫', '😕', '😐', '🙂', '🔥'];
 
-/** Describe un evento en una línea. */
-export function describeEvent(e: GameEvent, currency = 'MXN'): string {
+/** Describe un evento en una línea. `byId` (catálogo) da nombres a los sistemas que se describen en core. */
+export function describeEvent(e: GameEvent, currency = 'MXN', byId?: Map<string, Entity>): string {
   const p = e.payload ?? {};
   switch (e.type) {
     case 'mission.completed':
@@ -51,14 +38,19 @@ export function describeEvent(e: GameEvent, currency = 'MXN'): string {
       return [describeMeasures(p), p.workout ?? '', p.note ?? ''].filter(Boolean).join(' · ');
     case 'savings.moved':
       return fmtMoney(p.amount, currency);
-    default:
-      return '';
+    default: {
+      // Sistemas nuevos: su descripción vive en core (assistant/format.ts), sin la etiqueta del inicio.
+      const text = describeCoreEvent(e, byId ?? new Map(), currency);
+      const label = EVENT_TEXT[e.type];
+      return label && text.startsWith(`${label}: `) ? text.slice(label.length + 2) : text === label ? '' : text;
+    }
   }
 }
 
 /** Todo lo que pasó en un día: XP, registros (con anular/restaurar) y botón para registrar en ese día. */
 export function DaySheet({ date, onClose, onNav }: { date: string; onClose: () => void; onNav?: (d: string) => void }) {
-  const { state, events } = useGame();
+  const { state, events, entities } = useGame();
+  const byId = useMemo(() => new Map(entities.map((x) => [x.id, x])), [entities]);
   const xp = state.xp.ledger.filter((e) => e.date === date);
   const total = xp.reduce((s, e) => s + e.amount, 0);
   const dayEvents = events
@@ -94,7 +86,7 @@ export function DaySheet({ date, onClose, onNav }: { date: string; onClose: () =
               {xp.map((e, i) => (
                 <div key={i} className="item" style={{ padding: '6px 0' }}>
                   <div className="grow small">
-                    {e.label} <span className="tiny muted">· {SOURCE_LABEL[e.source] ?? e.source}</span>
+                    {e.label} <span className="tiny muted">· {xpSourceLabel(e.source)}</span>
                   </div>
                   <b className="gold num small">+{e.amount}</b>
                 </div>
@@ -111,7 +103,7 @@ export function DaySheet({ date, onClose, onNav }: { date: string; onClose: () =
                 <div className="small" style={{ fontWeight: 650, textDecoration: e.voidedAt ? 'line-through' : undefined }}>
                   {EVENT_LABELS[e.type as EventType] ?? e.type}
                 </div>
-                <div className="tiny muted ellipsis">{describeEvent(e, state.settings.currency)}</div>
+                <div className="tiny muted ellipsis">{describeEvent(e, state.settings.currency, byId)}</div>
               </div>
               {e.voidedAt ? (
                 <button className="btn sm ghost" onClick={() => restoreEvent(e.id)}>

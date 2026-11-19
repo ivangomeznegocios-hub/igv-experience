@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { ATTRIBUTE_IDS, ATTRIBUTE_NAMES, addDays, weekStart, xpByDate } from '@igv/core';
+import { ATTRIBUTE_IDS, ATTRIBUTE_NAMES, addDays, weekStart, xpByDate, xpSourceLabel } from '@igv/core';
 import { projectAsOf, useGame } from '../data/store';
 import { fmtDate, fmtMoney, fmtMonth, fmtNum } from '../lib/time';
 import { PageHeader } from '../ui/kit';
@@ -53,7 +53,6 @@ export default function Estadisticas() {
   }, [state.xp.ledger]);
 
   const avgWeek = weeks.slice(0, -1).reduce((s, w) => s + w.value, 0) / Math.max(1, weeks.length - 1);
-  const SRC: Record<string, string> = { mission: 'Misiones', streak: 'Racha', lesson: 'Lecciones', achievement: 'Logros', skill: 'Habilidades', boss_phase: 'Grandes retos', recurring_boss: 'Retos recurrentes', discovery: 'Mapa', bounty: 'Sorpresas', goal: 'Metas', library: 'Biblioteca', challenge: 'Retos' };
   return (
     <>
       <PageHeader title="Estadísticas" eyebrow="Progreso" />
@@ -96,7 +95,7 @@ export default function Estadisticas() {
         <h2>¿De dónde viene tu XP?</h2>
         {sources.map(([s, v]) => (
           <div key={s} className="row between small" style={{ padding: '4px 0' }}>
-            <span>{SRC[s] ?? s}</span>
+            <span>{xpSourceLabel(s, 'group')}</span>
             <b className="num">{fmtNum(v)}</b>
           </div>
         ))}

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ATTRIBUTE_GUIDE, ATTRIBUTE_IDS, ATTRIBUTE_NAMES, GAME_CONFIG, addDays, type AchievementData, type AttributeId, type SeasonData, type Entity } from '@igv/core';
+import { ATTRIBUTE_GUIDE, ATTRIBUTE_IDS, ATTRIBUTE_NAMES, GAME_CONFIG, addDays, xpSourceLabel, type AchievementData, type AttributeId, type SeasonData, type Entity } from '@igv/core';
 import { addEvent, projectAsOf, useGame } from '../data/store';
 import { getTheme } from '../lib/themes';
 import { fmtDate, fmtNum } from '../lib/time';
@@ -232,20 +232,6 @@ function SeasonSnapshots() {
   );
 }
 
-const SOURCE_LABEL: Record<string, string> = {
-  mission: 'Misión',
-  streak: 'Racha',
-  lesson: 'Lección',
-  achievement: 'Logro',
-  skill: 'Habilidad',
-  boss_phase: 'Gran reto',
-  recurring_boss: 'Reto recurrente',
-  discovery: 'Mapa',
-  bounty: 'Misión sorpresa',
-  goal: 'Meta',
-  library: 'Biblioteca',
-  challenge: 'Reto completado',
-};
 
 function XpLedger() {
   const { state } = useGame();
@@ -262,7 +248,7 @@ function XpLedger() {
               {e.label}
             </div>
             <div className="tiny muted">
-              {fmtDate(e.date, true)} · {SOURCE_LABEL[e.source]}
+              {fmtDate(e.date, true)} · {xpSourceLabel(e.source)}
               {e.attribute ? ` · ${ATTRIBUTE_NAMES[e.attribute]}` : ''}
             </div>
           </div>

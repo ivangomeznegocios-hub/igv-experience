@@ -47,12 +47,14 @@ export default function Tiempo() {
   const { state } = useGame();
   const today = state.today;
   const [params, setParams] = useSearchParams();
-  const [logDate, setLogDate] = useState(today);
+  const fecha = params.get('fecha');
+  const [logDate, setLogDate] = useState(fecha && fecha <= today ? fecha : today);
   const wantsLog = params.get('registrar') === '1' || params.has('habilidad');
   const closeLog = () => {
     params.delete('registrar');
     params.delete('habilidad');
     params.delete('area');
+    params.delete('fecha');
     setParams(params, { replace: true });
     setLogDate(today);
   };
