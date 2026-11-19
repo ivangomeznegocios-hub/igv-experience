@@ -1,0 +1,100 @@
+/* ---------- Voz y registro automático (sistema "voz") ---------- */
+
+/* Botón global "Hablar": encima del "+", en la misma zona del pulgar. */
+.vz-fab {
+  position: fixed; right: 23px; bottom: calc(150px + env(safe-area-inset-bottom)); z-index: 40;
+  width: 48px; height: 48px; border-radius: 16px; display: grid; place-items: center; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--gold) 45%, var(--line));
+  background: color-mix(in srgb, var(--card-2) 92%, transparent); color: var(--gold);
+  box-shadow: var(--shadow); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  transition: transform 0.12s ease;
+}
+.vz-fab:active { transform: scale(0.94); }
+.vz-fab svg { width: 24px; height: 24px; stroke-width: 2.1; }
+@media (min-width: 1000px) { .vz-fab { bottom: 98px; right: calc(50% - 434px + 113px); } }
+
+/* Hoja "Cuéntame" */
+.vz-mic-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 2px 0 14px; }
+.vz-mic {
+  position: relative; width: 84px; height: 84px; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--gold) 60%, var(--line)); color: #1a1205;
+  background: linear-gradient(160deg, var(--gold-2), var(--gold));
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--gold) 34%, transparent), inset 0 1px 0 rgb(255 255 255 / 0.45);
+  transition: transform 0.1s ease;
+}
+.vz-mic:active { transform: scale(0.95); }
+.vz-mic svg { width: 34px; height: 34px; stroke-width: 2.2; }
+.vz-mic.on { background: var(--red); border-color: var(--red); color: #fff; box-shadow: 0 10px 28px color-mix(in srgb, var(--red) 35%, transparent); }
+.vz-mic.on::after {
+  content: ''; position: absolute; inset: -6px; border-radius: 50%; border: 2px solid var(--red); opacity: 0.6;
+  animation: vz-pulse 1.4s ease-out infinite;
+}
+@keyframes vz-pulse { from { transform: scale(0.95); opacity: 0.6; } to { transform: scale(1.25); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .vz-mic.on::after { animation: none; } }
+.vz-mic-label { font-size: 13px; font-weight: 650; color: var(--muted); text-align: center; }
+.vz-text-input { font-size: 16px; line-height: 1.4; }
+.vz-interim { margin-top: 6px; font-size: 14px; color: var(--muted); font-style: italic; }
+.vz-save { margin-top: 12px; min-height: 48px; font-size: 16px; }
+.vz-status { margin: 8px 0 0; text-align: center; }
+.vz-working { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 36px 0; font-weight: 650; color: var(--muted); }
+.vz-spinner { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--gold); animation: vz-spin 0.9s linear infinite; }
+@keyframes vz-spin { to { transform: rotate(360deg); } }
+.vz-answer { max-width: 100%; margin-bottom: 10px; }
+
+/* Tarjetas de propuestas */
+.vz-list { display: flex; flex-direction: column; gap: 8px; }
+.vz-card { border: 1px solid var(--line); border-radius: 14px; background: var(--card-2); padding: 8px 8px 8px 10px; }
+.vz-card.saved { border-color: color-mix(in srgb, var(--green) 45%, var(--line)); background: color-mix(in srgb, var(--green) 8%, var(--card-2)); }
+.vz-card.removed { opacity: 0.5; }
+.vz-card.removed .vz-title { text-decoration: line-through; }
+.vz-row { display: flex; align-items: center; gap: 8px; }
+.vz-main { flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: 10px; background: none; border: 0; padding: 2px 0; color: inherit; text-align: left; cursor: pointer; }
+.vz-main:disabled { cursor: default; }
+.vz-ico { flex: none; width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; background: color-mix(in srgb, var(--gold) 14%, var(--card)); color: var(--gold); }
+.vz-ico svg { width: 18px; height: 18px; }
+.vz-ico.k-income { color: var(--green); background: color-mix(in srgb, var(--green) 14%, var(--card)); }
+.vz-ico.k-expense { color: var(--flame); background: color-mix(in srgb, var(--flame) 14%, var(--card)); }
+.vz-ico.k-person { color: var(--blue); background: color-mix(in srgb, var(--blue) 14%, var(--card)); }
+.vz-ico.k-sleep, .vz-ico.k-rest { color: var(--violet-2); background: color-mix(in srgb, var(--violet) 16%, var(--card)); }
+.vz-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.vz-title { font-weight: 700; font-size: 14px; overflow-wrap: anywhere; }
+.vz-detail { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.vz-warn { font-size: 12px; color: var(--flame); font-weight: 650; }
+.vz-actions { display: flex; gap: 6px; flex: none; }
+.vz-btn { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; cursor: pointer; border: 1px solid var(--line); background: var(--card); color: var(--muted); }
+.vz-btn svg { width: 20px; height: 20px; }
+.vz-btn.ok { background: linear-gradient(180deg, var(--gold-2), var(--gold)); color: #1a1205; border-color: color-mix(in srgb, var(--gold) 70%, #000); }
+.vz-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.vz-btn:active { transform: scale(0.95); }
+.vz-saved { font-size: 12px; font-weight: 700; color: var(--green); margin: 2px 0 0 42px; }
+.vz-editor { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.vz-2 { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+.vz-saveall { margin-top: 4px; min-height: 48px; }
+
+.vz-unknown { margin-top: 12px; padding: 10px 12px; border-radius: 12px; border: 1px dashed var(--line); }
+.vz-unknown-item { font-size: 13px; color: var(--muted); margin-top: 4px; overflow-wrap: anywhere; }
+
+/* Notas por procesar */
+.vz-notes { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 10px; }
+.vz-notes-head { display: flex; align-items: center; gap: 6px; background: none; border: 0; padding: 4px 0; color: var(--text); font-weight: 700; font-size: 14px; cursor: pointer; }
+.vz-note { padding: 10px 0; border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+.vz-note:first-of-type { border-top: 0; }
+.vz-note-text { font-size: 14px; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* Micrófono en campos de texto (registro rápido) */
+.vz-field-mic.on { color: var(--red); border-color: var(--red); }
+.vz-hint { font-size: 12px; color: var(--muted); margin: -6px 0 10px; font-style: italic; overflow-wrap: anywhere; }
+.vz-hint.err { color: var(--red); font-style: normal; }
+.vz-suggest { font-size: 12px; color: var(--muted); margin: -4px 0 10px; }
+.vz-suggest b { color: var(--gold); font-weight: 700; }
+.vz-talk {
+  width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin-bottom: 14px; cursor: pointer; text-align: left;
+  border-radius: 16px; border: 1px solid color-mix(in srgb, var(--gold) 40%, var(--line)); background: color-mix(in srgb, var(--gold) 9%, var(--card-2)); color: var(--text);
+}
+.vz-talk-ico { flex: none; width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(160deg, var(--gold-2), var(--gold)); color: #1a1205; }
+.vz-talk-ico svg { width: 22px; height: 22px; stroke-width: 2.2; }
+.vz-talk-title { font-weight: 800; font-size: 15px; }
+.vz-talk-sub { font-size: 12px; color: var(--muted); }
+.btn.icon.vz-field-mic { width: 42px; min-height: 42px; flex: none; }
+/* Con el micrófono encima del "+", el final de cada pantalla debe poder subir por encima de ambos. */
+@media (max-width: 999px) { body:has(.vz-fab) .main { padding-bottom: calc(160px + env(safe-area-inset-bottom)); } }

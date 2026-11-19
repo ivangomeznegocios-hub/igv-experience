@@ -137,6 +137,15 @@ export const GAME_CONFIG = {
 
   // ---- Sistemas nuevos: cada uno agrega su sección DEBAJO de su ancla ----
   // [[voz]]
+  /** Voz y registro automático (no da XP): qué tan parecido debe ser lo que dictas para reconocerlo (0–1). */
+  voz: {
+    /** Para reconocer una misión de tu catálogo en una frase ("entrené" → "Entrenar 30 min"). */
+    missionMatch: 0.6,
+    /** Para reutilizar el tamaño y atributo de algo que ya registraste con un título parecido. */
+    historyMatch: 0.6,
+    /** Días de historial que se usan para inferir tamaño, atributo y categoría de gasto. */
+    historyDays: 365,
+  },
 
   // [[entreno]]
 

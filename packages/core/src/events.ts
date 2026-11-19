@@ -128,6 +128,14 @@ export const EVENT_SCHEMAS = {
 
   // ---- Sistemas nuevos: cada uno agrega sus eventos DEBAJO de su ancla (no borres ni muevas las anclas) ----
   // [[voz]]
+  /** Lo que dijiste (o escribiste) tal cual, para no perderlo nunca. `pendiente` = falta procesarlo. No da XP. */
+  'note.captured': z.object({
+    text: z.string().trim().min(1).max(4000),
+    source: z.enum(['voz', 'texto']).default('voz'),
+    handled: z.enum(['coach', 'local', 'pendiente']).default('pendiente'),
+  }),
+  /** Una nota pendiente ya se procesó (con IA o aquí) o se descartó. Cuenta el primero. No da XP. */
+  'note.processed': z.object({ noteId: id, via: z.enum(['coach', 'local', 'descartada']).default('coach') }),
 
   // [[entreno]]
 
@@ -181,6 +189,8 @@ export const EVENT_LABELS: Record<EventType, string> = {
   'pledge.resolved': 'Compromiso resuelto',
 
   // [[voz]]
+  'note.captured': 'Nota (lo que dijiste)',
+  'note.processed': 'Nota procesada',
 
   // [[entreno]]
 

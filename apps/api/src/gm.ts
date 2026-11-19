@@ -53,12 +53,31 @@ Cómo respondes:
 Cómo funciona la app:
 ${APP_GUIDE}`;
 
+/**
+ * Modo dictado (botón "Hablar" de la app): Iván dicta lo que hizo y el Coach lo registra solo, sin conversar.
+ * Va como segundo bloque de sistema para no romper la caché del primero.
+ */
+export const DICTADO_SYSTEM = `MODO DICTADO. Iván te dictó por voz (sin revisar) lo que hizo. Tu trabajo es REGISTRARLO en la app, no conversar.
+- Registra todo lo que puedas con tus herramientas SIN pedir confirmación. Pregunta solo si falta algo esencial que no puedes deducir (p. ej. el monto de un gasto); en ese caso registra lo demás y di qué faltó.
+- El texto viene de reconocimiento de voz: corrige por contexto palabras mal transcritas ("jim" = gym, "la lus" = la luz) y nombres parecidos a los de sus personas.
+- Usa la herramienta más específica que exista (entrenamientos, visitas a lugares, contacto con personas, tiempo dedicado, salud, sueño, peso, dinero…) antes que una misión rápida genérica. Si algo coincide con una misión de su catálogo (rutina, agenda), complétala con su id.
+- Fechas: "ayer", "antier", "el lunes"… son relativas a hoy. Lo que piensa hacer después ("mañana tengo que…") va a la agenda.
+- No registres lo que NO hizo ("no fui al gym"). Una lección tras algo que salió mal va con registrar_leccion.
+- No dupliques: si algo ya está registrado ese día, no lo vuelvas a registrar.
+- Responde muy corto, sin saludo ni consejos, con este formato:
+Registré:
+• (una línea por registro)
+No entendí:
+• (lo que no pudiste registrar; omite esta sección si todo quedó)`;
+
 const askSchema = z.object({
   question: z.string().min(1).max(4000),
   /** Datos extra que manda una pantalla (p. ej. el reporte de una semana). El estado general se lee en el servidor. */
   context: z.string().max(30000).optional(),
   /** Solo consultar (p. ej. para escribir un resumen): no se le dan herramientas que escriben. */
   readOnly: z.boolean().optional(),
+  /** `dictado`: registrar lo dictado sin conversar (ver DICTADO_SYSTEM). */
+  mode: z.enum(['chat', 'dictado']).optional(),
   history: z
     .array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().max(8000) }))
     .max(20)
@@ -81,11 +100,17 @@ gmRoute.post('/ask', async (c) => {
   if (!c.env.ANTHROPIC_API_KEY) return c.json({ error: 'El Coach no está activado: falta el secreto ANTHROPIC_API_KEY.' }, 503);
   const parsed = askSchema.safeParse(await c.req.json());
   if (!parsed.success) return c.json({ error: 'Solicitud inválida' }, 400);
-  const { question, history, context, readOnly } = parsed.data;
+  const { question, history, context, readOnly, mode } = parsed.data;
+  const dictado = mode === 'dictado';
+  if (dictado && readOnly) return c.json({ error: 'El modo dictado necesita poder registrar.' }, 400);
 
   const queries: QueryCounter = { count: 0 };
   const DB = countingD1(c.env.DB, queries);
   const allowWrites = !readOnly && (await getAiSettings(drizzle(DB))).allowWrites;
+  if (dictado && !allowWrites) {
+    // Sin permiso de escribir no hay nada que hacer: la app guarda la nota como pendiente y propone registros locales.
+    return c.json({ error: 'El Coach está en solo lectura (Más → Conectar IA → Permisos). Tu nota quedó guardada para procesarla después.', code: 'read_only', actions: [] }, 409);
+  }
   const store = new D1AssistantStore(DB);
   // Si la pantalla manda sus propios datos para una consulta de solo lectura (p. ej. el reporte de una semana),
   // se usan solos: el panorama de hoy mezclaría dos periodos.
@@ -104,7 +129,7 @@ gmRoute.post('/ask', async (c) => {
     { role: 'user', content: intro },
     { role: 'assistant', content: 'Entendido. Tengo tu estado a la vista. ¿Qué necesitas?' },
     ...history.map((m) => ({ role: m.role, content: m.content })),
-    { role: 'user', content: question },
+    { role: 'user', content: dictado ? `Hoy es ${store.today}. Esto dicté:\n"""\n${question}\n"""` : question },
   ];
   const actions: CoachAction[] = [];
   let toolCalls = 0;
@@ -145,7 +170,7 @@ gmRoute.post('/ask', async (c) => {
       const response = await client.beta.messages.create({
         model: c.env.ANTHROPIC_MODEL || DEFAULT_MODEL,
         max_tokens: 16000,
-        system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
+        system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }, ...(dictado ? [{ type: 'text' as const, text: DICTADO_SYSTEM }] : [])],
         tools,
         output_config: { effort: 'medium' },
         // Si un filtro de seguridad rechaza la solicitud, la API reintenta con un modelo de respaldo.

@@ -25,6 +25,7 @@ import { reduceBody, reduceDayClosures, reduceSavings, type BodyState, type DayC
 
 // ---- Sistemas nuevos (imports) ----
 // [[voz]]
+import { reduceNotes, type NotesState } from './modules/notes';
 
 // [[entreno]]
 
@@ -86,6 +87,8 @@ export interface GameState {
 
   // ---- Sistemas nuevos (estado) ----
   // [[voz]]
+  /** Notas de voz por procesar (registro automático; no da XP). */
+  notes: NotesState;
 
   // [[entreno]]
 
@@ -177,6 +180,7 @@ export function project(input: ProjectInput): GameState {
 
   // ---- Sistemas nuevos (reductores; corren antes de logros, atributos y oro) ----
   // [[voz]]
+  const notes = reduceNotes(ctx);
 
   // [[entreno]]
 
@@ -234,6 +238,7 @@ export function project(input: ProjectInput): GameState {
     challenges,
 
     // [[voz]]
+    notes,
 
     // [[entreno]]
 

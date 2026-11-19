@@ -141,6 +141,8 @@ export interface AssistantSnapshot {
 
   // ---- Sistemas nuevos (foto para la IA) ----
   // [[voz]]
+  /** Notas de voz por procesar (opcional: las fotos de versiones anteriores no lo traen). */
+  notes?: { pending: number; latest: { id: string; date: string; text: string }[] };
 
   // [[entreno]]
 
@@ -405,6 +407,7 @@ export function buildSnapshot(
     lastJournal: journal ? { weekStart: journal.weekStart, happened: journal.happened, learned: journal.learned, next: journal.next } : null,
 
     // [[voz]]
+    notes: { pending: state.notes?.pending.length ?? 0, latest: (state.notes?.pending ?? []).slice(0, 3).map((n) => ({ id: n.id, date: n.date, text: n.text.slice(0, 280) })) },
 
     // [[entreno]]
 

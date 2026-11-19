@@ -1,27 +1,52 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ComponentType } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ATTRIBUTE_NAMES,
   GAME_CONFIG,
+  MISSION_SIZE_NAMES,
   addDays,
   frequentMissions,
+  inferMission,
+  parseDictation,
+  parseSpanishNumber,
   quickMissionId,
   type AttributeId,
   type Entity,
   type GoalData,
   type MissionData,
+  type MissionInference,
   type MissionSize,
   type NpcData,
 } from '@igv/core';
 import { addEvent, saveEntity, useGame } from '../data/store';
 import { completeMission, completeQuick, saveTodo, writeLesson } from '../lib/actions';
 import { fmtDate, fmtMoney, newId } from '../lib/time';
-import { useVoiceInput } from '../lib/voice';
+import { appendSpeech } from '../lib/voice';
+import { useVoiceContext } from '../lib/voz';
 import { AttrChips, Chips, DateChips, Field, Sheet, SizeChips, toast, useAutoFocus } from './kit';
 import { Icon } from './icons';
+import { openCuentame } from './Cuentame';
+import { useFieldMic } from './MicButton';
 import { startMissionQuest, startQuest } from './QuestMode';
+import '../styles/voz.css';
 
-export type QuickMode = 'menu' | 'did' | 'income' | 'expense' | 'lesson' | 'npc' | 'todo' | 'goal' | 'body' | 'rest';
+// ---- Registro rápido de los sistemas nuevos: cada uno importa aquí su `ui/quick/<X>Quick.tsx` ----
+// [[entreno]]
+
+// [[gente]]
+
+// [[mapa]]
+
+// [[habilidades]]
+
+// [[aprendizaje]]
+
+// [[salud]]
+
+// [[habitos]]
+
+/** Modos del registro rápido. Los sistemas nuevos agregan el suyo en QUICK_ENTRIES (cualquier texto sirve). */
+export type QuickMode = 'menu' | 'did' | 'income' | 'expense' | 'lesson' | 'npc' | 'todo' | 'goal' | 'body' | 'rest' | (string & {});
 type Opts = { mode?: QuickMode; date?: string };
 
 const bus = new Set<(o: Opts) => void>();
@@ -70,35 +95,67 @@ export function QuickAdd() {
   );
 }
 
-const TITLES: Record<QuickMode, string> = {
-  menu: 'Registrar',
-  did: 'Hice algo',
-  income: 'Ingreso',
-  expense: 'Gasto',
-  lesson: 'Lección',
-  npc: 'Hablé con…',
-  todo: 'Por hacer',
-  goal: 'Avance de meta',
-  body: 'Cuerpo',
-  rest: 'Día de descanso',
-};
+/** Props de cada formulario del registro rápido (los de `ui/quick/<X>Quick.tsx` usan las mismas). */
+export type QuickFormProps = { date: string; setDate: (d: string) => void; today: string; onDone: () => void };
+
+export interface QuickEntry {
+  mode: string;
+  icon: string;
+  /** Texto del mosaico en el menú. */
+  label: string;
+  /** Título de la hoja (si no, `label`). */
+  title?: string;
+  Form: ComponentType<QuickFormProps>;
+  /** false = no sale como mosaico (p. ej. "Día de descanso" tiene su propio botón). */
+  tile?: boolean;
+  /** No agregar el día al título de la hoja (formularios que eligen fechas futuras). */
+  ownDate?: boolean;
+}
+
+/**
+ * Formularios del registro rápido, en el orden del menú. Para agregar uno: impórtalo arriba (bajo tu ancla) y
+ * agrega `{ mode, icon, label, Form }` aquí bajo tu ancla. Aparece solo como mosaico y con su hoja, y se puede
+ * abrir directo con `openQuickAdd({ mode })`.
+ */
+const QUICK_ENTRIES: QuickEntry[] = [
+  { mode: 'did', icon: 'check', label: 'Hice algo', Form: DidForm },
+  { mode: 'income', icon: 'coin', label: 'Ingreso', Form: IncomeForm },
+  { mode: 'expense', icon: 'backpack', label: 'Gasto', Form: ExpenseForm },
+  { mode: 'npc', icon: 'chat', label: 'Hablé con…', Form: NpcForm },
+  { mode: 'todo', icon: 'calendar', label: 'Por hacer', Form: TodoForm, ownDate: true },
+  { mode: 'lesson', icon: 'feather', label: 'Lección', Form: LessonQuick },
+  { mode: 'goal', icon: 'target', label: 'Meta', title: 'Avance de meta', Form: GoalForm },
+  { mode: 'body', icon: 'heart', label: 'Cuerpo', Form: BodyForm },
+  { mode: 'rest', icon: 'moon', label: 'Día de descanso', Form: RestForm, tile: false },
+
+  // ---- Sistemas nuevos: cada uno agrega su entrada DEBAJO de su ancla ----
+  // [[entreno]]
+
+  // [[gente]]
+
+  // [[mapa]]
+
+  // [[habilidades]]
+
+  // [[aprendizaje]]
+
+  // [[salud]]
+
+  // [[habitos]]
+
+];
 
 function QuickSheet({ initial, today, onClose }: { initial: Opts; today: string; onClose: () => void }) {
   const [mode, setMode] = useState<QuickMode>(initial.mode ?? 'menu');
   const [date, setDate] = useState(initial.date ?? today);
-  const pastDay = date !== today;
+  const entry = QUICK_ENTRIES.find((e) => e.mode === mode);
+  const pastDay = date !== today && !entry?.ownDate;
+  const Form = entry?.Form;
   return (
-    <Sheet open onClose={onClose} title={`${TITLES[mode]}${pastDay && mode !== 'todo' ? ` · ${fmtDate(date, true)}` : ''}`}>
-      {mode === 'menu' && <Menu date={date} setDate={setDate} today={today} onPick={setMode} onClose={onClose} />}
-      {mode === 'did' && <DidForm date={date} setDate={setDate} today={today} onDone={onClose} />}
-      {(mode === 'income' || mode === 'expense') && <MoneyForm kind={mode} date={date} setDate={setDate} today={today} onDone={onClose} />}
-      {mode === 'lesson' && <LessonQuick date={date} setDate={setDate} today={today} onDone={onClose} />}
-      {mode === 'npc' && <NpcForm date={date} setDate={setDate} today={today} onDone={onClose} />}
-      {mode === 'todo' && <TodoForm today={today} onDone={onClose} />}
-      {mode === 'goal' && <GoalForm date={date} setDate={setDate} today={today} onDone={onClose} />}
-      {mode === 'body' && <BodyForm date={date} setDate={setDate} today={today} onDone={onClose} />}
-      {mode === 'rest' && <RestForm date={date} setDate={setDate} today={today} onDone={onClose} />}
-      {mode !== 'menu' && (
+    <Sheet open onClose={onClose} title={`${entry ? (entry.title ?? entry.label) : 'Registrar'}${pastDay && entry ? ` · ${fmtDate(date, true)}` : ''}`}>
+      {!entry && <Menu date={date} setDate={setDate} today={today} onPick={setMode} onClose={onClose} />}
+      {Form && <Form date={date} setDate={setDate} today={today} onDone={onClose} />}
+      {entry && (
         <button className="btn sm ghost" style={{ marginTop: 10 }} onClick={() => setMode('menu')}>
           <Icon name="left" /> Otras opciones
         </button>
@@ -115,19 +172,27 @@ function Menu({ date, setDate, today, onPick, onClose }: DateProps & { onPick: (
   const favs = useMemo(() => frequentMissions(events, today, 60, 10), [events, today]);
   const doneOn = (id: string) => !!state.missions.completions[id]?.dates.includes(date);
   const dailies = list<MissionData>('missions', 'daily');
-  const tiles: { mode: QuickMode | 'gm'; icon: string; label: string }[] = [
-    { mode: 'did', icon: 'check', label: 'Hice algo' },
-    { mode: 'income', icon: 'coin', label: 'Ingreso' },
-    { mode: 'expense', icon: 'backpack', label: 'Gasto' },
-    { mode: 'npc', icon: 'chat', label: 'Hablé con…' },
-    { mode: 'todo', icon: 'calendar', label: 'Por hacer' },
-    { mode: 'lesson', icon: 'feather', label: 'Lección' },
-    { mode: 'goal', icon: 'target', label: 'Meta' },
-    { mode: 'body', icon: 'heart', label: 'Cuerpo' },
-    { mode: 'gm', icon: 'sparkles', label: 'Contarle al Coach' },
-  ];
+  const tiles = QUICK_ENTRIES.filter((e) => e.tile !== false);
   return (
     <>
+      <button
+        type="button"
+        className="vz-talk"
+        onClick={() => {
+          onClose();
+          openCuentame({ listen: true });
+        }}
+      >
+        <span className="vz-talk-ico">
+          <Icon name="mic" />
+        </span>
+        <span>
+          <span className="vz-talk-title" style={{ display: 'block' }}>
+            Cuéntame
+          </span>
+          <span className="vz-talk-sub">Dilo con tu voz y lo registro solo</span>
+        </span>
+      </button>
       <Field label="¿Cuándo?">
         <DateChips value={date} onChange={setDate} today={today} />
       </Field>
@@ -160,20 +225,21 @@ function Menu({ date, setDate, today, onPick, onClose }: DateProps & { onPick: (
       )}
       <div className="qa-grid">
         {tiles.map((t) => (
-          <button
-            key={t.mode}
-            className="qa-btn"
-            onClick={() => {
-              if (t.mode === 'gm') {
-                onClose();
-                navigate('/game-master?modo=registrar');
-              } else onPick(t.mode);
-            }}
-          >
+          <button key={t.mode} className="qa-btn" onClick={() => onPick(t.mode)}>
             <Icon name={t.icon} />
             {t.label}
           </button>
         ))}
+        <button
+          className="qa-btn"
+          onClick={() => {
+            onClose();
+            navigate('/game-master?modo=registrar');
+          }}
+        >
+          <Icon name="sparkles" />
+          Contarle al Coach
+        </button>
       </div>
       <button className="btn block" style={{ marginTop: 10 }} onClick={() => onPick('rest')}>
         <Icon name="moon" /> Día de descanso
@@ -182,14 +248,41 @@ function Menu({ date, setDate, today, onPick, onClose }: DateProps & { onPick: (
   );
 }
 
-function DidForm({ date, setDate, today, onDone }: DateProps & { onDone: () => void }) {
+const INFER_TEXT: Record<MissionInference['source'], string> = {
+  historial: 'como la última vez',
+  parecido: 'como algo parecido que ya hiciste',
+  diccionario: 'por lo que escribiste',
+  defecto: '',
+};
+
+/** Tamaño y atributo sugeridos mientras escribes (tú puedes cambiarlos). */
+function useInference(title: string) {
+  const ctx = useVoiceContext();
+  const t = title.trim();
+  return useMemo(() => (t.length >= 3 ? inferMission(t, ctx.history) : null), [t, ctx.history]);
+}
+
+function SuggestLine({ inf, size, attr }: { inf: MissionInference | null; size: MissionSize; attr: AttributeId }) {
+  if (!inf || inf.source === 'defecto' || inf.size !== size || inf.attribute !== attr) return null;
+  return (
+    <div className="vz-suggest">
+      Sugerido {INFER_TEXT[inf.source]}: <b>{MISSION_SIZE_NAMES[inf.size]}</b> · <b>{ATTRIBUTE_NAMES[inf.attribute]}</b>
+    </div>
+  );
+}
+
+function DidForm({ date, setDate, today, onDone }: QuickFormProps) {
   const { list, events, state } = useGame();
   const [title, setTitle] = useState('');
-  const [size, setSize] = useState<MissionSize>('chica');
-  const [attr, setAttr] = useState<AttributeId>('disciplina');
+  // null = automático (se infiere del título mientras escribes); al tocar un chip, manda lo que elegiste.
+  const [sizeSel, setSize] = useState<MissionSize | null>(null);
+  const [attrSel, setAttr] = useState<AttributeId | null>(null);
   const [saveDaily, setSaveDaily] = useState(false);
   const ref = useAutoFocus<HTMLInputElement>();
-  const voice = useVoiceInput((text) => setTitle((prev) => (prev ? `${prev} ${text}` : text)));
+  const mic = useFieldMic((text) => setTitle((prev) => appendSpeech(prev, text)));
+  const inf = useInference(title);
+  const size = sizeSel ?? inf?.size ?? 'chica';
+  const attr = attrSel ?? inf?.attribute ?? 'disciplina';
   const catalog = list<MissionData>('missions').filter((m) => ['daily', 'side', 'event'].includes(m.kind));
   const t = title.trim();
   const match = catalog.find((m) => m.data.title.toLowerCase() === t.toLowerCase());
@@ -230,13 +323,10 @@ function DidForm({ date, setDate, today, onDone }: DateProps & { onDone: () => v
       <Field label="¿Qué hiciste o vas a hacer?">
         <div className="row" style={{ gap: 6 }}>
           <input ref={ref} className="input grow" value={title} placeholder="Fui al gym, cerré una venta…" onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && save()} />
-          {voice.supported && (
-            <button type="button" className={`btn icon ${voice.listening ? 'danger' : ''}`} onClick={voice.toggle} aria-label="Dictar por voz" title="Dictar por voz">
-              <Icon name="mic" />
-            </button>
-          )}
+          {mic.button}
         </div>
       </Field>
+      {mic.hint}
       {suggestions.length > 0 && (
         <div className="fav-row" style={{ marginTop: -6, marginBottom: 10 }}>
           {suggestions.map((s) => (
@@ -260,6 +350,7 @@ function DidForm({ date, setDate, today, onDone }: DateProps & { onDone: () => v
         </p>
       ) : (
         <>
+          <SuggestLine inf={inf} size={size} attr={attr} />
           <Field label="Tamaño">
             <SizeChips value={size} onChange={setSize} />
           </Field>
@@ -291,12 +382,33 @@ function DidForm({ date, setDate, today, onDone }: DateProps & { onDone: () => v
   );
 }
 
-function MoneyForm({ kind, date, setDate, today, onDone }: DateProps & { kind: 'income' | 'expense'; onDone: () => void }) {
+function IncomeForm(p: QuickFormProps) {
+  return <MoneyForm kind="income" {...p} />;
+}
+function ExpenseForm(p: QuickFormProps) {
+  return <MoneyForm kind="expense" {...p} />;
+}
+
+function MoneyForm({ kind, date, setDate, today, onDone }: QuickFormProps & { kind: 'income' | 'expense' }) {
   const { events, state } = useGame();
   const [amount, setAmount] = useState('');
   const [concept, setConcept] = useState('');
   const [category, setCategory] = useState('');
   const ref = useAutoFocus<HTMLInputElement>();
+  const vctx = useVoiceContext();
+  // "350 de gasolina" → monto, concepto y categoría de una vez.
+  const mic = useFieldMic((text) => {
+    const r = parseDictation(`${kind === 'income' ? 'cobré' : 'gasté'} ${text}`, vctx).proposals.find((x) => x.kind === 'income' || x.kind === 'expense');
+    if (r && (r.kind === 'income' || r.kind === 'expense')) {
+      setAmount(String(r.amount));
+      if (r.concept) setConcept(r.concept);
+      if (r.category) setCategory(r.category);
+      return;
+    }
+    const n = parseSpanishNumber(text);
+    if (n && n > 0) setAmount(String(n));
+    else setConcept((prev) => appendSpeech(prev, text));
+  }, 'Dictar monto y concepto');
   const type = kind === 'income' ? 'income.recorded' : 'expense.recorded';
   const history = useMemo(
     () =>
@@ -326,8 +438,12 @@ function MoneyForm({ kind, date, setDate, today, onDone }: DateProps & { kind: '
         El dinero real y la XP son sistemas separados.
       </p>
       <Field label={`Monto (${state.settings.currency})`}>
-        <input ref={ref} className="input" type="number" inputMode="decimal" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        <div className="row" style={{ gap: 6 }}>
+          <input ref={ref} className="input grow" type="number" inputMode="decimal" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          {mic.button}
+        </div>
       </Field>
+      {mic.hint}
       <div style={{ marginTop: -4, marginBottom: 12 }}>
         <Chips value={Number(amount) || null} onChange={(v) => setAmount(String(v))} options={presets.map((p) => ({ value: p, label: fmtMoney(p, state.settings.currency) }))} />
       </div>
@@ -357,11 +473,12 @@ function MoneyForm({ kind, date, setDate, today, onDone }: DateProps & { kind: '
   );
 }
 
-function LessonQuick({ date, setDate, today, onDone }: DateProps & { onDone: () => void }) {
+function LessonQuick({ date, setDate, today, onDone }: QuickFormProps) {
   const { list } = useGame();
   const [text, setText] = useState('');
   const [missionId, setMissionId] = useState('');
   const ref = useAutoFocus<HTMLTextAreaElement>();
+  const mic = useFieldMic((t) => setText((prev) => appendSpeech(prev, t)));
   const all = list<MissionData>('missions').filter((m) => m.kind !== 'main');
   return (
     <>
@@ -369,8 +486,12 @@ function LessonQuick({ date, setDate, today, onDone }: DateProps & { onDone: () 
         Un fracaso con lección escrita vale {GAME_CONFIG.rewards.lesson} XP.
       </p>
       <Field label="¿Qué aprendí?">
-        <textarea ref={ref} className="input" rows={4} value={text} onChange={(e) => setText(e.target.value)} placeholder="Qué pasó, por qué, y qué haré distinto." />
+        <div className="row" style={{ gap: 6, alignItems: 'flex-start' }}>
+          <textarea ref={ref} className="input grow" rows={4} value={text} onChange={(e) => setText(e.target.value)} placeholder="Qué pasó, por qué, y qué haré distinto." />
+          {mic.button}
+        </div>
       </Field>
+      {mic.hint}
       <Field label="¿En qué misión? (opcional)">
         <select className="input" value={missionId} onChange={(e) => setMissionId(e.target.value)}>
           <option value="">— Ninguna (Inteligencia) —</option>
@@ -398,11 +519,12 @@ function LessonQuick({ date, setDate, today, onDone }: DateProps & { onDone: () 
   );
 }
 
-function NpcForm({ date, setDate, today, onDone }: DateProps & { onDone: () => void }) {
+function NpcForm({ date, setDate, today, onDone }: QuickFormProps) {
   const { list, state } = useGame();
   const npcs = list<NpcData>('npcs', 'npc').sort((a, b) => (state.npcs.npcs[b.id]?.daysSince ?? 9999) - (state.npcs.npcs[a.id]?.daysSince ?? 9999));
   const [npcId, setNpcId] = useState<string | null>(null);
   const [note, setNote] = useState('');
+  const mic = useFieldMic((t) => setNote((prev) => appendSpeech(prev, t)));
   if (!npcs.length) return <p className="muted">Aún no tienes personas registradas. Agrégalas en Más → Mi gente.</p>;
   return (
     <>
@@ -417,8 +539,12 @@ function NpcForm({ date, setDate, today, onDone }: DateProps & { onDone: () => v
         />
       </Field>
       <Field label="Nota (opcional)">
-        <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="De qué hablaron" />
+        <div className="row" style={{ gap: 6 }}>
+          <input className="input grow" value={note} onChange={(e) => setNote(e.target.value)} placeholder="De qué hablaron" />
+          {mic.button}
+        </div>
       </Field>
+      {mic.hint}
       <Field label="¿Cuándo?">
         <DateChips value={date} onChange={setDate} today={today} />
       </Field>
@@ -437,13 +563,17 @@ function NpcForm({ date, setDate, today, onDone }: DateProps & { onDone: () => v
   );
 }
 
-function TodoForm({ today, onDone }: { today: string; onDone: () => void }) {
+function TodoForm({ today, onDone }: QuickFormProps) {
   const [title, setTitle] = useState('');
-  const [size, setSize] = useState<MissionSize>('media');
-  const [attr, setAttr] = useState<AttributeId>('disciplina');
+  const [sizeSel, setSize] = useState<MissionSize | null>(null);
+  const [attrSel, setAttr] = useState<AttributeId | null>(null);
+  const inf = useInference(title);
+  const size = sizeSel ?? (inf && inf.source !== 'defecto' ? inf.size : 'media');
+  const attr = attrSel ?? inf?.attribute ?? 'disciplina';
   const tomorrow = addDays(today, 1);
   const [date, setDate] = useState(tomorrow);
   const ref = useAutoFocus<HTMLInputElement>();
+  const mic = useFieldMic((t) => setTitle((prev) => appendSpeech(prev, t)));
   const save = () => {
     if (!title.trim()) return;
     saveTodo({ title: title.trim(), size, attribute: attr, date });
@@ -453,8 +583,12 @@ function TodoForm({ today, onDone }: { today: string; onDone: () => void }) {
   return (
     <>
       <Field label="¿Qué vas a hacer?">
-        <input ref={ref} className="input" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && save()} />
+        <div className="row" style={{ gap: 6 }}>
+          <input ref={ref} className="input grow" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && save()} />
+          {mic.button}
+        </div>
       </Field>
+      {mic.hint}
       <Field label="¿Cuándo?">
         <div className="row wrap" style={{ gap: 6 }}>
           <Chips
@@ -469,6 +603,7 @@ function TodoForm({ today, onDone }: { today: string; onDone: () => void }) {
           <input className="input date-mini" type="date" min={today} value={date} onChange={(e) => e.target.value && setDate(e.target.value)} aria-label="Otro día" />
         </div>
       </Field>
+      <SuggestLine inf={inf} size={size} attr={attr} />
       <Field label="Tamaño">
         <SizeChips value={size} onChange={setSize} />
       </Field>
@@ -482,7 +617,7 @@ function TodoForm({ today, onDone }: { today: string; onDone: () => void }) {
   );
 }
 
-function GoalForm({ date, setDate, today, onDone }: DateProps & { onDone: () => void }) {
+function GoalForm({ date, setDate, today, onDone }: QuickFormProps) {
   const { list, state } = useGame();
   const goals = list<GoalData>('goals', 'goal').filter((g) => !state.goals[g.id]?.completedOn && !(g.data as GoalData & { archived?: boolean }).archived);
   const [goalId, setGoalId] = useState<string | null>(goals[0]?.id ?? null);
@@ -528,7 +663,7 @@ function GoalForm({ date, setDate, today, onDone }: DateProps & { onDone: () => 
   );
 }
 
-function BodyForm({ date, setDate, today, onDone }: DateProps & { onDone: () => void }) {
+function BodyForm({ date, setDate, today, onDone }: QuickFormProps) {
   const { state } = useGame();
   const [weight, setWeight] = useState(state.body.lastWeight ? String(state.body.lastWeight.kg) : '');
   const [workout, setWorkout] = useState('');
@@ -586,7 +721,7 @@ function BodyForm({ date, setDate, today, onDone }: DateProps & { onDone: () => 
   );
 }
 
-function RestForm({ date, setDate, today, onDone }: DateProps & { onDone: () => void }) {
+function RestForm({ date, setDate, today, onDone }: QuickFormProps) {
   const { state, events } = useGame();
   const already = events.some((e) => !e.voidedAt && e.type === 'rest_day.marked' && e.localDate === date);
   return (

@@ -41,6 +41,8 @@ export * from './assistant/toolkit';
 
 // ---- Sistemas nuevos (exports) ----
 // [[voz]]
+export * from './voice';
+export type { NotesState, PendingNote } from './engine/modules/notes';
 
 // [[entreno]]
 
