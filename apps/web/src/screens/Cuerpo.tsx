@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { BODY_MEASURE_KEYS, BODY_MEASURE_LABELS, BODY_MEASURE_UNITS, addDays, describeMeasures, measuresAsOf } from '@igv/core';
+import { BODY_MEASURE_KEYS, BODY_MEASURE_LABELS, BODY_MEASURE_UNITS, addDays, describeMeasures, firstMeasures as firstOf } from '@igv/core';
 import { useGame, voidEvent } from '../data/store';
 import { fmtDate } from '../lib/time';
 import { Empty, PageHeader, confirmAction } from '../ui/kit';
@@ -24,7 +24,7 @@ export default function Cuerpo() {
   const avgSleep = b.sleep.slice(-14).reduce((s, x) => s + x.hours, 0) / Math.max(1, b.sleep.slice(-14).length);
   const workouts = [...b.entries].filter((e) => e.workout?.trim()).reverse();
   const diff = b.lastWeight && b.firstWeight ? b.lastWeight.kg - b.firstWeight.kg : null;
-  const firstMeasures = b.measureDates.length ? measuresAsOf(b.entries, b.measureDates[0]!) : {};
+  const firstMeasures = firstOf(b.entries);
   const measured = BODY_MEASURE_KEYS.filter((k) => k !== 'weightKg' && b.latest[k] !== undefined);
   const measureLogs = [...b.entries].filter((e) => describeMeasures(e)).reverse();
   return (

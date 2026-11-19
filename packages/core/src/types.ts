@@ -101,7 +101,7 @@ export type ShoeStyle = (typeof SHOE_STYLES)[number];
  * `lowerFace` de la nariz al mentón corto ↔ largo · `cheeks` pómulos · `crown` cráneo bajo ↔ alto ·
  * `forehead` frente corta ↔ amplia (altura del nacimiento del pelo) · `nose` nariz chica ↔ grande ·
  * `noseWidth` nariz fina ↔ ancha · `brows` cejas delgadas ↔ pobladas · `browHeight` cejas bajas ↔ altas ·
- * `eyes` ojos chicos ↔ grandes · `eyeSpacing` ojos juntos ↔ separados · `lips` labios delgados ↔ gruesos ·
+ * `eyes` ojos chicos ↔ grandes · `eyeOpen` ojos entrecerrados ↔ abiertos · `eyeSpacing` ojos juntos ↔ separados · `lips` labios delgados ↔ gruesos ·
  * `mouthWidth` boca chica ↔ ancha · `ears` orejas pegadas ↔ salidas.
  */
 export const FACE_TRAITS = [
@@ -119,6 +119,7 @@ export const FACE_TRAITS = [
   'brows',
   'browHeight',
   'eyes',
+  'eyeOpen',
   'eyeSpacing',
   'lips',
   'mouthWidth',
@@ -137,6 +138,8 @@ export interface CharacterLook {
   face?: Partial<Record<FaceTrait, number>>;
   /** Volumen del cabello (−1 a 1): arriba, al frente y a los lados. */
   hairShape?: { top?: number; front?: number; sides?: number };
+  /** Qué tan cerrada se ve la sombra de barba (−1 apenas visible ↔ 1 marcada). */
+  beardTone?: number;
   /** Ajuste fino de proporciones (−1 a 1): hombros angostos ↔ anchos, piernas cortas ↔ largas. */
   build?: { shoulders?: number; legs?: number };
 }

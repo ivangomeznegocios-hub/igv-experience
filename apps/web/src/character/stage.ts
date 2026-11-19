@@ -8,7 +8,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   NeutralToneMapping,
-  PCFSoftShadowMap,
+  PCFShadowMap,
   PerspectiveCamera,
   RingGeometry,
   Scene,
@@ -52,6 +52,10 @@ export class Stage {
   private ring: Mesh;
   private ringTrack: Mesh;
   private ringProgress = -1;
+  private specKey = '';
+  private pendingSpec: FigureSpec | null = null;
+  private key: DirectionalLight;
+  private lastMove = 0;
   /** Mallas propias del escenario (piso y anillos), para liberarlas al cerrar. */
   private props: Mesh[] = [];
   private raf = 0;
@@ -86,10 +90,10 @@ export class Stage {
     this.renderer.toneMapping = NeutralToneMapping;
     this.renderer.toneMappingExposure = 1;
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = PCFSoftShadowMap;
+    this.renderer.shadowMap.type = PCFShadowMap;
 
     this.scene.add(new HemisphereLight('#f4f4f2', '#8f8b86', 1.35));
-    const key = new DirectionalLight('#fffaf3', 2.5);
+    const key = (this.key = new DirectionalLight('#fffaf3', 2.5));
     key.position.set(2.2, 3.6, 3.2);
     key.castShadow = true;
     key.shadow.mapSize.set(1024, 1024);
@@ -103,14 +107,14 @@ export class Stage {
     key.shadow.normalBias = 0.02;
     key.shadow.radius = 5;
     this.scene.add(key);
-    const rim = new DirectionalLight('#bcd3ff', 1.5);
+    const rim = new DirectionalLight('#dde4f0', 1.3);
     rim.position.set(-2.6, 2.4, -2.8);
     this.scene.add(rim);
     const fill = new DirectionalLight('#fff4ec', 0.7);
     fill.position.set(-2.2, 0.4, 3);
     this.scene.add(fill);
     // Un poco de luz desde abajo para que mentón y cuello no se pierdan en sombra.
-    const under = new DirectionalLight('#fff4ec', 0.4);
+    const under = new DirectionalLight('#fff4ec', 0.75);
     under.position.set(0.4, -1.4, 2.6);
     this.scene.add(under);
 
@@ -136,6 +140,7 @@ export class Stage {
     canvas.addEventListener('pointerup', this.onUp);
     canvas.addEventListener('pointercancel', this.onUp);
     canvas.addEventListener('wheel', this.onWheel, { passive: false });
+    canvas.addEventListener('webglcontextrestored', this.onRestored);
     this.observer = new ResizeObserver(() => this.resize());
     this.observer.observe(host);
     if ('IntersectionObserver' in window) {
@@ -154,6 +159,18 @@ export class Stage {
 
   /** Reconstruye la figura (cambió la complexión, la apariencia o la ropa). */
   setSpec(spec: FigureSpec) {
+    // Reconstruir cuesta decenas de milisegundos: solo si de verdad cambió algo, y una vez por cuadro.
+    const key = JSON.stringify([spec.physique.heightCm, spec.physique.fat, spec.physique.muscle, spec.physique.girths, spec.character]);
+    if (key === this.specKey) return;
+    this.specKey = key;
+    this.pendingSpec = spec;
+    this.invalidate();
+  }
+
+  private build() {
+    const spec = this.pendingSpec;
+    if (!spec) return;
+    this.pendingSpec = null;
     const next = buildFigure(spec);
     if (this.figure) {
       this.pivot.remove(this.figure.group);
@@ -161,7 +178,6 @@ export class Stage {
     }
     this.figure = next;
     this.pivot.add(next.group);
-    this.invalidate();
   }
 
   /** Avance al siguiente nivel (0–1) y color del anillo del piso. */
@@ -171,7 +187,7 @@ export class Stage {
     if (Math.abs(p - this.ringProgress) > 0.001) {
       this.ringProgress = p;
       this.ring.geometry.dispose();
-      this.ring.geometry = new RingGeometry(R0, R1, 96, 1, Math.PI / 2, -Math.PI * 2 * Math.max(p, 0.004));
+      this.ring.geometry = new RingGeometry(R0, R1, 96, 1, Math.PI / 2 - Math.PI * 2 * Math.max(p, 0.004), Math.PI * 2 * Math.max(p, 0.004));
     }
     this.invalidate();
   }
@@ -207,14 +223,19 @@ export class Stage {
     this.canvas.removeEventListener('pointerup', this.onUp);
     this.canvas.removeEventListener('pointercancel', this.onUp);
     this.canvas.removeEventListener('wheel', this.onWheel);
+    this.canvas.removeEventListener('webglcontextrestored', this.onRestored);
     this.figure?.dispose();
     for (const m of this.props) {
       m.geometry.dispose();
       (m.material as MeshBasicMaterial).map?.dispose();
       (m.material as MeshBasicMaterial).dispose();
     }
+    this.key.shadow.dispose();
     this.renderer.dispose();
+    this.renderer.forceContextLoss();
   }
+
+  private onRestored = () => this.invalidate();
 
   private resize() {
     const w = Math.max(1, this.host.clientWidth);
@@ -222,7 +243,10 @@ export class Stage {
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
-    this.invalidate();
+    // Cambiar el tamaño borra el lienzo: se redibuja en el mismo instante para que no parpadee.
+    if (this.disposed) return;
+    cancelAnimationFrame(this.raf);
+    this.tick(performance.now());
   }
 
   invalidate() {
@@ -233,6 +257,7 @@ export class Stage {
   private tick = (now: number) => {
     this.raf = 0;
     if (this.disposed) return;
+    this.build();
     const dt = Math.min(0.05, this.lastT ? (now - this.lastT) / 1000 : 0.016);
     this.lastT = now;
     let moving = false;
@@ -280,6 +305,7 @@ export class Stage {
   };
 
   private onDown = (e: PointerEvent) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     this.canvas.setPointerCapture(e.pointerId);
     this.autoRotate = false;
@@ -304,8 +330,12 @@ export class Stage {
       if (this.pinchStart > 0) this.zoom = Math.max(1, Math.min(3, this.zoomStart * (dist / this.pinchStart)));
     } else {
       const k = 2.6 / Math.max(160, this.host.clientWidth);
-      this.yaw += dx * k * Math.PI * 0.5;
-      this.yawVel = (dx * k * Math.PI * 0.5) / 0.016;
+      const dYaw = dx * k * Math.PI * 0.5;
+      const nowMs = performance.now();
+      const dtMs = Math.max(8, Math.min(60, nowMs - this.lastMove));
+      this.lastMove = nowMs;
+      this.yaw += dYaw;
+      this.yawVel = Math.max(-8, Math.min(8, dYaw / (dtMs / 1000)));
       // En mouse también se inclina; en táctil el gesto vertical se deja para desplazar la página.
       if (e.pointerType === 'mouse') this.pitch = Math.max(-0.12, Math.min(0.5, this.pitch + dy * 0.004));
     }
@@ -315,6 +345,8 @@ export class Stage {
   private onUp = (e: PointerEvent) => {
     this.pointers.delete(e.pointerId);
     if (this.pointers.size === 0) this.dragging = false;
+    // Si el dedo se quedó quieto antes de soltar, no hay inercia.
+    if (performance.now() - this.lastMove > 90) this.yawVel = 0;
     this.pinchStart = 0;
     this.invalidate();
   };

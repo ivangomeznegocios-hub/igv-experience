@@ -10,8 +10,7 @@ import {
   TOP_STYLES,
   ageOn,
   lerpPhysique,
-  measuresAsOf,
-  physiqueFrom,
+  physiqueAsOf,
   resolveCharacter,
   type BeardStyle,
   type BodyMeasureKey,
@@ -57,6 +56,7 @@ const FACE_LABEL: Record<FaceTrait, [string, string, string]> = {
   brows: ['Cejas', 'Delgadas', 'Pobladas'],
   browHeight: ['Altura de cejas', 'Bajas', 'Altas'],
   eyes: ['Ojos', 'Chicos', 'Grandes'],
+  eyeOpen: ['Apertura de ojos', 'Entrecerrados', 'Abiertos'],
   eyeSpacing: ['Separación de ojos', 'Juntos', 'Separados'],
   lips: ['Labios', 'Delgados', 'Gruesos'],
   mouthWidth: ['Boca', 'Chica', 'Ancha'],
@@ -110,18 +110,27 @@ export function CharacterCard() {
   const settingsRef = useRef(state.settings);
   settingsRef.current = state.settings;
   const pending = useRef<{ timer: number; next: CharacterData } | null>(null);
+  const mounted = useRef(true);
   const flush = () => {
     if (!pending.current) return;
     window.clearTimeout(pending.current.timer);
     updateSettings(settingsRef.current, { character: pending.current.next });
     pending.current = null;
+    // Ya quedó guardado: se suelta el borrador para no tapar cambios que lleguen de otro dispositivo.
+    if (mounted.current) setDraft(null);
   };
   const change = (next: CharacterData) => {
     setDraft(next);
     if (pending.current) window.clearTimeout(pending.current.timer);
     pending.current = { next, timer: window.setTimeout(flush, 500) };
   };
-  useEffect(() => flush, []);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      flush();
+    };
+  }, []);
   const setLook = (patch: Partial<CharacterLook>) => change({ ...character, look: { ...character.look, ...patch } });
   const setOutfit = (patch: Partial<CharacterOutfit>) => change({ ...character, outfit: { ...character.outfit, ...patch } });
 
@@ -130,7 +139,8 @@ export function CharacterCard() {
   const heightCm = state.settings.heightCm;
   const entries = state.body.entries;
   const dates = state.body.measureDates;
-  const physiqueAt = (date: string, extra: BodyMeasures = {}, h = heightCm) => physiqueFrom({ ...measuresAsOf(entries, date), ...extra }, { heightCm: h, age });
+  // `extra` = lo que estás escribiendo en Medidas: cuenta como un registro más de ese día.
+  const physiqueAt = (date: string, extra: BodyMeasures = {}, h = heightCm) => physiqueAsOf(Object.keys(extra).length ? [...entries, { date, ...extra }] : entries, date, { heightCm: h, age });
   const current = useMemo(() => physiqueAt(state.today), [entries, state.today, heightCm, age]);
   const hasData = dates.length > 0 || !!heightCm;
 
@@ -234,7 +244,7 @@ export function CharacterCard() {
           onMeasure={() => selectTab('medidas')}
         />
       )}
-      {tab === 'medidas' && <MeasuresForm current={current} onPreview={setTyped} onSaved={() => selectTab('resumen')} />}
+      {tab === 'medidas' && <MeasuresForm current={current} onPreview={setTyped} onSaved={() => (setEvo(null), selectTab('resumen'))} />}
       {tab === 'apariencia' && <LookForm look={character.look} setLook={setLook} />}
       {tab === 'ropa' && <OutfitForm outfit={character.outfit} setOutfit={setOutfit} />}
     </div>
@@ -287,10 +297,16 @@ function Evolution({
         </button>
       </div>
     );
-  const dW = shown.weightKg - first.weightKg;
-  const dF = shown.bodyFatPct - first.bodyFatPct;
-  const dWaist = shown.girths.waist - first.girths.waist;
-  const dLean = shown.leanKg - first.leanKg;
+  // Solo se compara lo que está medido en los dos extremos (comparar contra una estimación engaña).
+  const measured = (p: Physique) => ({ weight: !p.estimated.weight, fat: !p.estimated.weight && !p.estimated.bodyFat, waist: !p.estimated.girths.includes('waist') });
+  const a = measured(first);
+  const b = measured(shown);
+  const deltas = [
+    a.weight && b.weight ? signed(shown.weightKg - first.weightKg, 'kg') : null,
+    a.fat && b.fat ? signed(shown.bodyFatPct - first.bodyFatPct, '% grasa') : null,
+    a.fat && b.fat ? signed(shown.leanKg - first.leanKg, 'kg magra') : null,
+    a.waist && b.waist ? signed(shown.girths.waist - first.girths.waist, 'cm cintura') : null,
+  ].filter(Boolean) as string[];
   return (
     <div>
       <div className="row between" style={{ marginBottom: 4 }}>
@@ -309,11 +325,16 @@ function Evolution({
         <div className="character-deltas tiny muted">Así empezaste. Mueve la barra para ver cómo has cambiado.</div>
       ) : (
         <div className="character-deltas tiny">
-          <span className="muted">Desde tu primer registro:</span>
-          <b>{signed(dW, 'kg')}</b>
-          <b>{signed(dF, '% grasa')}</b>
-          <b>{signed(dLean, 'kg magra')}</b>
-          <b>{signed(dWaist, 'cm cintura')}</b>
+          {deltas.length ? (
+            <>
+              <span className="muted">Desde tu primer registro:</span>
+              {deltas.map((d) => (
+                <b key={d}>{d}</b>
+              ))}
+            </>
+          ) : (
+            <span className="muted">Mide lo mismo dos veces (peso, % de grasa o cintura) para ver aquí cuánto cambiaste.</span>
+          )}
         </div>
       )}
     </div>
@@ -336,7 +357,8 @@ function MeasuresForm({ current, onPreview, onSaved }: { current: Physique; onPr
     return out;
   }, [vals]);
   const h = num(height);
-  const heightChanged = h !== undefined && h !== state.settings.heightCm && h >= 120 && h <= 230;
+  const heightOk = h === undefined || (h >= 120 && h <= 230);
+  const heightChanged = h !== undefined && h !== state.settings.heightCm && heightOk;
   useEffect(() => {
     onPreview({ measures, heightCm: h && h >= 120 && h <= 230 ? h : undefined });
   }, [measures, h]);
@@ -355,7 +377,8 @@ function MeasuresForm({ current, onPreview, onSaved }: { current: Physique; onPr
       </p>
       <div className="grid2" style={{ gap: 10 }}>
         <Field label="Estatura (cm)">
-          <input className="input" type="number" inputMode="decimal" min={120} max={230} value={height} placeholder="175" onChange={(e) => setHeight(e.target.value)} />
+          <input className="input" type="number" inputMode="decimal" min={120} max={230} value={height} placeholder="175" onChange={(e) => setHeight(e.target.value)} aria-invalid={!heightOk} />
+          {!heightOk && <span className="tiny" style={{ color: 'var(--red)' }}>Entre 120 y 230 cm</span>}
         </Field>
         <Field label="Peso (kg)">{input('weightKg', last.weightKg ? `Último: ${last.weightKg}` : '78')}</Field>
         <Field label="Grasa corporal (%)">{input('bodyFatPct', last.bodyFatPct ? `Último: ${last.bodyFatPct}` : `≈ ${fix1(current.bodyFatPct)}`)}</Field>
@@ -383,7 +406,7 @@ function MeasuresForm({ current, onPreview, onSaved }: { current: Physique; onPr
       </Field>
       <button
         className="btn primary block"
-        disabled={!valid || (!any && !heightChanged)}
+        disabled={!valid || !heightOk || (!any && !heightChanged)}
         onClick={() => {
           if (heightChanged) updateSettings(state.settings, { heightCm: h });
           if (any) addEvent('body.logged', measures, { localDate: date });
@@ -476,6 +499,7 @@ function LookForm({ look, setLook }: { look: CharacterLook; setLook: (p: Partial
           <Slider label="Cabello: arriba" low="Bajo" high="Alto" value={look.hairShape?.top ?? 0} onChange={(v) => setLook({ hairShape: { ...look.hairShape, top: v } })} />
           <Slider label="Cabello: al frente" low="Plano" high="Levantado" value={look.hairShape?.front ?? 0} onChange={(v) => setLook({ hairShape: { ...look.hairShape, front: v } })} />
           <Slider label="Cabello: a los lados" low="Pegado" high="Lleno" value={look.hairShape?.sides ?? 0} onChange={(v) => setLook({ hairShape: { ...look.hairShape, sides: v } })} />
+          <Slider label="Sombra de barba" low="Apenas" high="Marcada" value={look.beardTone ?? 0} onChange={(v) => setLook({ beardTone: v })} />
           <Slider label="Hombros" low="Angostos" high="Anchos" value={look.build?.shoulders ?? 0} onChange={(v) => setLook({ build: { ...look.build, shoulders: v } })} />
           <Slider label="Piernas" low="Cortas" high="Largas" value={look.build?.legs ?? 0} onChange={(v) => setLook({ build: { ...look.build, legs: v } })} />
         </>

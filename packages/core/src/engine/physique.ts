@@ -198,8 +198,77 @@ export function measuresAsOf(entries: readonly (BodyMeasures & { date: string })
 /** Fechas (sin repetir, en orden) en las que cambió alguna medida: los puntos de la línea de tiempo. */
 export function measureDates(entries: readonly (BodyMeasures & { date: string })[]): string[] {
   const dates = new Set<string>();
-  for (const e of entries) if (BODY_MEASURE_KEYS.some((k) => valid(e[k]))) dates.add(e.date);
+  const last: BodyMeasures = {};
+  for (const e of [...entries].sort((a, b) => compareDates(a.date, b.date)))
+    for (const k of BODY_MEASURE_KEYS) {
+      const v = e[k];
+      if (valid(v) && v !== last[k]) {
+        last[k] = v;
+        dates.add(e.date);
+      }
+    }
   return [...dates].sort(compareDates);
+}
+
+/** Primer valor registrado de cada medida (el punto de partida para ver cuánto ha cambiado). */
+export function firstMeasures(entries: readonly (BodyMeasures & { date: string })[]): BodyMeasures {
+  const out: BodyMeasures = {};
+  for (const e of [...entries].sort((a, b) => compareDates(a.date, b.date)))
+    for (const k of BODY_MEASURE_KEYS) if (valid(e[k]) && out[k] === undefined) out[k] = e[k];
+  return out;
+}
+
+const estimateOf = (p: Physique, k: Exclude<BodyMeasureKey, 'weightKg'>): number => {
+  if (k === 'bodyFatPct') return p.bodyFatPct;
+  const girth = (Object.keys(GIRTH_FIELD) as (keyof Girths)[]).find((g) => GIRTH_FIELD[g] === k)!;
+  return p.girths[girth];
+};
+
+/**
+ * Complexión a una fecha, a partir de los registros. Cada medida usa su último valor conocido, pero si
+ * el peso se volvió a registrar DESPUÉS de una medida (lo normal: te pesas seguido y la cinta la usas de
+ * vez en cuando), esa medida vieja no se toma como actual: se proyecta con el cambio de peso, conservando
+ * tu diferencia personal contra la estimación (medido − estimado de entonces + estimado de hoy), y se
+ * marca como estimada. Así un peso nuevo nunca deja la cintura o la grasa de hace meses como si fueran de hoy.
+ */
+export function physiqueAsOf(entries: readonly (BodyMeasures & { date: string })[], date: string, opts: { heightCm?: number | null; age?: number | null } = {}): Physique {
+  const sorted = [...entries].filter((e) => compareDates(e.date, date) <= 0).sort((a, b) => compareDates(a.date, b.date));
+  const last: Partial<Record<BodyMeasureKey, { value: number; date: string }>> = {};
+  for (const e of sorted) for (const k of BODY_MEASURE_KEYS) if (valid(e[k])) last[k] = { value: e[k] as number, date: e.date };
+  const raw: BodyMeasures = {};
+  for (const k of BODY_MEASURE_KEYS) if (last[k]) raw[k] = last[k]!.value;
+  const weight = last.weightKg;
+  if (!weight) return physiqueFrom(raw, opts);
+
+  const weightOn = (d: string): number | undefined => {
+    let w: number | undefined;
+    for (const e of sorted) if (compareDates(e.date, d) <= 0 && valid(e.weightKg)) w = e.weightKg;
+    return w;
+  };
+  const nowEstimate = physiqueFrom({ weightKg: weight.value }, opts);
+  const adjusted: BodyMeasures = { weightKg: weight.value };
+  const projected: Exclude<BodyMeasureKey, 'weightKg'>[] = [];
+  for (const k of BODY_MEASURE_KEYS) {
+    if (k === 'weightKg') continue;
+    const m = last[k];
+    if (!m) continue;
+    const weightThen = weightOn(m.date);
+    if (compareDates(m.date, weight.date) >= 0 || weightThen === undefined || weightThen === weight.value) {
+      adjusted[k] = m.value;
+      continue;
+    }
+    const thenEstimate = physiqueFrom({ weightKg: weightThen }, opts);
+    const value = estimateOf(nowEstimate, k) + (m.value - estimateOf(thenEstimate, k));
+    adjusted[k] = k === 'bodyFatPct' ? clamp(value, 4, 55) : Math.max(estimateOf(nowEstimate, k) * 0.6, value);
+    projected.push(k);
+  }
+  const p = physiqueFrom(adjusted, opts);
+  if (projected.includes('bodyFatPct')) p.estimated.bodyFat = true;
+  for (const g of Object.keys(GIRTH_FIELD) as (keyof Girths)[]) {
+    if (projected.includes(GIRTH_FIELD[g]) && !p.estimated.girths.includes(g)) p.estimated.girths.push(g);
+    if (projected.includes(GIRTH_FIELD[g])) p.girths[g] = round1(p.girths[g]);
+  }
+  return p;
 }
 
 /** Resumen corto de las medidas de un registro: "78 kg · 17 % grasa · Cintura 88 cm". */

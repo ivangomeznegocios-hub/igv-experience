@@ -60,11 +60,17 @@ export function buildFigure(spec: FigureSpec): Figure {
   const geos: BufferGeometry[] = [];
   const mats = new Map<string, MeshStandardMaterial>();
 
-  const mat = (color: string, roughness: number, o: { double?: boolean; metalness?: number; decal?: boolean; vertex?: boolean } = {}) => {
-    const key = `${color}|${roughness}|${o.double ? 1 : 0}|${o.metalness ?? 0}|${o.decal ? 1 : 0}|${o.vertex ? 1 : 0}`;
+  const mat = (color: string, roughness: number, o: { double?: boolean; metalness?: number; decal?: boolean; vertex?: boolean; alpha?: boolean; depthWrite?: boolean } = {}) => {
+    const key = `${color}|${roughness}|${o.double ? 1 : 0}|${o.metalness ?? 0}|${o.decal ? 1 : 0}|${o.vertex ? 1 : 0}|${o.alpha ? 1 : 0}|${o.depthWrite === false ? 0 : 1}`;
     let m = mats.get(key);
     if (!m) {
-      m = new MeshStandardMaterial({ color, roughness, metalness: o.metalness ?? 0, side: o.double ? DoubleSide : undefined, vertexColors: !!o.vertex });
+      m = new MeshStandardMaterial({ color, roughness, metalness: o.metalness ?? 0, vertexColors: !!o.vertex });
+      if (o.double) m.side = DoubleSide;
+      if (o.alpha) {
+        // Con color RGBA por vértice el borde se desvanece sobre la piel (sin recuadros ni costuras).
+        m.transparent = true;
+        m.depthWrite = o.depthWrite ?? false;
+      }
       if (o.decal) {
         m.polygonOffset = true;
         m.polygonOffsetFactor = -2;
@@ -319,7 +325,7 @@ export function buildFigure(spec: FigureSpec): Figure {
   const tEye = tNose + 0.195 * (1 + 0.1 * trait('midFace'));
   const tBrow = tEye + 0.075 + 0.014 * trait('browHeight');
   const tHairline = tEye + 0.32 + 0.03 * trait('forehead');
-  const tEar = tEye - 0.108;
+  const tEar = tEye - 0.12;
   const FU = trait('fullness');
   const capH = 0.2 * (1 + 0.3 * trait('crown'));
   /** Coronilla. */
@@ -340,7 +346,7 @@ export function buildFigure(spec: FigureSpec): Figure {
       hk(tNose + 0.1, 0.0712 + 0.003 * CK + soft * 0.5, 0.086, 0.01, 0.1, 2.15),
       hk(tEye + 0.005, 0.0735, 0.085, 0.008, 0.107, 2.1),
       hk(0.65, 0.0755, 0.084, 0.005, 0.108, 2.1),
-      hk(0.8, 0.0715, 0.074, 0, 0.101, 2.1),
+      hk(0.8, 0.067, 0.072, 0, 0.099, 2.1),
     ]),
     0,
     0.8,
@@ -358,8 +364,8 @@ export function buildFigure(spec: FigureSpec): Figure {
   const noseH = 0.0165 * (1 + 0.3 * trait('nose'));
   const noseW = 1 + 0.4 * trait('noseWidth');
   // La base sube en dos tramos (columela y punta) para que la sombra bajo la nariz sea suave.
-  const noseHeight = pchip([tNose - 0.024, tNose + 0.002, tNose + 0.032, tNose + 0.1, tBrow - 0.035, tBrow, tBrow + 0.04], [0, noseH * 0.42, noseH, 0.0065, 0.003, 0.0018, 0]);
-  const noseSigma = pchip([tNose - 0.024, tNose + 0.03, tNose + 0.1, tBrow], [0.0155 * noseW, 0.0125 * noseW, 0.0115 * (0.7 + 0.3 * noseW), 0.0105]);
+  const noseHeight = pchip([tNose - 0.01, tNose + 0.008, tNose + 0.032, tNose + 0.1, tBrow - 0.035, tBrow, tBrow + 0.04], [0, noseH * 0.5, noseH, 0.0065, 0.003, 0.0018, 0]);
+  const noseSigma = pchip([tNose - 0.01, tNose + 0.03, tNose + 0.1, tBrow], [0.0155 * noseW, 0.0125 * noseW, 0.0115 * (0.7 + 0.3 * noseW), 0.0105]);
   const eyeX = (0.0315 + 0.003 * trait('eyeSpacing')) * ws;
   /** Relieve de la cara (nariz y aletas, arco de las cejas, cuencas, pómulos, boca, mentón): desplazamiento en Z. */
   const faceRelief = (x: number, t: number): number => {
@@ -367,10 +373,10 @@ export function buildFigure(spec: FigureSpec): Figure {
     const xs = x / ws;
     const ax2 = Math.abs(xs);
     let d = 0;
-    if (t > tNose - 0.024 && t < tBrow + 0.04) d += noseHeight(t) * gauss(xs, noseSigma(t));
+    if (t > tNose - 0.01 && t < tBrow + 0.04) d += noseHeight(t) * gauss(xs, noseSigma(t));
     // Punta redonda y aletas: la nariz se lee por su base, no por un puente marcado.
     d += 0.0028 * (1 + 0.3 * trait('nose')) * gauss(xs, 0.0105 * noseW) * gauss(t - (tNose + 0.03), 0.028);
-    d += 0.0065 * gauss(ax2 - 0.0145 * noseW, 0.0065) * gauss(t - (tNose + 0.018), 0.02);
+    d += 0.0085 * gauss(ax2 - 0.0145 * noseW, 0.0065) * gauss(t - (tNose + 0.02), 0.02);
     d += 0.0045 * gauss(t - tBrow, 0.028) * (1 - smoothstep(0.045, 0.068, ax2));
     d -= 0.0095 * gauss(ax2 - eyeX / ws, 0.017) * gauss(t - tEye, 0.03);
     d += 0.003 * (1 + CK) * gauss(ax2 - 0.046, 0.022) * gauss(t - (tNose + 0.085), 0.06);
@@ -430,116 +436,97 @@ export function buildFigure(spec: FigureSpec): Figure {
     ear.position.set(side * (earRing.w + (0.0028 + 0.003 * trait('ears')) * ws), headY(tEar), earRing.cz - 0.012 * ws);
     ear.rotation.set(-0.16, -side * (0.42 + 0.3 * trait('ears')), -side * 0.07);
     const shellMesh = add(ear, earGeo, skinMat);
-    shellMesh.scale.set(0.0058 * ws, 0.031 * ws, 0.0155 * ws);
+    shellMesh.scale.set(0.0058 * ws, 0.034 * ws, 0.016 * ws);
     const concha = add(ear, earGeo, conchaMat, false);
-    concha.scale.set(0.003 * ws, 0.015 * ws, 0.007 * ws);
+    concha.scale.set(0.003 * ws, 0.0165 * ws, 0.0072 * ws);
     concha.position.set(side * 0.0036 * ws, -0.002 * ws, 0.002 * ws);
     root.add(ear);
   }
 
-  // Ojos, cejas y labios: parches pegados a la cara, pintados por vértice para que los bordes sean suaves.
-  const paint = mat('#ffffff', 0.55, { double: true, decal: true, vertex: true });
-  const patch = (cols: number, rows: number, fn: (i: number, j: number) => { p: P3; c: Color }): BufferGeometry => {
-    const colors = new Float32Array(cols * rows * 3);
+  // Ojos, cejas, fosas y labios: parches pegados a la cara, pintados por vértice (color + transparencia)
+  // para que los bordes se desvanezcan sobre la piel.
+  const paint = mat('#ffffff', 0.55, { double: true, decal: true, vertex: true, alpha: true });
+  const patch = (cols: number, rows: number, fn: (i: number, j: number) => { p: P3; c: Color; a?: number }, order = 2): Mesh => {
+    const colors = new Float32Array(cols * rows * 4);
     let n = 0;
     const geo = gridGeometry(cols, rows, (i, j) => {
       const r = fn(i, j);
       colors[n++] = r.c.r;
       colors[n++] = r.c.g;
       colors[n++] = r.c.b;
+      colors[n++] = r.a ?? 1;
       return r.p;
     });
-    geo.setAttribute('color', new BufferAttribute(colors, 3));
-    return geo;
+    geo.setAttribute('color', new BufferAttribute(colors, 4));
+    const mesh = add(root, geo, paint, false);
+    mesh.renderOrder = order;
+    return mesh;
   };
-  const skinC = new Color(look.skin);
-  const eyeHW = 0.0155 * ws * (1 + 0.15 * trait('eyes'));
-  const eyeHH = 0.0064 * ws * (1 + 0.22 * trait('eyes'));
-  const irisR = 0.0066 * ws;
+  const eyeHW = 0.0162 * ws * (1 + 0.15 * trait('eyes'));
+  const eyeHH = 0.0052 * ws * (1 + 0.1 * trait('eyes') + 0.25 * trait('eyeOpen'));
+  const irisR = 0.0063 * ws;
   const pupilR = 0.0023 * ws;
   const scleraC = new Color('#c8bfb6');
   const irisC = new Color(look.eyeColor);
   const limbC = irisC.clone().multiplyScalar(0.4);
   const pupilC = new Color('#0b0908');
-  const lidC = new Color(mix(look.skin, '#1a100c', 0.82));
-  const creaseC = new Color(mix(look.skin, '#5a352b', 0.42));
+  const lidC = new Color(mix(look.skin, '#1a100c', 0.85));
+  const creaseC = new Color(mix(look.skin, '#5a352b', 0.5));
   const browColor = look.hair === 'calvo' ? mix(look.hairColor, '#2a1e17', 0.5) : look.hairColor;
-  const browC = new Color(mix(browColor, look.skin, 0.1));
+  const browC = new Color(browColor);
+  const nostrilC = new Color(mix(look.skin, '#2e1513', 0.75));
   const almond = (s: number) => (1 - s * s) ** 0.7;
   for (const side of [1, -1]) {
     const cx = side * eyeX;
-    // Ojo: esclerótica, iris grande que los párpados recortan, pupila y línea de pestañas.
-    add(
-      root,
-      patch(61, 25, (i, j) => {
-        const s = (i / 60) * 2 - 1;
-        const v = (j / 24) * 2 - 1;
-        const dx = s * eyeHW;
-        const dy = v * eyeHH * (v > 0 ? 1.25 : 0.75) * almond(s) + s * side * 0.0008 * ws;
-        const r = Math.hypot(dx, dy - 0.0004 * ws);
-        const c = scleraC.clone().multiplyScalar((1 - 0.4 * smoothstep(-0.1, 1, v)) * (1 - 0.22 * Math.abs(s) ** 3));
-        c.lerp(limbC, 1 - smoothstep(irisR * 0.9, irisR * 1.06, r));
-        c.lerp(irisC, 1 - smoothstep(irisR * 0.72, irisR * 0.92, r));
-        c.lerp(pupilC, 1 - smoothstep(pupilR * 0.8, pupilR * 1.25, r));
-        c.lerp(lidC, smoothstep(0.76, 0.95, v));
-        c.lerp(creaseC, smoothstep(-0.86, -1, v) * 0.6);
-        return { p: facePoint(cx + dx, tEye + dy / hh, 0.0006), c };
-      }),
-      paint,
-      false,
-    );
+    // Ojo: esclerótica sombreada, iris grande que los párpados recortan, pupila y línea de pestañas.
+    patch(61, 25, (i, j) => {
+      const s = (i / 60) * 2 - 1;
+      const v = (j / 24) * 2 - 1;
+      const dx = s * eyeHW;
+      const dy = v * eyeHH * (v > 0 ? 1.25 : 0.75) * almond(s) + s * side * 0.0008 * ws;
+      const r = Math.hypot(dx, dy - 0.0004 * ws);
+      const c = scleraC.clone().multiplyScalar((1 - 0.42 * smoothstep(-0.1, 1, v)) * (1 - 0.22 * Math.abs(s) ** 3));
+      c.lerp(limbC, 1 - smoothstep(irisR * 0.9, irisR * 1.06, r));
+      c.lerp(irisC, 1 - smoothstep(irisR * 0.72, irisR * 0.92, r));
+      c.lerp(pupilC, 1 - smoothstep(pupilR * 0.8, pupilR * 1.25, r));
+      c.multiplyScalar(1 - 0.3 * smoothstep(0.2, 0.8, v));
+      c.lerp(lidC, smoothstep(0.72, 0.93, v));
+      c.lerp(creaseC, smoothstep(-0.84, -1, v) * 0.6);
+      return { p: facePoint(cx + dx, tEye + dy / hh, 0.0006), c };
+    });
     // Pliegue del párpado: una sombra suave sobre el ojo.
-    add(
-      root,
-      patch(21, 3, (i, j) => {
-        const s = (i / 20) * 2 - 1;
-        const y = eyeHH * 1.25 * almond(s * 0.9) + (0.0016 + 0.0009 * (j - 1)) * ws + s * side * 0.0008 * ws;
-        const c = skinC.clone().lerp(creaseC, j === 1 ? 0.75 * almond(s) : 0);
-        return { p: facePoint(cx + s * eyeHW * 1.05, tEye + y / hh, 0.0005), c };
-      }),
-      paint,
-      false,
-    );
-    // Ceja: casi recta, llena en los dos tercios internos y afinada en punta hacia la sien, con bordes difuminados.
+    patch(21, 3, (i, j) => {
+      const s = (i / 20) * 2 - 1;
+      const y = eyeHH * 1.25 * almond(s * 0.9) + (0.0017 + 0.001 * (j - 1)) * ws + s * side * 0.0008 * ws;
+      return { p: facePoint(cx + s * eyeHW * 1.05, tEye + y / hh, 0.0005), c: creaseC, a: j === 1 ? 0.7 * almond(s) : 0 };
+    });
+    // Ceja: casi recta, llena en los dos tercios internos y afinada en punta hacia la sien.
     const browHalf = (0.0033 + 0.0013 * trait('brows')) * ws;
     const browLen = 0.0255 * ws;
-    add(
-      root,
-      patch(23, 7, (i, j) => {
-        const so = (i / 22) * 2 - 1; // −1 = entrecejo, +1 = cola (hacia la sien)
-        const v = (j - 3) / 3;
-        const arch = (0.0022 * (1 - (so - 0.2) ** 2) - 0.002 * Math.max(0, so) ** 2) * ws;
-        const th = browHalf * (so < 0.33 ? 1 - 0.15 * Math.max(0, -so) ** 3 : 1 - 0.8 * ((so - 0.33) / 0.67) ** 1.3);
-        const edge = Math.max(Math.abs(v) ** 1.5, so < 0 ? (-so) ** 3 : so ** 8);
-        const c = browC.clone().lerp(skinC, smoothstep(0.3, 1, edge) * 0.92);
-        return { p: facePoint(side * (eyeX + 0.0012 * ws + so * browLen), tBrow + (arch + v * th * 1.3) / hh, 0.001), c };
-      }),
-      paint,
-      false,
-    );
+    patch(23, 7, (i, j) => {
+      const so = (i / 22) * 2 - 1; // −1 = entrecejo, +1 = cola (hacia la sien)
+      const v = (j - 3) / 3;
+      const arch = (0.0022 * (1 - (so - 0.2) ** 2) - 0.002 * Math.max(0, so) ** 2) * ws;
+      const th = browHalf * (so < 0.33 ? 1 - 0.15 * Math.max(0, -so) ** 3 : 1 - 0.8 * ((so - 0.33) / 0.67) ** 1.3);
+      const edge = Math.max(Math.abs(v) ** 1.6, so < 0 ? (-so) ** 4 : so ** 8);
+      return { p: facePoint(side * (eyeX + 0.0012 * ws + so * browLen), tBrow + (arch + v * th * 1.3) / hh, 0.001), c: browC, a: 0.95 * (1 - smoothstep(0.35, 1, edge)) };
+    });
+    // Fosa nasal: una sombra pequeña y suave bajo la punta.
+    patch(9, 7, (i, j) => {
+      const a = (i / 8) * 2 - 1;
+      const b = (j / 6) * 2 - 1;
+      return { p: facePoint(side * (0.0078 * noseW + a * 0.0042) * ws, tNose - 0.001 + (b * 0.0026 * ws) / hh, 0.0006), c: nostrilC, a: 0.5 * (1 - smoothstep(0.2, 1, Math.hypot(a, b))) };
+    });
   }
-  // Fosas nasales: dos sombras pequeñas y suaves bajo la punta.
-  const nostrilC = new Color(mix(look.skin, '#2e1513', 0.7));
-  for (const side of [1, -1])
-    add(
-      root,
-      patch(9, 7, (i, j) => {
-        const a = (i / 8) * 2 - 1;
-        const b = (j / 6) * 2 - 1;
-        const c = skinC.clone().lerp(nostrilC, (1 - smoothstep(0.25, 1, Math.hypot(a, b))) * 0.45);
-        return { p: facePoint(side * (0.0078 * noseW + a * 0.0042) * ws, tNose - 0.004 + (b * 0.0026 * ws) / hh, 0.0006), c };
-      }),
-      paint,
-      false,
-    );
   // Labios: superior delgado con arco, inferior más lleno, comisuras apenas levantadas.
   const lipHW = 0.025 * ws * (1 + 0.12 * trait('mouthWidth'));
   const lipHH = 0.006 * ws * (1 + 0.4 * trait('lips'));
   const lipC = new Color(mix(look.skin, '#b3506a', 0.5));
   const mouthC = new Color(mix(look.skin, '#3a1c1a', 0.8));
-  add(
-    root,
-    patch(29, 9, (i, j) => {
+  patch(
+    29,
+    9,
+    (i, j) => {
       const s = (i / 28) * 2 - 1;
       const v = (j - 4) / 4;
       const upper = 0.85 * (1 - s * s) ** 0.55 * (1 - 0.22 * gauss(s, 0.13));
@@ -547,11 +534,9 @@ export function buildFigure(spec: FigureSpec): Figure {
       const dy = (v > 0 ? v * upper : v * lower) * lipHH + 0.002 * ws * s * s;
       const c = lipC.clone();
       if (j === 4) c.lerp(mouthC, 0.9 * (1 - s * s * 0.3));
-      c.lerp(skinC, smoothstep(0.6, 1, Math.max(Math.abs(v), Math.abs(s) ** 4)) * 0.8);
-      return { p: facePoint(s * lipHW, tMouth + dy / hh, 0.0013), c };
-    }),
-    paint,
-    false,
+      return { p: facePoint(s * lipHW, tMouth + dy / hh, 0.0013), c, a: 1 - 0.85 * smoothstep(0.55, 1, Math.max(Math.abs(v), Math.abs(s) ** 4)) };
+    },
+    3,
   );
 
   // ---------- Cabello y barba ----------
@@ -567,15 +552,13 @@ export function buildFigure(spec: FigureSpec): Figure {
     ts: number[],
     fn: (u: number, t: number) => { p: Vector3; m: number },
     apex?: Vector3,
-    fade?: { from: string; to: string; linear?: boolean },
+    fade?: { color: string; linear?: boolean },
   ): BufferGeometry => {
     const rows = ts.length;
     const pos: number[] = [];
     const mask: number[] = [];
     const col: number[] = [];
-    const c0 = new Color(fade?.from ?? '#ffffff');
-    const c1 = new Color(fade?.to ?? '#ffffff');
-    const tmp = new Color();
+    const tint = new Color(fade?.color ?? '#ffffff');
     const SEG = 96;
     for (let i = 0; i < rows; i++)
       for (let j = 0; j < SEG; j++) {
@@ -583,10 +566,7 @@ export function buildFigure(spec: FigureSpec): Figure {
         const r = fn(v + HEAD_WARP * Math.cos(v), ts[i]!);
         pos.push(r.p.x, r.p.y, r.p.z);
         mask.push(r.m);
-        if (fade) {
-          tmp.copy(c0).lerp(c1, fade.linear ? clamp(r.m) : smoothstep(0.1, 0.7, r.m));
-          col.push(tmp.r, tmp.g, tmp.b);
-        }
+        if (fade) col.push(tint.r, tint.g, tint.b, fade.linear ? clamp(r.m) : smoothstep(0.08, 0.6, r.m));
       }
     const idx: number[] = [];
     const tri = (a: number, b: number, c: number) => {
@@ -608,7 +588,7 @@ export function buildFigure(spec: FigureSpec): Figure {
     }
     const geo = new BufferGeometry();
     geo.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
-    if (fade) geo.setAttribute('color', new BufferAttribute(new Float32Array(col), 3));
+    if (fade) geo.setAttribute('color', new BufferAttribute(new Float32Array(col), 4));
     geo.setIndex(idx);
     geo.computeVertexNormals();
     return geo;
@@ -620,11 +600,11 @@ export function buildFigure(spec: FigureSpec): Figure {
   // corta que termina a media oreja, rodea la oreja y cae a la nuca.
   const hairline = pchip(
     [0, 0.15, 0.25, 0.31, 0.36, 0.395, 0.405, 0.44, 0.455, 0.49, 0.6, 0.68, 0.82, 1].map((x) => x * PI),
-    [tHairline - 0.008, tHairline, tHairline - 0.02, tHairline - 0.075, tEye + 0.17, tEye + 0.06, tEar + 0.005, tEar, tEar + 0.035, tEar + 0.145, tEar + 0.14, tEar - 0.03, 0.27, 0.25],
+    [tHairline, tHairline, tHairline - 0.04, tEye + 0.19, tEye + 0.14, tEye + 0.05, tEar + 0.02, tEar + 0.015, tEar + 0.05, tEar + 0.16, tEar + 0.155, tEar - 0.02, 0.27, 0.25],
   );
   /** Borde de la gorra: sobre la frente al frente, más abajo en la nuca. */
   const capLine = (phi: number) => tBrow + 0.105 - 0.17 * (1 - Math.cos(phi)) * 0.5;
-  const hairMat = mat(look.hairColor, 0.8);
+  const hairMat = mat(look.hairColor, 0.9);
   if (look.hair !== 'calvo') {
     const shape = look.hairShape ?? {};
     const kTop = 1 + 0.5 * clamp(shape.top ?? 0, -1, 1);
@@ -649,9 +629,9 @@ export function buildFigure(spec: FigureSpec): Figure {
           // Lados cortos, más llenos a la altura de la sien; arriba bajo y redondeado, peinado hacia atrás y
           // hacia su izquierda (+X); al frente se levanta desde el nacimiento, más del lado derecho (−X),
           // con surcos suaves de peinado.
-          const side = kSide * (0.004 + 0.0068 * gauss(t - (tEye + 0.2), 0.11));
+          const side = kSide * (0.0062 + 0.0042 * gauss(t - (tEye + 0.13), 0.16)) * (1 - 0.75 * smoothstep(0.84, tTop, t) * (1 - fw));
           const crownTop = 0.0055 * kTop * smoothstep(0.8, tTop, t) * (0.6 + 0.4 * fw) * (1 + 0.12 * Math.cos(u));
-          const front = (1 - smoothstep(0.2 * PI, 0.46 * PI, phi)) * (1 - smoothstep(tHairline + 0.07, tTop, t));
+          const front = (1 - smoothstep(0.2 * PI, 0.46 * PI, phi)) * (1 - smoothstep(Math.min(tHairline + 0.07, tTop - 0.03), tTop, t));
           const lift = 0.0072 * kFront * front * (1 - 0.4 * Math.cos(u));
           const comb = 0.0014 * Math.sin((0.83 * pt.x + 0.55 * pt.z) * (TAU / (0.017 * ws))) * smoothstep(tHairline - 0.02, tHairline + 0.06, t);
           return side + crownTop + lift + comb;
@@ -677,24 +657,26 @@ export function buildFigure(spec: FigureSpec): Figure {
 
   if (look.beard !== 'ninguna') {
     const sombra = look.beard === 'sombra';
-    const beardTop = pchip([0, 0.12, 0.2, 0.3, 0.38, 0.43].map((x) => x * PI), [tNose - 0.02, tNose - 0.02, tNose - 0.035, tNose + 0.005, tNose + 0.07, tEar - 0.02]);
+    /** Qué tan cerrada se ve la sombra de barba (0.4 a 1.6). */
+    const tone = 1 + 0.6 * clamp(look.beardTone ?? 0, -1, 1);
+    const beardTop = pchip([0, 0.12, 0.2, 0.3, 0.38, 0.43].map((x) => x * PI), [tNose - 0.04, tNose - 0.04, tNose - 0.045, tNose + 0.005, tNose + 0.07, tEar]);
     const thick = { sombra: 0.0006, corta: 0.0035, completa: 0.0095, candado: 0.006, bigote: 0.004 }[look.beard] * ws;
     const beardAt = (u: number, t: number) => {
       const phi = fromFront(u);
       const pt0 = headPoint(u, t);
       const xs = Math.abs(pt0.x) / ws;
-      let m = smoothstep(0, sombra ? 0.08 : 0.045, beardTop(Math.min(phi, 0.43 * PI)) - t) * (1 - smoothstep(0.43 * PI, 0.47 * PI, phi));
+      let m = smoothstep(0, sombra ? 0.03 : 0.045, beardTop(Math.min(phi, 0.43 * PI)) - t) * (1 - smoothstep(0.43 * PI, 0.47 * PI, phi));
       if (sombra) {
         // Barba de uno o dos días: bigote (más a los lados que al centro), mentón, mosca y un rastro
         // por el borde de la mandíbula; las mejillas quedan casi limpias.
-        const moustache = smoothstep(tMouth + 0.012, tMouth + 0.03, t) * (1 - smoothstep(tNose - 0.035, tNose - 0.012, t)) * (1 - smoothstep(0.03, 0.04, xs)) * (0.4 + 0.6 * smoothstep(0.004, 0.013, xs));
+        const moustache = smoothstep(tMouth + 0.012, tMouth + 0.03, t) * (1 - smoothstep(tNose - 0.05, tNose - 0.03, t)) * (1 - smoothstep(0.03, 0.04, xs)) * (0.4 + 0.6 * smoothstep(0.004, 0.013, xs));
         const chin = (1 - smoothstep(0.08 * lowerF, 0.12 * lowerF, t)) * (1 - smoothstep(0.26 * PI, 0.36 * PI, phi));
-        const soul = 0.55 * gauss(xs, 0.006) * gauss(t - (tMouth - 0.04), 0.012);
+        const soul = 0.5 * gauss(xs, 0.006) * gauss(t - (tMouth - 0.04), 0.012);
         const jawEdge = lerp(0.1 * lowerF, tNose, clamp(phi / (0.42 * PI)) ** 1.6);
-        const jaw = 0.32 * (1 - smoothstep(jawEdge - 0.02, jawEdge + 0.05, t)) * (1 - smoothstep(0.3 * PI, 0.42 * PI, phi));
+        const jaw = 0.22 * (1 - smoothstep(jawEdge - 0.02, jawEdge + 0.05, t)) * (1 - smoothstep(0.3 * PI, 0.42 * PI, phi));
         // Grano irregular para que se lea como barba incipiente y no como una mancha lisa.
         const grain = Math.abs((Math.sin(u * 127.1 + t * 311.7) * 43758.5453) % 1);
-        m *= Math.min(1, Math.max(moustache * 0.85, chin * 0.6, soul, jaw, 0.06)) * (0.6 + 0.8 * grain);
+        m *= Math.min(1, Math.max(moustache, chin * 0.55, soul, jaw, 0.05) * (0.6 + 0.8 * grain) * tone);
       } else {
         if (look.beard === 'candado') m *= 1 - smoothstep(0.15 * PI, 0.19 * PI, phi);
         else if (look.beard === 'bigote') m *= (1 - smoothstep(0.13 * PI, 0.17 * PI, phi)) * smoothstep(tMouth + 0.012, tMouth + 0.028, t);
@@ -703,8 +685,9 @@ export function buildFigure(spec: FigureSpec): Figure {
       const chinBulk = look.beard === 'completa' ? 1 + 0.5 * gauss(t - 0.04, 0.1) * gauss(phi, 0.5) : 1;
       return { p: headPoint(u, t, Math.max(0.0003, thick * chinBulk * smoothstep(0.05, 0.75, m))), m };
     };
-    const beardColor = sombra ? mix(look.skin, look.hairColor, 0.55) : look.beard === 'corta' ? mix(look.skin, look.hairColor, 0.85) : look.hairColor;
-    add(root, shell(steps(0.004, tEar + 0.02, 52), beardAt, undefined, { from: look.skin, to: beardColor, linear: sombra }), mat('#ffffff', 0.75, { decal: true, vertex: true }), false);
+    const beardColor = sombra ? mix(look.skin, look.hairColor, 0.62) : look.beard === 'corta' ? mix(look.skin, look.hairColor, 0.85) : look.hairColor;
+    const beard = add(root, shell(steps(0.004, tEar + 0.03, 52), beardAt, undefined, { color: beardColor, linear: sombra }), mat('#ffffff', 0.75, { decal: true, vertex: true, alpha: true, depthWrite: !sombra }), false);
+    beard.renderOrder = 1;
   }
 
   // ---------- Lentes y gorra ----------

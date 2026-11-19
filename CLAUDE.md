@@ -22,7 +22,7 @@ código los nombres internos se conservan (módulos, tipos de evento, ids, rutas
 | `map` (`inexplorado`/`descubierto`/`dominado`) | Mapa: por conocer / conocido / habitual; "primera visita" |
 | `habits/vice`, `/enemigos` | Hábitos a dejar ("recaída") |
 | `/personaje` | Perfil ("Tu fuerte" = atributo más alto) |
-| `character/`, `settings.character`, `CharacterCard` | Tu personaje (3D): Evolución · Medidas · Apariencia · Ropa |
+| `character/`, `settings.character`, `CharacterCard` | Tu personaje (3D): Evolución · Medidas · Apariencia · Ropa (`copete` = Copete; `sombra` = barba de 1–2 días) |
 | `Physique`, `physiqueFrom` | Complexión (peso, grasa, masa magra, contornos) |
 | `/mas` (pestaña) | Más |
 | `/inventario` | Dinero y recursos |
@@ -177,9 +177,12 @@ importa `apps/web/public/push-sw.js`. Pruebas: `apps/api/test/push.test.ts` (des
   cuentas (`settings.partner`).
 - Personaje 3D (Perfil): la **forma del cuerpo nunca se guarda**; sale de los registros `body.logged` (peso,
   `bodyFatPct` y contornos en cm: cuello, hombros, pecho, cintura, cadera, brazo, antebrazo, muslo, pantorrilla)
-  y de `settings.heightCm`, vía `physiqueFrom` (`engine/physique.ts`). Lo medido siempre gana; lo que falta se
-  estima (grasa: por cintura/estatura, o por IMC y edad; contornos: por grasa e índice de masa magra). La línea
-  de tiempo usa `measuresAsOf(fecha)` (último valor conocido de cada medida) y `lerpPhysique` para animarla.
+  y de `settings.heightCm`, vía `physiqueAsOf(registros, fecha)` → `physiqueFrom` (`engine/physique.ts`). Lo
+  medido siempre gana; lo que falta se estima (grasa: por cintura/estatura, o por IMC y edad; contornos: por
+  grasa e índice de masa magra). Si el peso se registró DESPUÉS de una medida (lo normal: peso seguido, cinta de
+  vez en cuando), esa medida vieja se proyecta con el cambio de peso conservando la diferencia personal contra
+  la estimación, y se marca como estimada (≈). La línea de tiempo son las fechas en que alguna medida cambió
+  (`measureDates`); se anima con `lerpPhysique`; los cambios solo se muestran entre valores medidos.
   Apariencia y ropa sí son ajustes: `settings.character` (`look` + `outfit`, ver "Personaje 3D"). No da XP.
 - Sin XP (solo registro): enemigos (`habits/vice`, `vice.relapse`; cuenta días sin caer), cuerpo
   (`body.logged`), ahorro (`finance/savings`, `savings.moved`), presupuesto (`settings.budgets`), cierre del
@@ -221,12 +224,21 @@ pnpm --filter @igv/web dev  # Vite en :5173 con proxy de /api a :8787
   gesto horizontal gira y el vertical desplaza la página (`touch-action: pan-y`); pellizco = acercar.
   El anillo del piso es el avance al siguiente nivel. Estética sobria tipo maniquí realista (nada caricatura).
   Para probarlo en local sin GPU: Chromium con `--use-gl=angle --use-angle=swiftshader`.
-  - **Afinar el parecido con fotos** (pendiente a pedido del usuario): pedir foto de frente, de perfil y de
-    cuerpo completo, y traducirlas a `settings.character.look`: `skin`, `hairColor`, `eyeColor` (hex tomados
-    de la foto), `hair`, `beard`, `glasses`, `face` (10 rasgos de −1 a 1: `jaw`, `faceLength`, `cheeks`, `nose`,
-    `noseWidth`, `brows`, `eyes`, `eyeSpacing`, `lips`, `ears`) y `build` (`shoulders`, `legs`). Si hace falta un
-    rasgo o peinado que no existe, se agrega en `types.ts` (lista + tipo) y en `figure.ts` (anillo o relieve
-    que mueve). La complexión NO se ajusta a ojo: se registra con medidas reales.
+  - **Cabeza**: los rasgos van en alturas `t` (0 = mentón, ~1 = coronilla) con proporciones anatómicas (ojos a
+    media cabeza, base de la nariz a ~7 cm del mentón). Ojos, cejas, fosas, labios y sombra de barba son parches
+    pintados por vértice con transparencia (bordes difuminados, sin recuadros). Mapeo de tonos neutro: los
+    colores se ven como su hex.
+  - **Parecido con el usuario**: `DEFAULT_CHARACTER.look` (`packages/core/src/types.ts`) ES su cara, afinada
+    contra una foto suya (cara ancha y llena, frente amplia, cejas gruesas y bajas, nariz corta y ancha, copete
+    peinado hacia atrás y a su izquierda, barba de uno o dos días). Si guarda otra apariencia en Ajustes, gana la
+    guardada. Para volver a afinar con fotos nuevas: `look.skin`/`hairColor`/`eyeColor` (hex de la foto), `hair`
+    (incluye `copete`), `hairShape` (volumen arriba / al frente / a los lados), `beard` + `beardTone`, `glasses`,
+    `face` (19 rasgos de −1 a 1, ver `FACE_TRAITS`) y `build`. Método que funcionó: medir la foto en unidades de
+    distancia entre pupilas (alturas de nacimiento del pelo, cejas, nariz, boca, mentón; anchos de pómulos,
+    mandíbula, ojos, nariz, boca), renderizar frente / tres cuartos / perfil junto a la foto (página de
+    laboratorio local con `Stage` + Chromium con SwiftShader) y comparar; cuando un rasgo llega a ±1 y aún no
+    alcanza, el problema es del modelo (anillos o relieve en `figure.ts`), no del valor. La complexión NO se
+    ajusta a ojo: se registra con medidas reales.
 - Sin librería de UI ni de íconos (salvo `three` para el personaje 3D): CSS propio con tokens (`apps/web/src/styles.css`, paleta grafito y oro + estilos de color desbloqueables `[data-skin]`, tipografía `Plus Jakarta Sans` (también como `--font-display`, peso 800 y tracking cerrado) + `JetBrains Mono`; sin serif medieval) e íconos SVG en `ui/icons.tsx`. Tema claro/oscuro/automático (`lib/theme.ts`). Gráficas SVG propias (`ui/charts.tsx`), monograma evolutivo con iniciales, marco por título y anillo de avance de nivel (`ui/Avatar.tsx`), ícono sobrio de cada gran reto en un mosaico redondeado con anillo de avance opcional y barra de avance segmentada (`ui/BossArt.tsx`; `BossHpBar` recibe lo que falta y pinta el avance), mapa SVG por conocer/conocido/habitual (`screens/Mapa.tsx`) y árbol visual de habilidades (`screens/Habilidades.tsx`).
 - Experiencia en vivo (fase 6, sin migraciones D1):
   - **Modo enfoque** (`ui/QuestMode.tsx`): pantalla de enfoque con cronómetro o cuenta regresiva persistente en `localStorage`, sub-pasos de sesión, avance del gran reto vinculado y audio ambiental sintético (`lib/sound.ts`: fuego / lluvia con WebAudio).

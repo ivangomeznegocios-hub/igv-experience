@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { lerpPhysique, measureDates, measuresAsOf, physiqueFrom, resolveCharacter, validateEvent, DEFAULT_CHARACTER } from '../src';
+import { firstMeasures, lerpPhysique, measureDates, measuresAsOf, physiqueAsOf, physiqueFrom, resolveCharacter, validateEvent, DEFAULT_CHARACTER } from '../src';
 import { ev, run } from './helpers';
 
 describe('complexión del personaje', () => {
@@ -62,6 +62,50 @@ describe('complexión del personaje', () => {
     expect(measuresAsOf(entries, '2026-03-15')).toEqual({ weightKg: 85, waistCm: 100 });
     expect(measuresAsOf(entries, '2026-12-31')).toEqual({ weightKg: 80, waistCm: 90, bodyFatPct: 17 });
     expect(measureDates([...entries, { date: '2026-03-01', armCm: 35 }, { date: '2026-04-01' }])).toEqual(['2026-01-01', '2026-03-01', '2026-06-01']);
+  });
+
+  it('measureDates solo cuenta fechas en que una medida cambió; firstMeasures da el primer valor de cada una', () => {
+    const entries = [
+      { date: '2026-01-01', weightKg: 90 },
+      { date: '2026-01-05', weightKg: 90 }, // mismo peso (registro de entrenamiento con el peso prellenado)
+      { date: '2026-02-01', weightKg: 88, waistCm: 96 },
+      { date: '2026-03-01', waistCm: 93 },
+    ];
+    expect(measureDates(entries)).toEqual(['2026-01-01', '2026-02-01', '2026-03-01']);
+    expect(firstMeasures(entries)).toEqual({ weightKg: 90, waistCm: 96 });
+  });
+
+  it('un peso nuevo proyecta la cintura y la grasa viejas en vez de dejarlas fijas', () => {
+    const opts = { heightCm: 175, age: 30 };
+    const entries = [
+      { date: '2026-01-01', weightKg: 95, waistCm: 100 },
+      { date: '2026-06-01', weightKg: 80 },
+    ];
+    const before = physiqueAsOf(entries, '2026-01-01', opts);
+    const after = physiqueAsOf(entries, '2026-06-01', opts);
+    expect(before.girths.waist).toBe(100);
+    expect(before.estimated.girths).not.toContain('waist');
+    // Bajó 15 kg: la cintura y la grasa bajan, y no toda la pérdida se le carga a la masa magra.
+    expect(after.girths.waist).toBeLessThan(95);
+    expect(after.estimated.girths).toContain('waist');
+    expect(after.bodyFatPct).toBeLessThan(before.bodyFatPct);
+    expect(before.leanKg - after.leanKg).toBeLessThan(8);
+    // Conserva tu diferencia personal contra la estimación (aquí, cintura más chica que la estimada).
+    const plain = physiqueFrom({ weightKg: 80 }, opts);
+    expect(after.girths.waist).toBeLessThan(plain.girths.waist);
+
+    const withFat = [
+      { date: '2026-01-01', weightKg: 85, bodyFatPct: 20 },
+      { date: '2026-06-01', weightKg: 80 },
+    ];
+    const p = physiqueAsOf(withFat, '2026-06-01', opts);
+    expect(p.bodyFatPct).toBeLessThan(20);
+    expect(p.estimated.bodyFat).toBe(true);
+    // Si la medida es del mismo día que el peso (o posterior), se usa tal cual.
+    expect(physiqueAsOf([...withFat, { date: '2026-06-01', bodyFatPct: 18 }], '2026-06-01', opts).bodyFatPct).toBe(18);
+    expect(physiqueAsOf(withFat, '2026-01-01', opts).estimated.bodyFat).toBe(false);
+    // Sin registros de peso no hay con qué proyectar: se usan las medidas tal cual.
+    expect(physiqueAsOf([{ date: '2026-01-01', waistCm: 90 }], '2026-06-01', opts).girths.waist).toBe(90);
   });
 
   it('lerpPhysique mezcla dos complexiones', () => {
