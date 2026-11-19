@@ -15,9 +15,9 @@ jobs:
     name: Pruebas
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm
@@ -35,22 +35,30 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Verificar secretos
         run: |
-          for v in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID D1_DATABASE_ID; do
+          for v in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID; do
             if [ -z "${!v}" ]; then echo "::error::Falta el secreto $v en GitHub (Settings → Secrets and variables → Actions)"; exit 1; fi
           done
-        env:
-          D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
-      - name: Configurar el ID de la base de datos
-        run: sed -i "s/00000000-0000-0000-0000-000000000000/${{ secrets.D1_DATABASE_ID }}/" apps/api/wrangler.jsonc
+      - name: Crear (si no existe) y configurar la base de datos D1
+        working-directory: apps/api
+        run: |
+          ID=$(npx wrangler d1 list --json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const db=JSON.parse(s).find(x=>x.name==="igv-experience");process.stdout.write(db?db.uuid:"")})')
+          if [ -z "$ID" ]; then
+            echo "Creando la base de datos igv-experience…"
+            npx wrangler d1 create igv-experience
+            ID=$(npx wrangler d1 list --json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const db=JSON.parse(s).find(x=>x.name==="igv-experience");process.stdout.write(db?db.uuid:"")})')
+          fi
+          if [ -z "$ID" ]; then echo "::error::No se pudo obtener el ID de la base de datos D1"; exit 1; fi
+          echo "Base de datos: $ID"
+          sed -i "s/00000000-0000-0000-0000-000000000000/$ID/" wrangler.jsonc
       - run: pnpm --filter @igv/web build
       - name: Aplicar migraciones de D1
         working-directory: apps/api

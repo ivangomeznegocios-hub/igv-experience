@@ -14,7 +14,7 @@
     {
       "binding": "DB",
       "database_name": "igv-experience",
-      // El despliegue automático reemplaza este valor con el secreto D1_DATABASE_ID de GitHub.
+      // El despliegue automático crea la base (si no existe) y reemplaza este valor con su ID real.
       "database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "../../packages/db/migrations"
     }

@@ -29,32 +29,30 @@ Las reglas y decisiones técnicas están en [`CLAUDE.md`](CLAUDE.md).
 
 Necesitas: tu cuenta de GitHub y tu cuenta de Cloudflare. Tiempo: unos 20 minutos.
 
-### 1. Crea la base de datos D1
+Todo es gratis: Cloudflare Workers, D1 y Access (hasta 50 usuarios) en su plan Free, y GitHub Actions
+en un repositorio privado (2,000 minutos al mes; cada despliegue usa unos 2).
 
-1. Entra a [dash.cloudflare.com](https://dash.cloudflare.com) → **Storage & Databases** → **D1 SQL Database** → **Create**.
-2. Nombre: `igv-experience`. Crear.
-3. Copia el **Database ID** (algo como `a1b2c3d4-…`).
+### 1. Crea un token de API de Cloudflare
 
-### 2. Crea un token de API de Cloudflare
-
-1. Arriba a la derecha, tu perfil → **My Profile** → **API Tokens** → **Create Token**.
+1. Entra a [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens) → **Create Token**.
 2. Usa la plantilla **Edit Cloudflare Workers** y, en *Permissions*, agrega una fila más:
    **Account → D1 → Edit**.
 3. En *Account Resources* elige tu cuenta. Crea el token y cópialo (solo se muestra una vez).
-4. Copia también tu **Account ID** (está en la página principal del panel, columna derecha, o en la URL
+4. Copia también tu **Account ID** (en la página principal del panel, columna derecha, o en la URL
    `dash.cloudflare.com/<ACCOUNT_ID>/…`).
 
-### 3. Guarda los secretos en GitHub
+### 2. Guarda los secretos en GitHub
 
-En el repositorio: **Settings → Secrets and variables → Actions → New repository secret**. Crea tres:
+En el repositorio: **Settings → Secrets and variables → Actions → New repository secret**. Crea dos:
 
 | Nombre | Valor |
 |---|---|
-| `CLOUDFLARE_API_TOKEN` | el token del paso 2 |
+| `CLOUDFLARE_API_TOKEN` | el token del paso 1 |
 | `CLOUDFLARE_ACCOUNT_ID` | tu Account ID |
-| `D1_DATABASE_ID` | el Database ID del paso 1 |
 
-### 4. Primer despliegue
+La base de datos D1 `igv-experience` se crea sola en el primer despliegue.
+
+### 3. Primer despliegue
 
 Ve a la pestaña **Actions** del repositorio → **Pruebas y despliegue** → **Run workflow** (o sube cualquier
 cambio a `main`). Cuando termine en verde, el Worker `igv-experience` existe en Cloudflare con la URL
@@ -62,7 +60,7 @@ cambio a `main`). Cuando termine en verde, el Worker `igv-experience` existe en 
 
 > En este punto la API responde "Acceso no configurado" a propósito: no entrega datos hasta que actives Access.
 
-### 5. Activa Cloudflare Access (solo tú entras)
+### 4. Activa Cloudflare Access (solo tú entras)
 
 1. En el panel: **Workers & Pages → igv-experience → Settings → Domains & Routes**.
    En la fila **workers.dev**, activa **Cloudflare Access** (*Enable Cloudflare Access*).
@@ -85,7 +83,7 @@ cambio a `main`). Cuando termine en verde, el Worker `igv-experience` existe en 
 
 Guarda (*Deploy*). Listo: abre la URL, entra con el código que llega a tu correo y empieza a jugar.
 
-### 6. Instálala en tu celular
+### 5. Instálala en tu celular
 
 - **iPhone (Safari)**: abre la URL → botón Compartir → **Agregar a pantalla de inicio**.
 - **Android (Chrome)**: abre la URL → menú ⋮ → **Instalar app** (o *Agregar a pantalla principal*).
@@ -93,7 +91,7 @@ Guarda (*Deploy*). Listo: abre la URL, entra con el código que llega a tu corre
 La primera vez te pedirá tu fecha de nacimiento (para *Mi vida en semanas*) y, en Personaje, calificar
 tus 7 atributos iniciales con la guía de 30 y 70.
 
-### 7. (Opcional) Activa el Game Master IA
+### 6. (Opcional) Activa el Game Master IA
 
 1. Crea una clave en [platform.claude.com](https://platform.claude.com) → **API Keys**.
 2. **Workers & Pages → igv-experience → Settings → Variables and Secrets → Add** → tipo **Secret**,

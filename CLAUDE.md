@@ -130,7 +130,8 @@ pnpm --filter @igv/web dev  # Vite en :5173 con proxy de /api a :8787
   `claude-opus-5-5` (cambiable con la variable `ANTHROPIC_MODEL`), respaldo automático ante rechazos
   (`fallbacks: "default"`). El cliente arma un resumen del estado; la clave es el secreto
   `ANTHROPIC_API_KEY` del Worker. El GM solo propone; no registra nada por sí mismo.
-- Despliegue: GitHub Actions (`.github/workflows/deploy.yml`) → pruebas → migraciones D1 → `wrangler deploy`.
+- Despliegue: GitHub Actions (`.github/workflows/deploy.yml`) → pruebas → crea la base D1 si no existe
+  (por nombre `igv-experience`) → migraciones D1 → `wrangler deploy`. Secretos: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`.
   `keep_vars: true` conserva las variables configuradas en el panel de Cloudflare.
 
 ## Convenciones
