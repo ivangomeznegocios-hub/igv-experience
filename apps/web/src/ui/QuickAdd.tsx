@@ -124,7 +124,7 @@ function Menu({ date, setDate, today, onPick, onClose }: DateProps & { onPick: (
     { mode: 'lesson', icon: 'feather', label: 'Lección' },
     { mode: 'goal', icon: 'target', label: 'Meta' },
     { mode: 'body', icon: 'heart', label: 'Cuerpo' },
-    { mode: 'gm', icon: 'sparkles', label: 'Contarle al GM' },
+    { mode: 'gm', icon: 'sparkles', label: 'Contarle al Coach' },
   ];
   return (
     <>
@@ -279,8 +279,8 @@ function DidForm({ date, setDate, today, onDone }: DateProps & { onDone: () => v
       </Field>
       <div className="row" style={{ gap: 8 }}>
         {date === today && (
-          <button className="btn" disabled={!t} onClick={playNow} title="Iniciar en Modo Misión con temporizador">
-            <Icon name="play" /> Jugar
+          <button className="btn" disabled={!t} onClick={playNow} title="Iniciar en Modo enfoque con temporizador">
+            <Icon name="play" /> Enfoque
           </button>
         )}
         <button className="btn primary grow" disabled={!t} onClick={save}>
@@ -403,7 +403,7 @@ function NpcForm({ date, setDate, today, onDone }: DateProps & { onDone: () => v
   const npcs = list<NpcData>('npcs', 'npc').sort((a, b) => (state.npcs.npcs[b.id]?.daysSince ?? 9999) - (state.npcs.npcs[a.id]?.daysSince ?? 9999));
   const [npcId, setNpcId] = useState<string | null>(null);
   const [note, setNote] = useState('');
-  if (!npcs.length) return <p className="muted">Aún no tienes NPCs. Agrégalos en Mundo → NPCs.</p>;
+  if (!npcs.length) return <p className="muted">Aún no tienes personas registradas. Agrégalas en Más → Mi gente.</p>;
   return (
     <>
       <Field label="¿Con quién?">

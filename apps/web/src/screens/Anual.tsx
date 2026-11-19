@@ -56,7 +56,7 @@ export default function Anual() {
           ['Mejor racha', `${r.bestStreakInYear} días`],
           ['Lecciones', fmtNum(r.lessons)],
           ['Logros', fmtNum(r.achievements.length)],
-          ['Fases de jefe', fmtNum(r.bossPhases.length)],
+          ['Fases de reto', fmtNum(r.bossPhases.length)],
           ['Libros/cursos', fmtNum(r.booksFinished)],
           ['Metas cumplidas', fmtNum(r.goalsCompleted)],
         ].map(([k, v]) => (
@@ -91,10 +91,10 @@ export default function Anual() {
       </div>
       {(r.achievements.length > 0 || r.bossPhases.length > 0) && (
         <div className="card">
-          <h2>Momentos épicos</h2>
+          <h2>Mejores momentos</h2>
           {[...r.bossPhases, ...r.achievements].map((h, i) => (
             <div key={i} className="item" style={{ padding: '6px 0' }}>
-              <Icon name={h.source === 'boss_phase' ? 'skull' : 'trophy'} width={16} className="gold" />
+              <Icon name={h.source === 'boss_phase' ? 'flag' : 'trophy'} width={16} className="gold" />
               <div className="grow small">{h.label}</div>
               <span className="tiny muted">{h.date.slice(5)}</span>
             </div>
@@ -177,7 +177,7 @@ async function downloadImage(r: YearReview, name: string, cur: string) {
   ${topAttr ? `<text x="90" y="1130" fill="#e8edf6" font-size="32">Atributo del año: <tspan fill="#b4a1ff" font-weight="800">${esc(ATTRIBUTE_NAMES[topAttr[0]])}</tspan></text>` : ''}
   ${top ? `<text x="90" y="1185" fill="#e8edf6" font-size="32">Lo que más hice: <tspan font-weight="800">${esc(top.title)}</tspan> (${top.count}×)</text>` : ''}
   <text x="90" y="1240" fill="#e8edf6" font-size="32">Ingresos: <tspan fill="#34d399" font-weight="800">${esc(fmtMoney(r.income, cur))}</tspan></text>
-  <text x="${W - 90}" y="${H - 50}" fill="#5b6780" font-size="22" text-anchor="end">Mi vida real, jugada como un RPG</text>
+  <text x="${W - 90}" y="${H - 50}" fill="#5b6780" font-size="22" text-anchor="end">Mi vida real, medida y en progreso</text>
 </svg>`;
   const img = new Image();
   const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));

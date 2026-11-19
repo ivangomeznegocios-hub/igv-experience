@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { WeekShareCard } from '../ui/WeekShare';
 import { ATTRIBUTE_NAMES, GAME_CONFIG, addDays, weekReport, weekStart, type AttributeId } from '@igv/core';
 import { api } from '../data/api';
 import { useGame } from '../data/store';
@@ -16,7 +17,7 @@ function pct(a: number, b: number) {
   return `${p >= 0 ? '+' : ''}${p}%`;
 }
 
-/** Reporte de batalla semanal, con narración opcional del Game Master. */
+/** Reporte semanal, con resumen opcional del Coach. */
 export default function Reporte() {
   const { state, events, list } = useGame();
   const [params, setParams] = useSearchParams();
@@ -40,7 +41,7 @@ export default function Reporte() {
         `Por atributo: ${Object.entries(r.byAttribute).map(([a, x]) => `${ATTRIBUTE_NAMES[a as AttributeId]} ${x}`).join(', ') || 'nada'}.`,
         `Momentos clave: ${r.highlights.map((h) => `${h.label} (+${h.amount})`).join('; ') || 'ninguno'}.`,
         `Racha actual: ${state.streak.current}. Nivel ${state.level.level} (${state.level.title}).`,
-        overdue.length ? `NPC olvidados: ${overdue.map((m) => m.title.replace('Escribirle a ', '')).join(', ')}.` : '',
+        overdue.length ? `Personas olvidadas: ${overdue.map((m) => m.title.replace('Escribirle a ', '')).join(', ')}.` : '',
         journal ? `Diario: pasó "${journal.happened}"; aprendí "${journal.learned}"; sigue "${journal.next}".` : '',
         `Misiones de esa semana: ${state.xp.ledger.filter((e) => e.source === 'mission' && e.date >= r.weekStart && e.date <= r.weekEnd).map((e) => e.label).slice(0, 40).join('; ')}.`,
       ]
@@ -48,13 +49,13 @@ export default function Reporte() {
         .join('\n');
       const res = await api.gmAsk({
         question:
-          'Narra esta semana como el capítulo de una historia épica de mi vida (tercera persona, tono de crónica de RPG, máximo 180 palabras, con un título). Usa solo hechos reales del resumen. Cierra con una línea "Próximo capítulo:" con la misión más importante para la semana que viene.',
+          'Escribe el resumen de esta semana como un coach que me conoce (segunda persona, directo y cálido, máximo 180 palabras, con un título corto). Qué salió bien, qué faltó y un patrón que notes. Usa solo hechos reales del resumen. Cierra con una línea "Siguiente semana:" con la misión más importante para la semana que viene.',
         context: ctx,
         history: [],
       });
       setStory(res.answer);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'No se pudo narrar');
+      setErr(e instanceof Error ? e.message : 'No se pudo escribir el resumen');
     } finally {
       setBusy(false);
     }
@@ -62,7 +63,7 @@ export default function Reporte() {
 
   return (
     <>
-      <PageHeader title="Reporte de batalla" eyebrow={`${fmtDate(r.weekStart)} – ${fmtDate(r.weekEnd, true)}`} />
+      <PageHeader title="Reporte semanal" eyebrow={`${fmtDate(r.weekStart)} – ${fmtDate(r.weekEnd, true)}`} />
       <div className="row between" style={{ marginBottom: 10 }}>
         <button className="btn sm" onClick={() => go(-1)}>
           <Icon name="left" /> Anterior
@@ -71,6 +72,7 @@ export default function Reporte() {
           Siguiente <Icon name="right" />
         </button>
       </div>
+      <WeekShareCard monday={ws} />
       <div className="grid2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', marginBottom: 12 }}>
         <div className="card" style={{ marginBottom: 0 }}>
           <div className="eyebrow">XP</div>
@@ -127,21 +129,21 @@ export default function Reporte() {
         )}
         {overdue.length > 0 && (
           <p className="small" style={{ marginBottom: 0 }}>
-            <Icon name="users" width={14} style={{ verticalAlign: -2 }} /> Tu party te extraña: {overdue.map((m) => m.title.replace('Escribirle a ', '')).join(', ')}.
+            <Icon name="users" width={14} style={{ verticalAlign: -2 }} /> Tu gente te extraña: {overdue.map((m) => m.title.replace('Escribirle a ', '')).join(', ')}.
           </p>
         )}
       </div>
       <div className="card">
         <div className="card-head">
-          <h2>Crónica de la semana</h2>
+          <h2>Resumen de la semana</h2>
           <button className="btn sm violet" disabled={busy} onClick={narrate}>
-            <Icon name="sparkles" /> {busy ? 'Escribiendo…' : story ? 'Otra versión' : 'Narrar'}
+            <Icon name="sparkles" /> {busy ? 'Escribiendo…' : story ? 'Otra versión' : 'Resumir'}
           </button>
         </div>
-        {!story && !err && <p className="small muted">El Game Master convierte tu semana en un capítulo de tu historia (usa solo lo que registraste).</p>}
+        {!story && !err && <p className="small muted">El Coach resume tu semana: qué salió bien, qué faltó y qué sigue (usa solo lo que registraste).</p>}
         {err && <p className="small red">{err}</p>}
         {story && <div className="story">{story}</div>}
-        {list('seasons', 'season').length > 0 && !journal && addDays(ws, 6) <= state.today && <p className="tiny muted">Tip: escribe tu diario semanal en Temporadas para que la crónica tenga más contexto.</p>}
+        {list('seasons', 'season').length > 0 && !journal && addDays(ws, 6) <= state.today && <p className="tiny muted">Tip: escribe tu diario semanal en Temporadas para que el resumen tenga más contexto.</p>}
       </div>
     </>
   );

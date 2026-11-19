@@ -11,12 +11,13 @@ const SOURCE_LABEL: Record<string, string> = {
   lesson: 'Lección',
   achievement: 'Logro',
   skill: 'Habilidad',
-  boss_phase: 'Jefe',
-  recurring_boss: 'Jefe recurrente',
+  boss_phase: 'Gran reto',
+  recurring_boss: 'Reto recurrente',
   discovery: 'Mapa',
   bounty: 'Sorpresa',
   goal: 'Meta',
   library: 'Biblioteca',
+  challenge: 'Reto completado',
 };
 const MOODS = ['😫', '😕', '😐', '🙂', '🔥'];
 

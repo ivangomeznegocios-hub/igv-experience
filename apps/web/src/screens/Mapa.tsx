@@ -5,8 +5,8 @@ import { fmtDate, newId } from '../lib/time';
 import { Icon } from '../ui/icons';
 import { Badge, Empty, Field, PageHeader, Sheet, Tabs, confirmAction } from '../ui/kit';
 
-const STATUS_LABEL: Record<PlaceStatus, string> = { inexplorado: 'Inexplorado', descubierto: 'Descubierto', dominado: 'Dominado' };
-const TYPE_LABEL: Record<string, string> = { lugar: 'Territorio', experiencia: 'Experiencia', comunidad: 'Comunidad' };
+const STATUS_LABEL: Record<PlaceStatus, string> = { inexplorado: 'Por conocer', descubierto: 'Conocido', dominado: 'Habitual' };
+const TYPE_LABEL: Record<string, string> = { lugar: 'Lugar', experiencia: 'Experiencia', comunidad: 'Comunidad' };
 
 function hashStr(s: string): number {
   let h = 2166136261;
@@ -17,7 +17,7 @@ function hashStr(s: string): number {
   return h >>> 0;
 }
 
-/** Posiciona cada nodo de forma determinista en su región del mapa (Territorios / Experiencias / Comunidades). */
+/** Posiciona cada nodo de forma determinista en su región del mapa (Lugares / Experiencias / Comunidades). */
 function layoutNodes(places: Entity<PlaceData>[]) {
   const regions: Record<string, { cx: number; cy: number; rx: number; ry: number }> = {
     lugar: { cx: 115, cy: 115, rx: 78, ry: 68 },
@@ -55,8 +55,8 @@ export default function Mapa() {
   return (
     <>
       <PageHeader
-        title="Mapa del Mundo"
-        eyebrow={`${discovered}/${places.length} descubiertos · ${mastered} dominados`}
+        title="Mapa"
+        eyebrow={`${discovered}/${places.length} conocidos · ${mastered} habituales`}
         right={
           <button className="btn sm primary" onClick={() => setCreating(true)}>
             <Icon name="plus" /> Nuevo
@@ -78,7 +78,7 @@ export default function Mapa() {
       {places.length === 0 && (
         <div className="card">
           <Empty>
-            Tu mapa está cubierto de niebla. Agrega lugares, experiencias y comunidades por descubrir. Cada descubrimiento despeja la niebla y da +{GAME_CONFIG.rewards.discovery} XP.
+            Tu mapa está vacío. Agrega lugares, experiencias y comunidades por conocer. La primera visita a cada uno da +{GAME_CONFIG.rewards.discovery} XP.
           </Empty>
         </div>
       )}
@@ -86,7 +86,7 @@ export default function Mapa() {
       {places.length > 0 && view === 'map' && (
         <>
           <div className="card world-map-card">
-            <svg viewBox="0 0 420 320" className="world-map-svg" role="img" aria-label="Mapa interactivo de lugares descubiertos y por descubrir">
+            <svg viewBox="0 0 420 320" className="world-map-svg" role="img" aria-label="Mapa interactivo de lugares conocidos y por conocer">
               <defs>
                 <radialGradient id="wm-bg" cx="50%" cy="45%" r="70%">
                   <stop offset="0%" stopColor="var(--card-2)" />
@@ -120,7 +120,7 @@ export default function Mapa() {
 
               {/* Etiquetas de regiones */}
               <g className="wm-region-lbl">
-                <text x="115" y="42" textAnchor="middle">TERRITORIOS</text>
+                <text x="115" y="42" textAnchor="middle">LUGARES</text>
                 <text x="305" y="42" textAnchor="middle">EXPERIENCIAS</text>
                 <text x="215" y="304" textAnchor="middle">COMUNIDADES</text>
               </g>
@@ -163,7 +163,7 @@ export default function Mapa() {
                     onClick={() => setSelectedId(place.id)}
                     style={{ cursor: 'pointer' }}
                   >
-                    {/* Niebla de guerra o halo descubierto */}
+                    {/* Halo según estado (por conocer / conocido / habitual) */}
                     <circle r={s === 'inexplorado' ? 28 : 24} fill={s === 'dominado' ? 'url(#wm-glow-gold)' : s === 'descubierto' ? 'url(#wm-glow-teal)' : 'url(#wm-fog)'} />
                     {isSel && <circle r="16" fill="none" stroke="var(--text)" strokeWidth="1.6" strokeDasharray="3 3" />}
                     <circle
@@ -192,13 +192,13 @@ export default function Mapa() {
             </svg>
             <div className="legend">
               <span>
-                <i style={{ background: 'var(--card-2)', border: '1px solid var(--muted)' }} /> Inexplorado (niebla)
+                <i style={{ background: 'var(--card-2)', border: '1px solid var(--muted)' }} /> Por conocer
               </span>
               <span>
-                <i style={{ background: 'var(--teal)' }} /> Descubierto (+{GAME_CONFIG.rewards.discovery} XP)
+                <i style={{ background: 'var(--teal)' }} /> Conocido (+{GAME_CONFIG.rewards.discovery} XP)
               </span>
               <span>
-                <i style={{ background: 'var(--gold)' }} /> Dominado
+                <i style={{ background: 'var(--gold)' }} /> Habitual
               </span>
             </div>
           </div>
@@ -220,8 +220,8 @@ export default function Mapa() {
                         {selected.data.notes && <p className="small muted" style={{ margin: '6px 0 0' }}>{selected.data.notes}</p>}
                         {st?.discoveredOn && (
                           <div className="tiny muted" style={{ marginTop: 6 }}>
-                            Descubierto el {fmtDate(st.discoveredOn, true)}
-                            {st.masteredOn && s === 'dominado' ? ` · Dominado el ${fmtDate(st.masteredOn, true)}` : ''}
+                            Primera visita el {fmtDate(st.discoveredOn, true)}
+                            {st.masteredOn && s === 'dominado' ? ` · Habitual desde el ${fmtDate(st.masteredOn, true)}` : ''}
                           </div>
                         )}
                       </div>
@@ -232,12 +232,12 @@ export default function Mapa() {
                     <div className="row" style={{ gap: 8, marginTop: 12 }}>
                       {s === 'inexplorado' && (
                         <button className="btn primary" onClick={() => addEvent('map.status_changed', { placeId: selected.id, status: 'descubierto' })}>
-                          <Icon name="compass" /> Despejar niebla (+{GAME_CONFIG.rewards.discovery} XP)
+                          <Icon name="pin" /> Primera visita (+{GAME_CONFIG.rewards.discovery} XP)
                         </button>
                       )}
                       {s === 'descubierto' && (
-                        <button className="btn primary" onClick={() => confirmAction(`¿Dominaste "${selected.data.name}"?`) && addEvent('map.status_changed', { placeId: selected.id, status: 'dominado' })}>
-                          <Icon name="crown" /> Marcar como Dominado
+                        <button className="btn primary" onClick={() => confirmAction(`¿"${selected.data.name}" ya es parte de tu vida habitual?`) && addEvent('map.status_changed', { placeId: selected.id, status: 'dominado' })}>
+                          <Icon name="check" /> Marcar como habitual
                         </button>
                       )}
                     </div>
@@ -267,19 +267,19 @@ export default function Mapa() {
                           <div className="item-title">{p.data.name}</div>
                           <div className="row wrap" style={{ gap: 4, marginTop: 3 }}>
                             <Badge>{TYPE_LABEL[p.data.placeType]}</Badge>
-                            {st?.discoveredOn && <Badge tone="teal">Descubierto {fmtDate(st.discoveredOn, true)}</Badge>}
-                            {st?.masteredOn && s === 'dominado' && <Badge tone="gold">Dominado {fmtDate(st.masteredOn, true)}</Badge>}
+                            {st?.discoveredOn && <Badge tone="teal">Primera visita {fmtDate(st.discoveredOn, true)}</Badge>}
+                            {st?.masteredOn && s === 'dominado' && <Badge tone="gold">Habitual {fmtDate(st.masteredOn, true)}</Badge>}
                           </div>
                           {p.data.notes && <div className="tiny muted" style={{ marginTop: 3 }}>{p.data.notes}</div>}
                         </div>
                         {s === 'inexplorado' && (
                           <button className="btn sm primary" onClick={() => addEvent('map.status_changed', { placeId: p.id, status: 'descubierto' })}>
-                            Descubrir
+                            Ya fui
                           </button>
                         )}
                         {s === 'descubierto' && (
-                          <button className="btn sm" onClick={() => confirmAction(`¿Dominaste "${p.data.name}"?`) && addEvent('map.status_changed', { placeId: p.id, status: 'dominado' })}>
-                            Dominar
+                          <button className="btn sm" onClick={() => confirmAction(`¿"${p.data.name}" ya es parte de tu vida habitual?`) && addEvent('map.status_changed', { placeId: p.id, status: 'dominado' })}>
+                            Habitual
                           </button>
                         )}
                         <button className="btn icon ghost" aria-label="Editar" onClick={() => setEdit(p)}>

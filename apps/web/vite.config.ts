@@ -11,7 +11,7 @@ export default defineConfig({
       manifest: {
         name: 'IGV EXPERIENCE',
         short_name: 'IGV',
-        description: 'Tu vida real como un RPG.',
+        description: 'Tu vida real, medida y con progreso.',
         lang: 'es',
         start_url: '/',
         scope: '/',

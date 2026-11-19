@@ -4,6 +4,7 @@ import { addEvent, deleteEntity, saveEntity, useGame, voidEvent } from '../data/
 import { fmtDate, fmtNum, newId } from '../lib/time';
 import { AttrChips, Badge, Bar, Empty, Field, PageHeader, Sheet, SizeChips, confirmAction, undoToast } from '../ui/kit';
 import { Icon } from '../ui/icons';
+import { GoalPaceLine } from '../ui/Pace';
 
 type Goal = GoalData & { archived?: boolean };
 
@@ -52,6 +53,7 @@ export default function Metas() {
             </>
           }
         />
+        <GoalPaceLine goal={g} state={state} />
         {!g.data.archived && (
           <div className="row wrap" style={{ gap: 6, marginTop: 10 }}>
             {[1, 5, 10].map((n) => (

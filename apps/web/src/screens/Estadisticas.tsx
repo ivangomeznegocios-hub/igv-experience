@@ -53,7 +53,7 @@ export default function Estadisticas() {
   }, [state.xp.ledger]);
 
   const avgWeek = weeks.slice(0, -1).reduce((s, w) => s + w.value, 0) / Math.max(1, weeks.length - 1);
-  const SRC: Record<string, string> = { mission: 'Misiones', streak: 'Racha', lesson: 'Lecciones', achievement: 'Logros', skill: 'Habilidades', boss_phase: 'Jefes', recurring_boss: 'Jefes recurrentes', discovery: 'Mapa', bounty: 'Sorpresas', goal: 'Metas', library: 'Biblioteca' };
+  const SRC: Record<string, string> = { mission: 'Misiones', streak: 'Racha', lesson: 'Lecciones', achievement: 'Logros', skill: 'Habilidades', boss_phase: 'Grandes retos', recurring_boss: 'Retos recurrentes', discovery: 'Mapa', bounty: 'Sorpresas', goal: 'Metas', library: 'Biblioteca', challenge: 'Retos' };
   return (
     <>
       <PageHeader title="Estadísticas" eyebrow="Progreso" />

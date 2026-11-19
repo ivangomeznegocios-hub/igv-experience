@@ -55,7 +55,7 @@ export function dayPhase(): 'dawn' | 'day' | 'dusk' | 'night' {
   return 'night';
 }
 
-/** Infiere duración sugerida (en minutos) para el Modo Misión a partir del título o tamaño. */
+/** Infiere duración sugerida (en minutos) para el Modo enfoque a partir del título o tamaño. */
 export function guessQuestMinutes(title: string, size: MissionSize): number {
   const mMin = title.match(/(\d+)\s*(min|minutos?)/i);
   if (mMin) {
@@ -73,7 +73,7 @@ export function guessQuestMinutes(title: string, size: MissionSize): number {
   return 60;
 }
 
-/** Calcula el porcentaje de HP restante (0..100) de un jefe en su fase actual o total. */
+/** Calcula el porcentaje que le falta (0..100) a un gran reto en su fase actual o en total (avance = 100 − esto). */
 export function bossHpPercent(boss: Entity<BossData>, state: GameState): { phaseHpPct: number; totalHpPct: number; nextPhaseIndex: number } {
   const st = state.bosses.bosses[boss.id];
   const totalPhases = Math.max(boss.data.phases.length, 1);
@@ -91,7 +91,7 @@ export function bossHpPercent(boss: Entity<BossData>, state: GameState): { phase
   return { phaseHpPct, totalHpPct, nextPhaseIndex: idx >= 0 ? idx : totalPhases };
 }
 
-/** Busca el jefe vinculado a una misión (por weekly_streak directo o por mainQuestId). */
+/** Busca el gran reto vinculado a una misión (por weekly_streak directo o por mainQuestId). */
 export function findLinkedBoss(
   missionId: string | undefined,
   mainQuestId: string | null | undefined,
@@ -122,7 +122,7 @@ export function findLinkedBoss(
   return { boss: found, phaseTitle: next.title, hpRemainingPct: phaseHpPct, currentText: cur };
 }
 
-/** Deriva estados/buffs activos del jugador (solo lectura; 100% recalculable). */
+/** Deriva lo que tienes a tu favor / en contra hoy (solo lectura; 100% recalculable). */
 export function computeBuffs(state: GameState, entities: Entity[]): ActiveBuff[] {
   const buffs: ActiveBuff[] = [];
   const wd = weekday(state.today);
@@ -135,35 +135,36 @@ export function computeBuffs(state: GameState, entities: Entity[]): ActiveBuff[]
     if (state.energy.value >= 100) {
       buffs.push({ id: 'rested', label: 'Descansado', detail: `${state.energy.sleepHours} h · energía al máximo`, tone: 'teal', icon: 'bolt' });
     } else if (state.energy.low) {
-      buffs.push({ id: 'survival', label: 'Supervivencia', detail: 'Energía baja · prioriza misiones chicas y recuperación', tone: 'red', icon: 'moon' });
+      buffs.push({ id: 'survival', label: 'Energía baja', detail: 'Prioriza misiones chicas y recuperación', tone: 'red', icon: 'moon' });
     }
   }
 
   if (state.streak.current >= 30) {
-    buffs.push({ id: 'streak-30', label: `Imparable ×${state.streak.current}`, detail: `+${state.streak.bonusToday} XP Disciplina al día`, tone: 'flame', icon: 'flame' });
+    buffs.push({ id: 'streak-30', label: `Racha de ${state.streak.current} días`, detail: `+${state.streak.bonusToday} XP Disciplina al día`, tone: 'flame', icon: 'flame' });
   } else if (state.streak.current >= 7) {
-    buffs.push({ id: 'streak-7', label: `Fuego Vivo ×${state.streak.current}`, detail: `Aura encendida · +${state.streak.bonusToday} XP Disciplina`, tone: 'flame', icon: 'flame' });
+    buffs.push({ id: 'streak-7', label: `Racha de ${state.streak.current} días`, detail: `Una semana o más · +${state.streak.bonusToday} XP Disciplina`, tone: 'flame', icon: 'flame' });
   } else if (state.streak.current >= 3) {
-    buffs.push({ id: 'streak-3', label: `En Racha ×${state.streak.current}`, detail: `+${state.streak.bonusToday} XP Disciplina hoy`, tone: 'gold', icon: 'flame' });
+    buffs.push({ id: 'streak-3', label: `En racha · ${state.streak.current} días`, detail: `+${state.streak.bonusToday} XP Disciplina hoy`, tone: 'gold', icon: 'flame' });
   }
 
   if (routine.length > 0 && routine.every((m) => doneToday.has(m.id))) {
-    buffs.push({ id: 'perfect-day', label: 'Día Perfecto', detail: `${routine.length}/${routine.length} rutina completada`, tone: 'green', icon: 'crown' });
+    buffs.push({ id: 'perfect-day', label: 'Día perfecto', detail: `${routine.length}/${routine.length} rutina completada`, tone: 'green', icon: 'crown' });
   }
 
   const vices = entities.filter((e) => !e.deletedAt && e.module === 'habits' && e.kind === 'vice') as Entity<ViceData>[];
   const bestClean = vices.reduce((best, v) => Math.max(best, state.vices[v.id]?.current ?? 0), 0);
   if (bestClean >= 7) {
-    buffs.push({ id: 'iron-mind', label: 'Mente de Hierro', detail: `${bestClean} días manteniendo enemigos a raya`, tone: 'blue', icon: 'shield' });
+    buffs.push({ id: 'iron-mind', label: `${bestClean} días sin recaída`, detail: `Tu mejor marca actual en hábitos a dejar`, tone: 'blue', icon: 'shield' });
   }
 
   return buffs;
 }
 
-/** Genera un briefing breve del Narrador / Game Master local (instantáneo y sin costo de API). */
+/** Genera el Resumen del día local (instantáneo y sin costo de API). */
 export function buildDailyBriefing(state: GameState, entities: Entity[]): { headline: string; body: string } {
   const phase = dayPhase();
-  const name = (state.settings.name || 'Jugador').split(/\s+/)[0];
+  const name = (state.settings.name || '').split(/\s+/)[0];
+  const n = name ? `, ${name}` : '';
   const wd = weekday(state.today);
   const routine = (entities.filter((e) => !e.deletedAt && e.module === 'missions' && e.kind === 'daily') as Entity<MissionData>[]).filter((m) =>
     isInRoutine(m.data, wd),
@@ -179,32 +180,32 @@ export function buildDailyBriefing(state: GameState, entities: Entity[]): { head
   // Saludo contextual
   const greet =
     phase === 'dawn'
-      ? `Amanece en la campaña, ${name}.`
+      ? `Buenos días${n}.`
       : phase === 'day'
-        ? `Campaña en marcha, ${name}.`
+        ? `Buen ritmo${n}.`
         : phase === 'dusk'
-          ? `Cae la tarde, ${name}.`
-          : `Hora de la hoguera, ${name}.`;
+          ? `Buenas tardes${n}.`
+          : `Buenas noches${n}.`;
 
   // Situación prioritaria
   if (state.streak.todayRest) {
     return {
-      headline: 'Día de descanso activo',
-      body: 'Tu racha está protegida. Recupera fuerzas hoy sin culpa; mañana vuelves al frente con energía llena.',
+      headline: 'Hoy es día de descanso',
+      body: 'Tu racha está protegida. Recupérate sin culpa; mañana vuelves con la energía llena.',
     };
   }
   if (routine.length > 0 && remainingRoutine.length === 0) {
     return {
-      headline: `¡Día Perfecto! +${state.xp.today} XP hoy`,
+      headline: `Día perfecto: +${state.xp.today} XP hoy`,
       body: state.dayClosures[state.today]
-        ? 'Rutina completa y día cerrado en la hoguera. Misión cumplida.'
-        : 'Completaste toda tu rutina de hoy. Pasa por La Hoguera en la noche para sellar tu crónica.',
+        ? 'Rutina completa y día cerrado. Buen trabajo.'
+        : 'Completaste toda tu rutina de hoy. En la noche haz el cierre del día para dejarlo registrado.',
     };
   }
   if (state.energy.low) {
     return {
-      headline: `${greet} Modo Supervivencia.`,
-      body: `Energía en ${state.energy.value}. Hoy no pelees batallas gigantes: elige una misión chica o de recuperación para sostener la racha.`,
+      headline: `${greet} Hoy, con calma.`,
+      body: `Energía en ${state.energy.value}. Hoy no toca lo pesado: elige una misión chica o de recuperación para sostener la racha.`,
     };
   }
   if (!state.streak.todayActive && state.streak.current > 0 && (phase === 'dusk' || phase === 'night')) {
@@ -217,8 +218,8 @@ export function buildDailyBriefing(state: GameState, entities: Entity[]): { head
     const pct = Math.round((state.money.monthIncome / Math.max(state.money.goal, 1)) * 100);
     if (pct >= 70 && pct < 100) {
       return {
-        headline: `El Dragón Financiero está herido (${100 - pct}% HP)`,
-        body: `Llevas ${fmtMoney(state.money.monthIncome, state.settings.currency)} este mes. Un golpe más y cae la meta mensual.`,
+        headline: `Meta de ingresos del mes al ${pct}%`,
+        body: `Llevas ${fmtMoney(state.money.monthIncome, state.settings.currency)} este mes. Un empujón más y la cumples.`,
       };
     }
   }
@@ -226,7 +227,7 @@ export function buildDailyBriefing(state: GameState, entities: Entity[]): { head
     const who = state.npcs.generatedMissions[0].title.replace('Escribirle a ', '');
     return {
       headline: greet,
-      body: `${remainingRoutine.length} misión(es) en tu rutina y ${who} lleva tiempo sin saber de ti. Un mensaje breve suma a tu party.`,
+      body: `${remainingRoutine.length} misión(es) en tu rutina y ${who} lleva tiempo sin saber de ti. Un mensaje breve cuenta.`,
     };
   }
   if (focusQuest) {
@@ -241,7 +242,7 @@ export function buildDailyBriefing(state: GameState, entities: Entity[]): { head
   };
 }
 
-/** Encuentro aleatorio determinista del día (emboscada de jefe recurrente o reto del atributo más bajo). */
+/** Reto del día, determinista por fecha (un reto recurrente o una prueba del atributo más bajo). */
 export function pickDailyEncounter(state: GameState, entities: Entity[]): DailyEncounter | null {
   const recurring = entities.filter((e) => !e.deletedAt && e.module === 'bosses' && e.kind === 'recurring') as Entity<RecurringBossData>[];
   const lowestAttr = ATTRIBUTE_IDS.reduce(
@@ -253,7 +254,7 @@ export function pickDailyEncounter(state: GameState, entities: Entity[]): DailyE
     ...recurring.map((b) => ({
       id: `enc-${b.id}`,
       kind: 'recurring_boss' as const,
-      title: `Emboscada: ${b.data.name}`,
+      title: b.data.name,
       subtitle: `${b.data.defeatCondition} (+${GAME_CONFIG.rewards.recurringBoss} XP)`,
       bossId: b.id,
       attribute: b.data.attribute,

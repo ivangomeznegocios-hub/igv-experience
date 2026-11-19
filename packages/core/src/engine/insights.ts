@@ -89,7 +89,8 @@ function best<K extends string>(m: Map<K, number>, exclude?: K): { key: K | null
 function record(id: PersonalRecord['id'], label: string, unit: PersonalRecord['unit'], m: Map<string, number>, current: string): PersonalRecord {
   const prev = best(m, current);
   const cur = m.get(current) ?? 0;
-  const brokenNow = cur > 0 && cur > prev.value;
+  // Sin marca anterior no hay récord que romper (el primer día no cuenta).
+  const brokenNow = prev.value > 0 && cur > prev.value;
   return { id, label, unit, value: brokenNow ? cur : prev.value, when: brokenNow ? current : prev.key, previous: prev.value, brokenNow };
 }
 

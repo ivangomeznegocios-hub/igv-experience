@@ -25,7 +25,7 @@ function tone(freq: number, start: number, dur: number, gain = 0.08, type: Oscil
   o.stop(t + dur + 0.06);
 }
 
-/** Sonidos RPG sintetizados (sin archivos externos). Se pueden apagar en Ajustes. */
+/** Sonidos de feedback sintetizados (sin archivos externos). Se pueden apagar en Ajustes. */
 export const sfx = {
   xp(amount: number) {
     if (!getPrefs().sound) return;
@@ -54,7 +54,7 @@ export const sfx = {
   },
   bossHit() {
     if (!getPrefs().sound) return;
-    // Golpe grave + filo metálico
+    // Avance en un reto: pulso grave + brillo corto
     tone(150, 0, 0.22, 0.14, 'sawtooth', 48);
     tone(920, 0.03, 0.14, 0.05, 'triangle', 520);
   },
@@ -88,7 +88,7 @@ export function haptic(pattern: number | number[]) {
   if (getPrefs().haptics && typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(pattern);
 }
 
-// ---------- Sonido ambiente sintetizado para Modo Misión (hoguera / lluvia) ----------
+// ---------- Sonido ambiente sintetizado para Modo enfoque (fuego / lluvia) ----------
 export type AmbientMode = 'off' | 'fire' | 'rain';
 let ambientNodes: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
 
@@ -115,7 +115,7 @@ export function setAmbientSound(mode: AmbientMode) {
   let last = 0;
   for (let i = 0; i < len; i++) {
     const white = Math.random() * 2 - 1;
-    // Ruido marrón suave para hoguera o rosa/bandpass para lluvia
+    // Ruido marrón suave para fuego o rosa/bandpass para lluvia
     last = (last + 0.04 * white) / 1.04;
     data[i] = mode === 'fire' ? last * 2.6 + (Math.random() > 0.9985 ? (Math.random() * 2 - 1) * 0.45 : 0) : (last * 1.4 + white * 0.18);
   }

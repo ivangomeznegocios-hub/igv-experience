@@ -43,7 +43,7 @@ function normStr(s: string): string {
     .trim();
 }
 
-/** Detecta misiones propuestas en el formato `• [Tamaño · Atributo] Título: razón` dentro de las respuestas del GM. */
+/** Detecta misiones propuestas en el formato `• [Tamaño · Atributo] Título: razón` dentro de las respuestas del Coach. */
 function extractQuestOffers(text: string): ParsedQuestOffer[] {
   const out: ParsedQuestOffer[] = [];
   const sizeMap: Record<string, MissionSize> = { chica: 'chica', media: 'media', grande: 'grande', epica: 'epica' };
@@ -73,11 +73,11 @@ function extractQuestOffers(text: string): ParsedQuestOffer[] {
   return out;
 }
 
-/** Resumen compacto del estado del juego para el Game Master (se calcula en tu dispositivo). */
+/** Resumen compacto de tu progreso para el Coach (se calcula en tu dispositivo). */
 function buildContext(state: GameState, list: <D>(m: string, k?: string) => Entity<D>[]): string {
   const lines: string[] = [];
   const s = state.settings;
-  lines.push(`Jugador: ${s.name} (${s.className}). Hoy: ${state.today}.`);
+  lines.push(`Persona: ${s.name} (${s.className}). Hoy: ${state.today}.`);
   lines.push(`Nivel ${state.level.level} (${state.level.title}), ${state.level.totalXp} XP; faltan ${state.level.nextLevelXp - state.level.totalXp} XP para el siguiente nivel.`);
   lines.push(`Racha: ${state.streak.current} días (mejor ${state.streak.best}). Días de descanso disponibles esta semana: ${state.streak.restDaysLeftThisWeek}.`);
   lines.push(`Energía hoy: ${state.energy.value ?? 'sin check-in'}${state.energy.low ? ' (BAJA)' : ''}.`);
@@ -90,7 +90,7 @@ function buildContext(state: GameState, list: <D>(m: string, k?: string) => Enti
   lines.push(`Ingreso del mes: ${fmtMoney(state.money.monthIncome)} de meta ${fmtMoney(state.money.goal)}.`);
   lines.push('\nMisiones principales:');
   for (const q of list<MainQuestData>('missions', 'main')) lines.push(`- ${q.data.code} ${q.data.title}: ${q.data.goal}`);
-  lines.push('\nJefes:');
+  lines.push('\nGrandes retos:');
   for (const b of list<BossData>('bosses', 'boss')) {
     const st = state.bosses.bosses[b.id];
     const next = st?.phases.find((p) => !p.done);
@@ -102,7 +102,7 @@ function buildContext(state: GameState, list: <D>(m: string, k?: string) => Enti
   lines.push('\nMenú de diarias:');
   for (const m of list<MissionData>('missions', 'daily')) lines.push(`- [${m.data.size} · ${ATTRIBUTE_NAMES[m.data.attribute]}] ${m.data.title}${m.data.recovery ? ' (recuperación)' : ''}`);
   const overdue = state.npcs.generatedMissions;
-  if (overdue.length) lines.push(`\nNPC clave sin contacto: ${overdue.map((m) => m.title.replace('Escribirle a ', '')).join(', ')}.`);
+  if (overdue.length) lines.push(`\nPersonas clave sin contacto: ${overdue.map((m) => m.title.replace('Escribirle a ', '')).join(', ')}.`);
   const journal = Object.values(state.seasons.journal).sort((a, b) => (a.weekStart < b.weekStart ? 1 : -1)).slice(0, 3);
   if (journal.length) {
     lines.push('\nÚltimas entradas del diario:');
@@ -115,13 +115,13 @@ function buildContext(state: GameState, list: <D>(m: string, k?: string) => Enti
   const todos = list<TodoData>('planner', 'todo').filter((t) => !state.missions.completions[t.id] && t.data.date <= addDays(state.today, 7));
   if (todos.length) lines.push(`Agenda: ${todos.map((t) => `${t.data.date} ${t.data.title}`).join('; ')}.`);
   const vices = list<ViceData>('habits', 'vice');
-  if (vices.length) lines.push(`Enemigos (días sin caer): ${vices.map((v) => `${v.data.name} ${state.vices[v.id]?.current ?? 0}`).join('; ')}.`);
+  if (vices.length) lines.push(`Hábitos a dejar (días sin recaída): ${vices.map((v) => `${v.data.name} ${state.vices[v.id]?.current ?? 0}`).join('; ')}.`);
   const recent = [...state.xp.ledger].reverse().slice(0, 12);
   if (recent.length) lines.push(`\nXP reciente: ${recent.map((e) => `${e.date} ${e.label} +${e.amount}`).join('; ')}.`);
   return lines.join('\n');
 }
 
-const SUGGESTIONS = ['Propónme 3 misiones para hoy', '¿Qué jefe estoy más cerca de vencer y cómo lo remato?', 'Plan para esta semana según mi misión en foco', '¿Qué atributo estoy descuidando?'];
+const SUGGESTIONS = ['Propónme 3 misiones para hoy', '¿Qué gran reto tengo más cerca y cómo lo cierro?', 'Plan para esta semana según mi misión en foco', '¿Qué atributo estoy descuidando?'];
 
 export default function GameMaster() {
   const [params, setParams] = useSearchParams();
@@ -132,10 +132,10 @@ export default function GameMaster() {
   }, []);
   return (
     <>
-      <PageHeader title="Game Master" eyebrow="Narrador IA · opcional" />
+      <PageHeader title="Coach" eyebrow="Coach con IA · opcional" />
       {enabled === false && (
         <div className="card">
-          <h2>Activa el Game Master</h2>
+          <h2>Activa el Coach</h2>
           <p className="small muted">
             Usa la API de Claude con tu propia clave. En el panel de Cloudflare: Workers &amp; Pages → igv-experience → Settings → Variables and Secrets → agrega el secreto <code>ANTHROPIC_API_KEY</code>. Los pasos completos están en el README.
           </p>
@@ -158,7 +158,7 @@ export default function GameMaster() {
   );
 }
 
-/** Cuéntale tu día en texto o voz: el GM propone registros y tú confirmas con un toque. */
+/** Cuéntale tu día en texto o voz: el Coach propone registros y tú confirmas con un toque. */
 function Registrar() {
   const { state, list } = useGame();
   const [text, setText] = useState('');
@@ -176,7 +176,7 @@ function Registrar() {
       'Misiones (id | título | tamaño | atributo):',
       ...missions.map((m) => `${m.id} | ${m.data.title} | ${m.data.size} | ${m.data.attribute}`),
       '',
-      'NPCs (id | nombre):',
+      'Personas (id | nombre):',
       ...npcs.map((n) => `${n.id} | ${n.data.name}`),
       '',
       'Metas (id | meta | unidad):',
@@ -211,7 +211,7 @@ function Registrar() {
         return { title: `${p.kind === 'income' ? 'Ingreso' : 'Gasto'} ${fmtMoney(p.amount ?? 0, state.settings.currency)}`, detail: [p.concept, p.category].filter(Boolean).join(' · '), ok: (p.amount ?? 0) > 0 };
       case 'npc': {
         const n = npcs.find((x) => x.id === p.matchId);
-        return { title: `Hablé con ${n?.data.name ?? '?'}`, detail: 'Interacción con NPC', ok: !!n };
+        return { title: `Hablé con ${n?.data.name ?? '?'}`, detail: 'Interacción con una persona', ok: !!n };
       }
       case 'lesson':
         return { title: 'Lección', detail: `${p.text ?? ''} · +${GAME_CONFIG.rewards.lesson} XP`, ok: (p.text ?? '').trim().length >= 3 };
@@ -350,7 +350,7 @@ function Chat() {
   const acceptOffer = (key: string, offer: ParsedQuestOffer) => {
     saveTodo({ title: offer.title, size: offer.size, attribute: offer.attribute, date: state.today, notes: offer.reason || undefined });
     setAccepted((s) => new Set(s).add(key));
-    toast(`⚔️ Misión aceptada en tu Agenda de hoy: "${offer.title}"`);
+    toast(`✓ Misión agregada a tu Agenda de hoy: "${offer.title}"`);
   };
 
   return (
@@ -359,7 +359,7 @@ function Chat() {
         {msgs.length === 0 && (
           <>
             <p className="small muted" style={{ marginTop: 0 }}>
-              Leo tu progreso (nivel, atributos, racha, energía, jefes, misiones y diario) y te propongo misiones que puedes aceptar en tu Agenda o jugar al instante.
+              Leo tu progreso (nivel, atributos, racha, energía, grandes retos, misiones y diario) y te propongo misiones que puedes aceptar en tu Agenda o empezar al instante.
             </p>
             <div className="row wrap" style={{ gap: 6 }}>
               {SUGGESTIONS.map((s) => (
@@ -393,8 +393,8 @@ function Chat() {
                           <div className="row" style={{ gap: 4 }}>
                             <button
                               className="btn icon sm play-btn"
-                              title="Jugar ahora"
-                              aria-label={`Jugar ${o.title}`}
+                              title="Empezar ahora"
+                              aria-label={`Empezar ${o.title}`}
                               onClick={() => startQuest({ kind: 'quick', title: o.title, size: o.size, attribute: o.attribute })}
                             >
                               <Icon name="play" />
@@ -411,7 +411,7 @@ function Chat() {
               </div>
             );
           })}
-          {busy && <div className="bubble gm muted">El Game Master está consultando tu campaña…</div>}
+          {busy && <div className="bubble gm muted">El Coach está revisando tu progreso…</div>}
           {err && <div className="bubble gm red">{err}</div>}
           <div ref={end} />
         </div>
@@ -428,7 +428,7 @@ function Chat() {
             <Icon name="mic" />
           </button>
         )}
-        <input className="input" placeholder="Pregúntale al Game Master…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="input" placeholder="Pregúntale al Coach…" value={q} onChange={(e) => setQ(e.target.value)} />
         <button className="btn primary" disabled={busy || !q.trim()} aria-label="Enviar">
           <Icon name="sparkles" />
         </button>

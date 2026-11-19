@@ -104,8 +104,8 @@ function MainQuests() {
                   {!done && (
                     <button
                       className="btn icon sm play-btn"
-                      aria-label={`Jugar capítulo ${c.data.number}`}
-                      title="Entrar en Modo Misión"
+                      aria-label={`Empezar capítulo ${c.data.number}`}
+                      title="Entrar en Modo enfoque"
                       onClick={() => startMissionQuest(c)}
                     >
                       <Icon name="play" width={15} height={15} />
@@ -123,7 +123,7 @@ function MainQuests() {
               </button>
               {boss && bs && (
                 <span className="small muted">
-                  <Icon name="skull" width={14} style={{ verticalAlign: -2 }} /> {boss.data.name}: {bs.locked ? 'bloqueado' : `${bs.phasesDone}/${bs.phases.length} fases`}
+                  <Icon name="flag" width={14} style={{ verticalAlign: -2 }} /> {boss.data.name}: {bs.locked ? 'aún no se abre' : `${bs.phasesDone}/${bs.phases.length} fases`}
                 </span>
               )}
             </div>
@@ -200,7 +200,7 @@ function MainQuestForm({ initial, onClose }: { initial?: Entity<MainQuestData>; 
       <Field label="Objetivo">
         <textarea className="input" value={d.goal} onChange={(e) => up({ goal: e.target.value })} />
       </Field>
-      <p className="tiny muted">Las fases de jefe de esta misión suman XP a {ATTRIBUTE_NAMES[d.attribute]}.</p>
+      <p className="tiny muted">Las fases de reto de esta misión suman XP a {ATTRIBUTE_NAMES[d.attribute]}.</p>
     </Sheet>
   );
 }
@@ -235,8 +235,8 @@ function Agenda() {
           <>
             <button
               className="btn icon sm play-btn"
-              aria-label={`Jugar ${t.data.title}`}
-              title="Entrar en Modo Misión"
+              aria-label={`Empezar ${t.data.title}`}
+              title="Entrar en Modo enfoque"
               onClick={() => startTodoQuest(t)}
             >
               <Icon name="play" width={15} height={15} />
@@ -336,8 +336,8 @@ function MissionList({ kind }: { kind: Exclude<MissionKind, 'main' | 'chapter'> 
           {!completed && (
             <button
               className="btn icon sm play-btn"
-              aria-label={`Jugar ${m.data.title}`}
-              title="Entrar en Modo Misión"
+              aria-label={`Empezar ${m.data.title}`}
+              title="Entrar en Modo enfoque"
               onClick={() => startMissionQuest(m)}
             >
               <Icon name="play" width={15} height={15} />

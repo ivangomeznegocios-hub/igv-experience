@@ -14,7 +14,7 @@ export const ATTR_COLOR: Record<AttributeId, string> = {
   creatividad: '#26c6b9',
 };
 
-/** Forma del escudo/marco según el título (Aprendiz → Leyenda). */
+/** Forma del marco según el título (Aprendiz → Leyenda). */
 function framePath(tier: number, c: number, r: number): string {
   const poly = (n: number, rot = -Math.PI / 2, rr = r) =>
     Array.from({ length: n }, (_, i) => {

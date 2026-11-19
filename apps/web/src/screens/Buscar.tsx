@@ -11,25 +11,25 @@ const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,
 
 /** Dónde vive cada tipo de elemento del catálogo. */
 const ROUTES: Record<string, { label: string; to: string; icon: string }> = {
-  'missions/main': { label: 'Misión principal', to: '/misiones?tab=main', icon: 'sword' },
-  'missions/chapter': { label: 'Capítulo', to: '/misiones?tab=main', icon: 'sword' },
-  'missions/side': { label: 'Secundaria', to: '/misiones?tab=side', icon: 'sword' },
-  'missions/daily': { label: 'Diaria', to: '/misiones?tab=daily', icon: 'sword' },
-  'missions/event': { label: 'Evento', to: '/misiones?tab=event', icon: 'sword' },
+  'missions/main': { label: 'Misión principal', to: '/misiones?tab=main', icon: 'target' },
+  'missions/chapter': { label: 'Capítulo', to: '/misiones?tab=main', icon: 'target' },
+  'missions/side': { label: 'Secundaria', to: '/misiones?tab=side', icon: 'target' },
+  'missions/daily': { label: 'Diaria', to: '/misiones?tab=daily', icon: 'target' },
+  'missions/event': { label: 'Evento', to: '/misiones?tab=event', icon: 'target' },
   'planner/todo': { label: 'Agenda', to: '/misiones?tab=agenda', icon: 'calendar' },
-  'bosses/boss': { label: 'Jefe', to: '/jefes', icon: 'skull' },
-  'bosses/recurring': { label: 'Jefe recurrente', to: '/jefes', icon: 'skull' },
+  'bosses/boss': { label: 'Gran reto', to: '/jefes', icon: 'flag' },
+  'bosses/recurring': { label: 'Reto recurrente', to: '/jefes', icon: 'flag' },
   'achievements/achievement': { label: 'Logro', to: '/logros', icon: 'trophy' },
   'skills/skill': { label: 'Habilidad', to: '/habilidades', icon: 'shield' },
   'seasons/season': { label: 'Temporada', to: '/temporadas', icon: 'calendar' },
   'inventory/tool': { label: 'Herramienta', to: '/inventario', icon: 'wrench' },
   'inventory/knowledge': { label: 'Conocimiento', to: '/inventario', icon: 'book' },
-  'npcs/npc': { label: 'NPC', to: '/npcs', icon: 'users' },
-  'npcs/guild': { label: 'Gremio', to: '/npcs', icon: 'users' },
+  'npcs/npc': { label: 'Persona', to: '/npcs', icon: 'users' },
+  'npcs/guild': { label: 'Círculo', to: '/npcs', icon: 'users' },
   'map/place': { label: 'Lugar', to: '/mapa', icon: 'compass' },
   'shop/reward': { label: 'Premio', to: '/tienda', icon: 'coin' },
   'goals/goal': { label: 'Meta', to: '/metas', icon: 'target' },
-  'habits/vice': { label: 'Enemigo', to: '/enemigos', icon: 'skull' },
+  'habits/vice': { label: 'Hábito a dejar', to: '/enemigos', icon: 'shield' },
   'finance/savings': { label: 'Ahorro', to: '/inventario', icon: 'coin' },
   'library/book': { label: 'Biblioteca', to: '/biblioteca', icon: 'book' },
   'life/milestone': { label: 'Hito', to: '/vida', icon: 'star' },
@@ -67,12 +67,12 @@ export default function Buscar() {
       <PageHeader title="Buscar" />
       <div className="search-box">
         <Icon name="compass" width={18} />
-        <input ref={ref} className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Misiones, NPCs, lecciones, gastos, notas…" />
+        <input ref={ref} className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Misiones, personas, lecciones, gastos, notas…" />
       </div>
       {needle.length >= 2 && results.ents.length === 0 && results.evs.length === 0 && <Empty>Sin resultados para “{q}”.</Empty>}
       {results.ents.length > 0 && (
         <div className="card">
-          <h2>En tu mundo</h2>
+          <h2>En tu catálogo</h2>
           {results.ents.map(({ e, title }) => {
             const r = ROUTES[`${e.module}/${e.kind}`];
             return (

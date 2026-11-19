@@ -49,13 +49,13 @@ type BossVictory = {
 };
 
 /**
- * Motor de celebraciones RPG ("Game Juice"):
+ * Celebraciones y feedback:
  * - +XP y +Oro flotante con contador de combo diario
- * - Banner estilo trofeo "Logro Desbloqueado"
- * - Banner de "Rango de Habilidad" y "¡Día Perfecto!"
- * - Impacto de combate al Jefe ("Golpe al Dragón")
- * - Pantalla épica de "¡Fase de Jefe Vencida!" / "¡Jefe Derrotado!"
- * - Pantalla de "¡Subiste de Nivel!" con tu personaje evolucionado
+ * - Banner "Logro desbloqueado"
+ * - Banner de "Rango de habilidad" y "¡Día perfecto!"
+ * - "Avanzaste en el reto" al registrar ingreso (meta mensual)
+ * - Pantalla de "Fase completada" / "Reto superado"
+ * - Pantalla de "¡Subiste de nivel!" con tu monograma
  */
 export function Fx() {
   const { state, store, list, byId } = useGame();
@@ -111,7 +111,7 @@ export function Fx() {
       }
     }
 
-    // 2. Golpe al Dragón Financiero al registrar ingreso
+    // 2. Avance en la meta mensual de ingresos al registrar ingreso
     if (cur.monthIncome > p.monthIncome) {
       const delta = cur.monthIncome - p.monthIncome;
       const pctLeft = Math.max(0, Math.round((1 - cur.monthIncome / Math.max(state.money.goal, 1)) * 100));
@@ -119,10 +119,10 @@ export function Fx() {
       haptic([25, 40, 25]);
       pushBanner({
         kind: 'boss-hit',
-        eyebrow: 'Golpe al jefe',
-        title: `El Dragón Financiero recibe daño`,
-        sub: `-${delta.toLocaleString('es-MX')} HP · queda ${pctLeft}% de la meta mensual`,
-        icon: 'sword',
+        eyebrow: 'Avanzaste en el reto',
+        title: 'Meta de ingresos del mes',
+        sub: `+${delta.toLocaleString('es-MX')} · llevas ${100 - pctLeft}% de la meta mensual`,
+        icon: 'coin',
       });
     }
 
@@ -165,7 +165,7 @@ export function Fx() {
       }
     }
 
-    // 5. ¡Día Perfecto! (todas las diarias de la rutina hechas)
+    // 5. ¡Día perfecto! (todas las diarias de la rutina hechas)
     if (cur.routineComplete && !p.routineComplete) {
       window.setTimeout(() => {
         sfx.perfectDay();
@@ -173,8 +173,8 @@ export function Fx() {
         pushBanner(
           {
             kind: 'perfect',
-            eyebrow: 'Combo completado',
-            title: '¡Día Perfecto!',
+            eyebrow: 'Rutina completa',
+            title: '¡Día perfecto!',
             sub: `Completaste ${routine.length}/${routine.length} misiones de tu rutina de hoy`,
             icon: 'crown',
           },
@@ -183,7 +183,7 @@ export function Fx() {
       }, 350);
     }
 
-    // 6. Fase de jefe vencida / Jefe derrotado
+    // 6. Fase de reto completada / Reto superado
     for (const [bossId, phasesDone] of Object.entries(cur.bossPhases)) {
       if (phasesDone > (p.bossPhases[bossId] ?? 0)) {
         const bossEnt = byId.get(bossId)?.data as BossData | undefined;
@@ -227,7 +227,7 @@ export function Fx() {
 
   return (
     <>
-      {/* Banners de logros / combate / día perfecto */}
+      {/* Banners de logros / avance en retos / día perfecto */}
       {banners.length > 0 && (
         <div className="rpg-banners" aria-live="polite">
           {banners.map((b) => (
@@ -248,15 +248,15 @@ export function Fx() {
       {/* +XP / +Oro flotante */}
       {floats.map((f) => (
         <div key={f.id} className="xp-float num">
-          {f.combo > 0 && <span className="combo-float">COMBO ×{f.combo}</span>}
+          {f.combo > 0 && <span className="combo-float">{f.combo} misiones hoy</span>}
           +{f.amount} XP
           {f.gold > 0 && <span className="gold-float">+{f.gold} oro</span>}
         </div>
       ))}
 
-      {/* Celebración de Fase de Jefe / Jefe Derrotado */}
+      {/* Celebración de Fase completada / Reto superado */}
       {bossVictory && !levelUp && (
-        <div className="levelup boss-victory" onClick={() => setBossVictory(null)} role="dialog" aria-label="Victoria contra jefe">
+        <div className="levelup boss-victory" onClick={() => setBossVictory(null)} role="dialog" aria-label="Reto superado">
           <div className="confetti" aria-hidden="true">
             {Array.from({ length: 30 }, (_, i) => (
               <i
@@ -264,7 +264,7 @@ export function Fx() {
                 style={{
                   left: `${(i * 83) % 100}%`,
                   animationDelay: `${(i % 7) * 0.12}s`,
-                  background: ['var(--gold)', 'var(--flame)', 'var(--red)', 'var(--gold-2)'][i % 4],
+                  background: ['var(--gold)', 'var(--green)', 'var(--teal)', 'var(--gold-2)'][i % 4],
                 }}
               />
             ))}
@@ -274,7 +274,7 @@ export function Fx() {
               <BossArt bossId={bossVictory.bossId} size={112} defeated={bossVictory.defeated} />
             </div>
             <div className="eyebrow" style={{ color: 'var(--gold)', marginBottom: 6 }}>
-              {bossVictory.defeated ? '¡JEFE DERROTADO!' : '¡FASE DE JEFE VENCIDA!'}
+              {bossVictory.defeated ? 'Reto superado' : 'Fase completada'}
             </div>
             <h2>{bossVictory.bossName}</h2>
             <p>{bossVictory.phaseTitle}</p>

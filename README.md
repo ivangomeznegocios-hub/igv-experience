@@ -1,7 +1,8 @@
 # IGV EXPERIENCE
 
-Tu vida real como un RPG. Registra lo que haces fuera de la app (misiones, ingresos, lecciones, entrenos,
-conversaciones) y lo convierte en XP, niveles, atributos, rachas, jefes y logros.
+Tu vida real, medida y con progreso. Registra lo que haces fuera de la app (misiones, ingresos, lecciones,
+entrenos, conversaciones) y lo convierte en XP, niveles, atributos, rachas, grandes retos y logros.
+Mecánicas de juego, lenguaje y estética sobrios de app de rendimiento personal (nada de fantasía).
 
 - **Privada**: solo tú entras, con Cloudflare Access (código a tu correo).
 - **Sincronizada**: celular y computadora leen la misma base de datos (Cloudflare D1). Funciona sin
@@ -16,11 +17,12 @@ conversaciones) y lo convierte en XP, niveles, atributos, rachas, jefes y logros
 | Fase | Contenido |
 |---|---|
 | 1. Base | Hoy, Misiones (principales con capítulos, secundarias, diarias, eventos), XP, niveles y títulos, racha y Día de descanso, energía, atributos con guía 30/70, Mi vida en semanas, respaldo JSON, bitácora para anular errores |
-| 2. Progresión | Jefes con fases automáticas o manuales, jefes recurrentes, logros (vitrina), habilidades con evidencia, temporadas con revisión de inicio/fin, diario semanal y foto de atributos |
-| 3. Mundo | Inventario (ingresos, gastos, resumen mensual, herramientas, conocimientos), NPCs y gremios con aviso a los 30 días, mapa |
-| 4. Game Master IA (opcional) | Asistente que lee tu progreso y te propone misiones con la API de Claude y tu propia clave |
-| 5. Inmersión | Botón **+** para registrar todo con un toque (misión sin catálogo, dinero con montos rápidos, NPC, agenda, meta, cuerpo, descanso, días pasados), rutina de diarias con checks y "Deshacer", deslizar para completar, favoritos, agenda, misión sorpresa con bono, oro y tienda de premios reales, avatar que evoluciona, sonidos y vibración, cierre del día, reporte semanal con crónica del GM, registro por texto libre con el GM, notificaciones push, Mi vida en semanas por año calendario con zoom a año y a días, hitos de vida, historial en calendario, estadísticas, metas con contador, enemigos (malos hábitos), presupuesto y ahorro, biblioteca, cuerpo, buscador y "Mi año en review" (imagen/PDF) |
-| 6. Experiencia Videojuego | Identidad visual RPG en obsidiana y oro forjado (más estilos de color desbloqueables), monograma evolutivo (iniciales + anillo de nivel), **Modo Misión Activa** jugable en vivo (temporizador/cronómetro, sub-pasos, barra del jefe y sonido ambiental de hoguera/lluvia), narrador diario local sin IA, buffs activos y encuentro diario, ilustraciones y barras de HP segmentadas para jefes, **Estilo de la app** en la tienda (paletas de color con oro), **La Hoguera** para cerrar el día, celebraciones de logros/combos/golpe al jefe, mapa mundial interactivo con niebla de guerra, árbol visual de habilidades, tarjetas de misión aceptables con un toque en el Game Master y dictado por voz |
+| 2. Progresión | Grandes retos con fases automáticas o manuales, retos recurrentes, logros (vitrina), habilidades con evidencia, temporadas con revisión de inicio/fin, diario semanal y foto de atributos |
+| 3. Más | Dinero y recursos (ingresos, gastos, resumen mensual, herramientas, conocimientos), Mi gente (personas y círculos) con aviso a los 30 días, mapa |
+| 4. Coach IA (opcional) | Coach que lee tu progreso y te propone misiones con la API de Claude y tu propia clave |
+| 5. Registro rápido | Botón **+** para registrar todo con un toque (misión sin catálogo, dinero con montos rápidos, persona, agenda, meta, cuerpo, descanso, días pasados), rutina de diarias con checks y "Deshacer", deslizar para completar, favoritos, agenda, misión sorpresa con bono, oro y tienda de premios reales, avatar que evoluciona, sonidos y vibración, cierre del día, reporte semanal con resumen del Coach, registro por texto libre con el Coach, notificaciones push, Mi vida en semanas por año calendario con zoom a año y a días, hitos de vida, historial en calendario, estadísticas, metas con contador, hábitos a dejar, presupuesto y ahorro, biblioteca, cuerpo, buscador y "Mi año en review" (imagen/PDF) |
+| 6. Experiencia en vivo | Identidad visual sobria en grafito y oro con tipografía Plus Jakarta Sans (más estilos de color desbloqueables), monograma evolutivo (iniciales + anillo de nivel), **Modo enfoque** (temporizador/cronómetro, sub-pasos, avance del reto vinculado y sonido ambiental de fuego/lluvia), Resumen del día local sin IA, lo que tienes a tu favor / en contra y Reto del día, grandes retos con ícono y barra de avance segmentada, **Estilo de la app** en la tienda (paletas de color con oro), **Cierre del día**, celebraciones de logros, día perfecto y avance en retos, mapa interactivo (por conocer → conocido → habitual), árbol visual de habilidades, tarjetas de misión aceptables con un toque en el Coach y dictado por voz |
+| 7. Vida real | Lenguaje sobrio (Perfil, Grandes retos, Mi gente, Coach, Cierre del día), **Tus 3 de hoy** (planear el día y mañana, bono de oro al cumplir), **Tú vs. tú** contra la semana pasada a la misma hora, **Récords y datos** (récords personales, patrones de sueño/día/hora, ritmo de metas e ingresos), **Retos de N días** (no rompas la cadena), **Compromisos** con oro en juego, bono sorpresa al cerrar el día y **resumen semanal** compartible por imagen o WhatsApp |
 
 Los números del juego están en [`packages/core/src/config/game.ts`](packages/core/src/config/game.ts).
 Las reglas y decisiones técnicas están en [`CLAUDE.md`](CLAUDE.md).
@@ -35,7 +37,7 @@ Tú solo inicias sesión y escribes el código que te llegue al correo.
 Las instrucciones completas están en [`CONFIGURAR-CON-CLAUDE-CODE.md`](CONFIGURAR-CON-CLAUDE-CODE.md).
 
 Todo es gratis: Cloudflare Workers, D1 y Access en su plan Free, y GitHub Actions en un repositorio
-privado (2,000 minutos al mes; cada despliegue usa unos 2). Lo único con costo es el Game Master IA,
+privado (2,000 minutos al mes; cada despliegue usa unos 2). Lo único con costo es el Coach IA,
 que es opcional.
 
 Resumen de lo que se hace (a mano son unos 5 minutos):
@@ -55,15 +57,15 @@ Resumen de lo que se hace (a mano son unos 5 minutos):
 - **iPhone (Safari)**: abre la URL → botón Compartir → **Agregar a pantalla de inicio**.
 - **Android (Chrome)**: abre la URL → menú ⋮ → **Instalar app** (o *Agregar a pantalla principal*).
 
-La primera vez te pedirá tu fecha de nacimiento (para *Mi vida en semanas*) y, en Personaje, calificar
+La primera vez te pedirá tu fecha de nacimiento (para *Mi vida en semanas*) y, en Perfil, calificar
 tus 7 atributos iniciales con la guía de 30 y 70.
 
-### (Opcional) Activa el Game Master IA
+### (Opcional) Activa el Coach IA
 
 1. Crea una clave en [platform.claude.com](https://platform.claude.com) → **API Keys**.
 2. **Workers & Pages → igv-experience → Settings → Variables and Secrets → Add** → tipo **Secret**,
    nombre `ANTHROPIC_API_KEY`, valor tu clave.
-3. Abre **Mundo → Game Master**. Usa el modelo `claude-opus-5-5`; para cambiarlo, agrega la variable
+3. Abre **Más → Coach**. Usa el modelo `claude-opus-5-5`; para cambiarlo, agrega la variable
    `ANTHROPIC_MODEL`. Cada pregunta consume tokens de tu cuenta de la API de Claude.
 
 ### Notificaciones
@@ -77,13 +79,13 @@ está listo por si algún día las quieres; se activan pidiéndoselo a Claude Co
 
 1. **En la mañana**: check-in de sueño (energía). Tu **rutina** de diarias ya aparece como lista de checks.
 2. **Durante el día**: toca el check (o desliza →) al completar. ¿Algo que no está en el catálogo? Botón
-   **+ → Hice algo**. Ingresos, gastos, NPCs, metas y entrenos también van por el **+**.
+   **+ → Hice algo**. Ingresos, gastos, personas, metas y entrenos también van por el **+**.
 3. **¿Te equivocaste?** Toca otra vez el check o "Deshacer" en el aviso. Para días pasados: Progreso →
    Historial → toca el día. Nada se borra; solo deja de contar.
 4. **¿Se te olvidó ayer?** En el **+** elige "Ayer" (o cualquier fecha) antes de registrar.
 5. **Si fallaste**: "Escribir lección" (+30 XP). **Si no puedes**: "Día de descanso" (máx. 2 por semana).
 6. **En la noche**: "Cerrar el día" (resumen + una línea). Planea mañana con **+ → Por hacer**.
-7. **Domingo**: diario semanal de 3 líneas en Temporadas y Reporte de batalla.
+7. **Domingo**: diario semanal de 3 líneas en Temporadas y Reporte semanal.
 8. **Respaldo**: Ajustes → Exportar respaldo (JSON). Guárdalo de vez en cuando.
 
 Atajos: mantén presionado el ícono de la app instalada para "Registrar misión / gasto / ingreso / Planear".

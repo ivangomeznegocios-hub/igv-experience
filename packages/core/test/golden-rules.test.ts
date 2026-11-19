@@ -39,7 +39,7 @@ describe('reglas de oro', () => {
     for (let seedN = 1; seedN <= 15; seedN++) {
       const r = rng(seedN);
       const events: any[] = [];
-      const ents = [...seed, { id: 'ch-1', module: 'challenges', kind: 'challenge', data: { title: 'Reto', days: 3, attribute: 'fuerza', size: 'media' } }];
+      const ents = [...seed, { id: 'ch-1', module: 'challenges', kind: 'challenge', sort: 0, data: { title: 'Reto', days: 3, attribute: 'fuerza', size: 'media' } }];
       let prev = run([], '2027-03-31', { entities: ents });
       for (let i = 0; i < 60; i++) {
         const date = addDays('2026-11-23', Math.floor(r() * 120));

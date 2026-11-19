@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { addDays, dayCloseBonus, GAME_CONFIG, goalPace, insights, monthPace, personalRecords, validateEvent, weekPace, type Entity } from '../src';
 import { bySource, done, ev, run, seed } from './helpers';
 
-const challenge = (id = 'ch-leer', days = 3): Entity => ({ id, module: 'challenges', kind: 'challenge', data: { title: 'Leer', days, attribute: 'inteligencia', size: 'grande' } });
+const challenge = (id = 'ch-leer', days = 3): Entity => ({ id, module: 'challenges', kind: 'challenge', sort: 0, data: { title: 'Leer', days, attribute: 'inteligencia', size: 'grande' } });
 const withCh = (...c: Entity[]) => ({ entities: [...seed, ...c] });
 
 describe('retos de N días', () => {

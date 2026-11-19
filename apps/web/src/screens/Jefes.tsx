@@ -15,8 +15,8 @@ export default function Jefes() {
   return (
     <>
       <PageHeader
-        title="Jefes"
-        eyebrow="Arena de Progresión"
+        title="Grandes retos"
+        eyebrow="Progreso"
         right={
           <button className="btn sm primary" onClick={() => setCreating(true)}>
             <Icon name="plus" /> Nuevo
@@ -27,7 +27,7 @@ export default function Jefes() {
         value={tab}
         onChange={setTab}
         options={[
-          { value: 'boss', label: 'Jefes de misión' },
+          { value: 'boss', label: 'Retos de misión' },
           { value: 'recurring', label: 'Recurrentes' },
         ]}
       />
@@ -54,7 +54,7 @@ function BossList() {
   const { list, state, byId } = useGame();
   const bosses = list<BossData>('bosses', 'boss');
   const [edit, setEdit] = useState<Entity<BossData> | null>(null);
-  if (!bosses.length) return <Empty>No hay jefes.</Empty>;
+  if (!bosses.length) return <Empty>No hay grandes retos.</Empty>;
   return (
     <>
       {bosses.map((b) => {
@@ -72,14 +72,14 @@ function BossList() {
         return (
           <div key={b.id} className={`card ${st?.defeated ? 'perfect-card' : 'boss-encounter'}`} style={st?.locked ? { opacity: 0.6 } : undefined}>
             <div className="row" style={{ alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
-              <BossArt bossId={b.id} size={64} defeated={st?.defeated} locked={st?.locked} />
+              <BossArt bossId={b.id} size={64} defeated={st?.defeated} locked={st?.locked} progress={st?.defeated ? 100 : 100 - totalHpPct} />
               <div className="grow" style={{ minWidth: 0 }}>
                 <div className="row wrap" style={{ gap: 6 }}>
                   {quest && <Badge tone="gold">{quest.data.code}</Badge>}
-                  {st?.defeated && <Badge tone="green">Derrotado {fmtDate(st.defeatedOn, true)}</Badge>}
+                  {st?.defeated && <Badge tone="green">Superado {fmtDate(st.defeatedOn, true)}</Badge>}
                   {st?.locked && (
-                    <Badge tone="red">
-                      <Icon name="lock" width={11} /> Bloqueado hasta vencer a {lockName}
+                    <Badge>
+                      <Icon name="lock" width={11} /> Se abre al superar {lockName}
                     </Badge>
                   )}
                 </div>
@@ -93,20 +93,20 @@ function BossList() {
 
             <BossHpBar
               hpPct={st?.defeated ? 0 : totalHpPct}
-              label={`HP total · ${st?.phasesDone ?? 0}/${b.data.phases.length} fases vencidas`}
-              right={st?.defeated ? '0% HP' : `${totalHpPct}% HP`}
+              label={`Avance · ${st?.phasesDone ?? 0}/${b.data.phases.length} fases`}
+              right={st?.defeated ? '100%' : `${100 - totalHpPct}%`}
             />
 
             {!st?.locked && !st?.defeated && (linkedMission || isIncomeBoss) && (
               <div style={{ marginTop: 10 }}>
                 {linkedMission && (
                   <button className="btn sm primary" onClick={() => startMissionQuest(linkedMission)}>
-                    <Icon name="play" /> Atacar ({linkedMission.data.title})
+                    <Icon name="play" /> Avanzar ({linkedMission.data.title})
                   </button>
                 )}
                 {isIncomeBoss && (
                   <button className="btn sm primary" onClick={() => openQuickAdd({ mode: 'income' })}>
-                    <Icon name="sword" /> Atacar (Registrar ingreso)
+                    <Icon name="plus" /> Registrar ingreso
                   </button>
                 )}
               </div>
@@ -124,14 +124,14 @@ function BossList() {
                     <div className="grow">
                       <div className="item-title">{ph.title}</div>
                       <div className="tiny muted">
-                        {ps?.done ? `Vencida el ${fmtDate(ps.date, true)} · +${GAME_CONFIG.rewards.bossPhase} XP` : metricText(ph.metric, byId)}
+                        {ps?.done ? `Completada el ${fmtDate(ps.date, true)} · +${GAME_CONFIG.rewards.bossPhase} XP` : metricText(ph.metric, byId)}
                       </div>
                       {isNext && ps?.progress && ps.progress.target > 0 && (
                         <div style={{ marginTop: 6 }}>
                           <Bar
                             value={ps.progress.current}
                             max={ps.progress.target}
-                            tone="flame"
+                            tone="gold"
                             size="sm"
                             label={
                               <span className="num">
@@ -145,9 +145,9 @@ function BossList() {
                     {isNext && ph.metric.type === 'manual' && (
                       <button
                         className="btn sm primary"
-                        onClick={() => confirmAction(`¿Venciste la fase "${ph.title}"? (+${GAME_CONFIG.rewards.bossPhase} XP)`) && addEvent('boss.phase_completed', { bossId: b.id, phaseIndex: i })}
+                        onClick={() => confirmAction(`¿Completaste la fase "${ph.title}"? (+${GAME_CONFIG.rewards.bossPhase} XP)`) && addEvent('boss.phase_completed', { bossId: b.id, phaseIndex: i })}
                       >
-                        Vencí
+                        Completé
                       </button>
                     )}
                   </div>
@@ -186,11 +186,11 @@ function BossForm({ initial, onClose }: { initial?: Entity<BossData>; onClose: (
     <Sheet
       open
       onClose={onClose}
-      title={initial ? 'Editar jefe' : 'Nuevo jefe de misión'}
+      title={initial ? 'Editar reto' : 'Nuevo gran reto'}
       actions={
         <>
           {initial && (
-            <button className="btn ghost danger" onClick={() => confirmAction('¿Borrar este jefe? La XP ya ganada se perdería si dependía de sus fases.') && (deleteEntity(initial.id), onClose())}>
+            <button className="btn ghost danger" onClick={() => confirmAction('¿Borrar este reto? La XP ya ganada se perdería si dependía de sus fases.') && (deleteEntity(initial.id), onClose())}>
               Borrar
             </button>
           )}
@@ -224,9 +224,9 @@ function BossForm({ initial, onClose }: { initial?: Entity<BossData>; onClose: (
             ))}
           </select>
         </Field>
-        <Field label="Bloqueado hasta vencer a">
+        <Field label="Se abre al superar">
           <select className="input" value={d.lockedUntilBossId ?? ''} onChange={(e) => up({ lockedUntilBossId: e.target.value || null })}>
-            <option value="">— Nadie —</option>
+            <option value="">— Siempre abierto —</option>
             {bosses.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.data.name}
@@ -305,7 +305,7 @@ function RecurringList() {
   const [defeat, setDefeat] = useState<Entity<RecurringBossData> | null>(null);
   const [edit, setEdit] = useState<Entity<RecurringBossData> | null>(null);
   const [note, setNote] = useState('');
-  if (!items.length) return <Empty>No hay jefes recurrentes.</Empty>;
+  if (!items.length) return <Empty>No hay retos recurrentes.</Empty>;
   return (
     <>
       {items.map((b) => {
@@ -318,7 +318,7 @@ function RecurringList() {
                 <h2 style={{ margin: '0 0 3px' }}>{b.data.name}</h2>
                 <div className="small muted">{b.data.description}</div>
                 <div className="small" style={{ marginTop: 6 }}>
-                  <b>Se vence con:</b> {b.data.defeatCondition}
+                  <b>Se supera con:</b> {b.data.defeatCondition}
                 </div>
               </div>
               <button className="btn icon ghost" aria-label="Editar" onClick={() => setEdit(b)}>
@@ -327,7 +327,7 @@ function RecurringList() {
             </div>
             <div className="row between">
               <span className="small muted">
-                Vencido {r?.defeats ?? 0} {r?.defeats === 1 ? 'vez' : 'veces'}
+                Superado {r?.defeats ?? 0} {r?.defeats === 1 ? 'vez' : 'veces'}
                 {r?.lastDate ? ` · última ${fmtDate(r.lastDate, true)}` : ''}
               </span>
               <button
@@ -337,7 +337,7 @@ function RecurringList() {
                   setDefeat(b);
                 }}
               >
-                <Icon name="sword" /> Lo vencí (+{GAME_CONFIG.rewards.recurringBoss})
+                <Icon name="check" /> Lo superé (+{GAME_CONFIG.rewards.recurringBoss})
               </button>
             </div>
           </div>
@@ -347,7 +347,7 @@ function RecurringList() {
         <Sheet
           open
           onClose={() => setDefeat(null)}
-          title={`Vencer a ${defeat.data.name}`}
+          title={`Superé: ${defeat.data.name}`}
           actions={
             <button
               className="btn primary"
@@ -381,11 +381,11 @@ function RecurringForm({ initial, onClose }: { initial?: Entity<RecurringBossDat
     <Sheet
       open
       onClose={onClose}
-      title={initial ? 'Editar jefe recurrente' : 'Nuevo jefe recurrente'}
+      title={initial ? 'Editar reto recurrente' : 'Nuevo reto recurrente'}
       actions={
         <>
           {initial && (
-            <button className="btn ghost danger" onClick={() => confirmAction('¿Borrar este jefe?') && (deleteEntity(initial.id), onClose())}>
+            <button className="btn ghost danger" onClick={() => confirmAction('¿Borrar este reto?') && (deleteEntity(initial.id), onClose())}>
               Borrar
             </button>
           )}
@@ -408,7 +408,7 @@ function RecurringForm({ initial, onClose }: { initial?: Entity<RecurringBossDat
       <Field label="Descripción">
         <textarea className="input" value={d.description} onChange={(e) => up({ description: e.target.value })} />
       </Field>
-      <Field label="Se vence con">
+      <Field label="Se supera con">
         <input className="input" value={d.defeatCondition} onChange={(e) => up({ defeatCondition: e.target.value })} />
       </Field>
       <Field label="Atributo">

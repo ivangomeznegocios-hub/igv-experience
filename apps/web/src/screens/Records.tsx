@@ -11,7 +11,8 @@ import '../life.css';
 function fmtValue(r: PersonalRecord, currency: string) {
   if (r.unit === 'dinero') return fmtMoney(r.value, currency);
   if (r.unit === 'xp') return `${fmtNum(r.value)} XP`;
-  return `${fmtNum(r.value)} ${r.unit}`;
+  const unit = r.value === 1 ? (r.unit === 'días' ? 'día' : 'misión') : r.unit;
+  return `${fmtNum(r.value)} ${unit}`;
 }
 
 function fmtWhen(r: PersonalRecord) {

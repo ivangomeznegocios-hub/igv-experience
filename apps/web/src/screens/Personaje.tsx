@@ -14,7 +14,7 @@ export default function Personaje() {
   const { state } = useGame();
   return (
     <>
-      <PageHeader title="Personaje" eyebrow="Atributos" />
+      <PageHeader title="Perfil" eyebrow="Atributos" />
       <Hero compact />
       <AvatarCard />
       {state.attributes.rated ? <Attributes /> : <RateAttributes />}
@@ -42,7 +42,7 @@ function AvatarCard() {
             {nextTitle ? <span className="muted"> · evoluciona a {nextTitle.title} en NV {nextTitle.level}</span> : null}
           </div>
           <div>
-            <b>Esencia:</b> {ATTRIBUTE_NAMES[top]} <span className="muted">(tu atributo más alto)</span>
+            <b>Tu fuerte:</b> {ATTRIBUTE_NAMES[top]} <span className="muted">(tu atributo más alto)</span>
           </div>
           <div>
             <b>Racha:</b>{' '}
@@ -236,12 +236,13 @@ const SOURCE_LABEL: Record<string, string> = {
   lesson: 'Lección',
   achievement: 'Logro',
   skill: 'Habilidad',
-  boss_phase: 'Jefe',
-  recurring_boss: 'Jefe recurrente',
+  boss_phase: 'Gran reto',
+  recurring_boss: 'Reto recurrente',
   discovery: 'Mapa',
   bounty: 'Misión sorpresa',
   goal: 'Meta',
   library: 'Biblioteca',
+  challenge: 'Reto completado',
 };
 
 function XpLedger() {

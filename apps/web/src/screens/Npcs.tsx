@@ -5,7 +5,7 @@ import { daysAgo, newId } from '../lib/time';
 import { Badge, Empty, Field, PageHeader, Sheet, Tabs, confirmAction, toast } from '../ui/kit';
 import { Icon } from '../ui/icons';
 
-const TYPE_LABEL: Record<NpcType, string> = { party: 'Party', aliado: 'Aliado', mentor: 'Mentor', cliente: 'Cliente', rival: 'Rival' };
+const TYPE_LABEL: Record<NpcType, string> = { party: 'Cercano', aliado: 'Aliado', mentor: 'Mentor', cliente: 'Cliente', rival: 'Rival' };
 const TYPE_TONE: Record<NpcType, string> = { party: 'gold', aliado: 'green', mentor: 'violet', cliente: 'teal', rival: 'red' };
 
 export default function Npcs() {
@@ -14,8 +14,8 @@ export default function Npcs() {
   return (
     <>
       <PageHeader
-        title="NPCs y gremios"
-        eyebrow="Mundo"
+        title="Mi gente"
+        eyebrow="Personas y círculos"
         right={
           <button className="btn sm primary" onClick={() => setCreating(true)}>
             <Icon name="plus" /> Nuevo
@@ -27,7 +27,7 @@ export default function Npcs() {
         onChange={setTab}
         options={[
           { value: 'npc', label: 'Personas' },
-          { value: 'guild', label: 'Gremios' },
+          { value: 'guild', label: 'Círculos' },
         ]}
       />
       {tab === 'npc' ? <People /> : <Guilds />}
@@ -66,7 +66,7 @@ function People() {
           </button>
         ))}
       </div>
-      {shown.length === 0 && <Empty>Agrega a las personas clave de tu historia: tu party, aliados, mentores, clientes y rivales.</Empty>}
+      {shown.length === 0 && <Empty>Agrega a las personas clave de tu vida: tu gente cercana, aliados, mentores, clientes y rivales.</Empty>}
       {shown.map((n) => {
         const st = state.npcs.npcs[n.id];
         const guild = n.data.guildId ? (byId.get(n.data.guildId)?.data as GuildData | undefined) : undefined;
@@ -150,7 +150,7 @@ function NpcForm({ initial, onClose }: { initial?: Entity<NpcData>; onClose: () 
     <Sheet
       open
       onClose={onClose}
-      title={initial ? 'Editar NPC' : 'Nuevo NPC'}
+      title={initial ? 'Editar persona' : 'Nueva persona'}
       actions={
         <>
           {initial && (
@@ -184,7 +184,7 @@ function NpcForm({ initial, onClose }: { initial?: Entity<NpcData>; onClose: () 
             ))}
           </select>
         </Field>
-        <Field label="Gremio">
+        <Field label="Círculo">
           <select className="input" value={d.guildId ?? ''} onChange={(e) => up({ guildId: e.target.value || null })}>
             <option value="">— Ninguno —</option>
             {guilds.map((g) => (
@@ -219,7 +219,7 @@ function Guilds() {
   const guilds = list<GuildData>('npcs', 'guild');
   const npcs = list<NpcData>('npcs', 'npc');
   const [edit, setEdit] = useState<Entity<GuildData> | null>(null);
-  if (!guilds.length) return <Empty>Los gremios agrupan personas: tu equipo, una comunidad, un club.</Empty>;
+  if (!guilds.length) return <Empty>Los círculos agrupan personas: tu equipo, una comunidad, un club.</Empty>;
   return (
     <>
       {guilds.map((g) => {
@@ -250,11 +250,11 @@ function GuildForm({ initial, onClose }: { initial?: Entity<GuildData>; onClose:
     <Sheet
       open
       onClose={onClose}
-      title={initial ? 'Editar gremio' : 'Nuevo gremio'}
+      title={initial ? 'Editar círculo' : 'Nuevo círculo'}
       actions={
         <>
           {initial && (
-            <button className="btn ghost danger" onClick={() => confirmAction('¿Borrar este gremio?') && (deleteEntity(initial.id), onClose())}>
+            <button className="btn ghost danger" onClick={() => confirmAction('¿Borrar este círculo?') && (deleteEntity(initial.id), onClose())}>
               Borrar
             </button>
           )}

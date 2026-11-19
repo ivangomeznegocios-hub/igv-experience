@@ -71,7 +71,7 @@ export function buildPlan(state: GameState, entities: Entity[], prefs: Prefs['no
     // Mañana: check-in + rutina + agenda
     if (!(isToday && state.energy.value !== null)) {
       const extra = [routine ? `${routine} diarias en tu rutina` : '', planned ? `${planned} pendiente(s) en la agenda` : ''].filter(Boolean).join(' · ');
-      add('morning', d, prefs.morning, 'Buenos días ⚔️', `Haz tu check-in de energía.${extra ? ` Hoy: ${extra}.` : ''}`);
+      add('morning', d, prefs.morning, 'Buenos días ☀️', `Haz tu check-in de energía.${extra ? ` Hoy: ${extra}.` : ''}`);
     }
     // Noche: racha en riesgo (hoy solo si aún no hay misiones ni descanso)
     if (!(isToday && (state.streak.todayActive || state.streak.todayRest))) {
@@ -81,9 +81,9 @@ export function buildPlan(state: GameState, entities: Entity[], prefs: Prefs['no
     }
     if (prefs.npcs && state.npcs.generatedMissions.length && i < 2) {
       const names = state.npcs.generatedMissions.map((m) => m.title.replace('Escribirle a ', '')).slice(0, 3).join(', ');
-      add('npc', d, '13:00', 'Tu party te extraña', `Hace mucho no hablas con ${names}. Un mensaje cuenta como misión.`);
+      add('npc', d, '13:00', 'Tu gente te extraña', `Hace mucho no hablas con ${names}. Un mensaje cuenta como misión.`);
     }
-    if (prefs.weekly && weekday(d) === 6) add('weekly', d, '19:00', '📜 Cierre de semana', 'Escribe tu diario de 3 líneas y mira tu reporte de batalla.', '/reporte');
+    if (prefs.weekly && weekday(d) === 6) add('weekly', d, '19:00', 'Cierre de semana', 'Escribe tu diario de 3 líneas y mira tu reporte semanal.', '/reporte');
   }
   return items.sort((a, b) => (a.at < b.at ? -1 : 1)).slice(0, 40);
 }

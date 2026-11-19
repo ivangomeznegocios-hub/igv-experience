@@ -4,6 +4,8 @@ import { onStoreError, sync, useGame, useStore } from './data/store';
 import { Fx } from './ui/fx';
 import { QuestMode } from './ui/QuestMode';
 import { QuickAdd } from './ui/QuickAdd';
+import { PlanSheet } from './ui/DayPlan';
+import { RecordWatcher } from './ui/RecordWatcher';
 import { SyncPill } from './ui/SyncPill';
 import { schedulePlanUpload } from './lib/notifications';
 import { Toasts, toast } from './ui/kit';
@@ -33,8 +35,10 @@ const Biblioteca = lazy(() => import('./screens/Biblioteca'));
 const Cuerpo = lazy(() => import('./screens/Cuerpo'));
 const Buscar = lazy(() => import('./screens/Buscar'));
 const Anual = lazy(() => import('./screens/Anual'));
+const Retos = lazy(() => import('./screens/Retos'));
+const Records = lazy(() => import('./screens/Records'));
 
-const PROGRESS = ['/progreso', '/jefes', '/logros', '/habilidades', '/temporadas', '/metas', '/estadisticas', '/reporte', '/anual', '/tienda', '/historial'];
+const PROGRESS = ['/progreso', '/jefes', '/logros', '/habilidades', '/temporadas', '/metas', '/estadisticas', '/reporte', '/anual', '/tienda', '/historial', '/retos', '/records'];
 const WORLD = ['/mas', '/inventario', '/npcs', '/mapa', '/vida', '/ajustes', '/game-master', '/enemigos', '/biblioteca', '/cuerpo', '/buscar'];
 
 function Nav() {
@@ -47,12 +51,12 @@ function Nav() {
         Hoy
       </NavLink>
       <NavLink to="/misiones">
-        <Icon name="sword" />
+        <Icon name="target" />
         Misiones
       </NavLink>
       <NavLink to="/personaje">
         <Icon name="user" />
-        Personaje
+        Perfil
       </NavLink>
       <NavLink to="/progreso" className={cls(PROGRESS)}>
         <Icon name="trophy" />
@@ -60,7 +64,7 @@ function Nav() {
       </NavLink>
       <NavLink to="/mas" className={cls(WORLD)}>
         <Icon name="grid" />
-        Mundo
+        Más
       </NavLink>
     </nav>
   );
@@ -142,7 +146,7 @@ export default function App() {
           {!store.ready ? (
             <div className="empty" style={{ paddingTop: 80 }}>
               {store.status === 'syncing' || store.status === 'idle' ? (
-                'Cargando tu partida…'
+                'Cargando tus datos…'
               ) : (
                 <>
                   <p>{store.authMessage === 'access_disabled' ? 'Activa Cloudflare Access en el Worker para entrar.' : 'No pude conectar con el servidor.'}</p>
@@ -180,6 +184,8 @@ export default function App() {
                 <Route path="/cuerpo" element={<Cuerpo />} />
                 <Route path="/buscar" element={<Buscar />} />
                 <Route path="/anual" element={<Anual />} />
+                <Route path="/retos" element={<Retos />} />
+                <Route path="/records" element={<Records />} />
                 <Route path="*" element={<Hoy />} />
               </Routes>
             </Suspense>
@@ -191,6 +197,8 @@ export default function App() {
       <SyncPill />
       {store.ready && <QuestMode />}
       {store.ready && <QuickAdd />}
+      {store.ready && <PlanSheet />}
+      {store.ready && <RecordWatcher />}
       {store.ready && <NotificationsSync />}
       {store.ready && <SkinSync />}
     </BrowserRouter>

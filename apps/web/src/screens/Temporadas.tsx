@@ -113,7 +113,7 @@ function ReviewSheet({ season, phase, onClose }: { season: Entity<SeasonData>; p
   const [text, setText] = useState(
     prev?.text ??
       (phase === 'start'
-        ? '¿Qué quiero lograr en esta temporada?\n\n¿Qué misión está en foco y por qué?\n\n¿Qué jefe quiero vencer?'
+        ? '¿Qué quiero lograr en esta temporada?\n\n¿Qué misión está en foco y por qué?\n\n¿Qué gran reto quiero superar?'
         : '¿Qué logré?\n\n¿Qué no logré y por qué?\n\n¿Qué me llevo a la siguiente temporada?'),
   );
   return (

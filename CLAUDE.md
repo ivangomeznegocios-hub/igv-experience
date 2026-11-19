@@ -4,10 +4,30 @@ Contexto para futuras sesiones con IA. Léelo completo antes de cambiar algo.
 
 ## Qué es
 
-Tablero personal de **Iván Gómez Vera** para jugar su vida real como un RPG. Registra lo que hace fuera
-de la app (misiones, ingresos, lecciones, etc.) y lo convierte en XP, niveles, atributos, rachas, jefes y
-logros. Un solo usuario, uso diario, en español, pensado primero para celular (PWA). Proyecto a largo plazo:
-se le irán agregando sistemas.
+Tablero personal de **Iván Gómez Vera** para medir y mejorar su vida real con mecánicas de juego. Registra lo
+que hace fuera de la app (misiones, ingresos, lecciones, etc.) y lo convierte en XP, niveles, atributos, rachas,
+grandes retos y logros. Un solo usuario, uso diario, en español, pensado primero para celular (PWA). Proyecto a
+largo plazo: se le irán agregando sistemas.
+
+**Tono y vocabulario (preferencia del usuario):** le gustan las mecánicas (XP, niveles, racha, oro, premios,
+logros, misiones) pero NO el lenguaje ni la estética de fantasía/RPG ("otaku"). Todo texto visible debe sonar a
+app sobria de rendimiento personal (estilo Whoop/Strava/Oura), en español de México, casual y directo. En el
+código los nombres internos se conservan (módulos, tipos de evento, ids, rutas y llaves); solo cambia lo visible:
+
+| Interno (código / ruta) | En pantalla |
+|---|---|
+| `bosses/boss`, `/jefes`, `BossArt` | Grandes retos / Reto (fases = fases; "avance", "Reto superado", "Se abre al superar X") |
+| `bosses/recurring` | Reto recurrente |
+| `npcs/npc`, `npcs/guild`, `/npcs` | Mi gente: Personas y Círculos ("persona clave") |
+| `map` (`inexplorado`/`descubierto`/`dominado`) | Mapa: por conocer / conocido / habitual; "primera visita" |
+| `habits/vice`, `/enemigos` | Hábitos a dejar ("recaída") |
+| `/personaje` | Perfil ("Tu fuerte" = atributo más alto) |
+| `/mas` (pestaña) | Más |
+| `/inventario` | Dinero y recursos |
+| `/game-master`, `/api/gm/*` | Coach |
+| `lib/narrator.ts` (briefing, buffs, encuentro) | Resumen del día, A tu favor / en contra, Reto del día |
+| `QuestMode` | Modo enfoque (ambiente: Fuego / Lluvia) |
+| `day.closed` / `CampfireCard` | Cierre del día |
 
 ## Arquitectura
 
@@ -19,12 +39,13 @@ packages/core   Reglas del juego en TypeScript puro (sin red ni DOM). Probadas c
   src/engine/project.ts  project(): eventos + catálogo + config → estado completo del juego.
   src/engine/modules/  Un reductor por sistema (misiones, racha, lecciones, dinero, jefes,
                        habilidades, mapa/NPCs, temporadas, logros, atributos, misión sorpresa, oro,
-                       metas, enemigos, biblioteca, cuerpo/ahorro/cierres del día).
+                       metas, enemigos, biblioteca, cuerpo/ahorro/cierres del día, plan del día, retos).
+  src/engine/insights.ts Tú vs. tú (weekPace), récords personales, "datos sobre ti" e ritmo de metas/ingresos.
   src/engine/reports.ts  Funciones puras para reportes: XP por día, reporte semanal, año en review,
                        favoritos, id de misión rápida, elección determinista por fecha.
   src/seed/            Datos iniciales (IDs fijos) y guía de atributos (30/70).
 packages/db     Esquema Drizzle (events, entities, server_meta) y migraciones SQL de D1.
-apps/api        Worker de Cloudflare con Hono: /api/* (sync, eventos, catálogo, respaldo, Game Master, push).
+apps/api        Worker de Cloudflare con Hono: /api/* (sync, eventos, catálogo, respaldo, Coach IA en /api/gm, push).
                 Notificaciones push APAGADAS (sin cron); ver "Notificaciones push".
                 El mismo Worker sirve el frontend (Workers Static Assets, SPA).
 apps/web        React + Vite + PWA. Calcula el estado en el dispositivo con @igv/core.
@@ -135,6 +156,19 @@ importa `apps/web/public/push-sw.js`. Pruebas: `apps/api/test/push.test.ts` (des
 - Metas (`goals/goal`, evento `goal.progress`): al llegar al objetivo dan la XP de una misión de su tamaño
   (una vez). Las cumplidas se archivan, no se borran.
 - Biblioteca (`library/book`, evento `library.finished`): XP de misión de su tamaño, una vez por libro.
+- Plan del día (`plan.set`, `modules/plans.ts`): máx. 3 cosas para un día; la última versión gana. Una cosa
+  está hecha si su misión se completó ese día. Cumplir todas da `goldBonus.planCompleted` de oro (no XP).
+  Se planea desde Hoy ("Tus 3 de hoy") y al cerrar el día se ofrece planear mañana.
+- Retos de N días (`challenges/challenge`, `challenge.started` / `challenge.checked`, `modules/challenges.ts`):
+  cada `started` abre un intento si no hay otro en curso; un día ya terminado sin marcar lo hace fallar (hoy
+  nunca). Completarlo da la XP de una misión de su tamaño (fuente `challenge`), una vez por intento.
+- Oro extra (nunca XP): bono sorpresa al cerrar un día con ≥1 misión (`dayCloseBonus`, elegido por fecha de
+  `goldBonus.dayCloseOptions`), y compromisos (`pledge.made` / `pledge.resolved`): se aparta lo apostado si
+  alcanzaba el oro; cumplir devuelve `stake × pledge.payoutMultiplier`, fallar lo pierde; cuenta el primer resultado.
+- Récords, tú vs. tú, datos sobre ti y ritmo: funciones puras en `engine/insights.ts` (no se guardan).
+  Pantalla `/records`; aviso de récord en vivo con `ui/RecordWatcher.tsx`.
+- Resumen semanal para compartir (`ui/WeekShare.tsx`): imagen PNG o texto por WhatsApp al compañero de
+  cuentas (`settings.partner`).
 - Sin XP (solo registro): enemigos (`habits/vice`, `vice.relapse`; cuenta días sin caer), cuerpo
   (`body.logged`), ahorro (`finance/savings`, `savings.moved`), presupuesto (`settings.budgets`), cierre del
   día (`day.closed`).
@@ -166,20 +200,22 @@ pnpm --filter @igv/web dev  # Vite en :5173 con proxy de /api a :8787
 - Un solo Worker con Static Assets (no Pages + Worker): una URL, una política de Access, sin CORS.
 - Estado de la app con un store propio (`useSyncExternalStore` + IndexedDB) en lugar de TanStack Query:
   hace falta cola sin conexión y proyección local; es más simple así.
-- Sin librería de UI ni de íconos: CSS propio con tokens (`apps/web/src/styles.css`, paleta grafito y oro + estilos de color desbloqueables `[data-skin]`, tipografía `Cinzel` + `Plus Jakarta Sans` + `JetBrains Mono`) e íconos SVG en `ui/icons.tsx`. Tema claro/oscuro/automático (`lib/theme.ts`). Gráficas SVG propias (`ui/charts.tsx`), monograma evolutivo con iniciales, marco por título y anillo de avance de nivel (`ui/Avatar.tsx`), ilustraciones de jefes y barra de HP segmentada (`ui/BossArt.tsx`), mapa mundial SVG con niebla de guerra (`screens/Mapa.tsx`) y árbol visual de habilidades (`screens/Habilidades.tsx`).
-- Experiencia de juego en vivo (fase 6, sin migraciones D1):
-  - **Modo Misión Activa** (`ui/QuestMode.tsx`): pantalla de enfoque/combate con cronómetro o cuenta regresiva persistente en `localStorage`, sub-pasos de sesión, barra del jefe vinculado y audio ambiental sintético (`lib/sound.ts`: hoguera / lluvia con WebAudio).
-  - **Narrador local y encuentros diarios** (`lib/narrator.ts`): parte diario, buffs activos, encuentro diario y vínculo jefe↔misión calculados 100 % en el cliente desde `GameState` (sin IA ni costo).
+- Sin librería de UI ni de íconos: CSS propio con tokens (`apps/web/src/styles.css`, paleta grafito y oro + estilos de color desbloqueables `[data-skin]`, tipografía `Plus Jakarta Sans` (también como `--font-display`, peso 800 y tracking cerrado) + `JetBrains Mono`; sin serif medieval) e íconos SVG en `ui/icons.tsx`. Tema claro/oscuro/automático (`lib/theme.ts`). Gráficas SVG propias (`ui/charts.tsx`), monograma evolutivo con iniciales, marco por título y anillo de avance de nivel (`ui/Avatar.tsx`), ícono sobrio de cada gran reto en un mosaico redondeado con anillo de avance opcional y barra de avance segmentada (`ui/BossArt.tsx`; `BossHpBar` recibe lo que falta y pinta el avance), mapa SVG por conocer/conocido/habitual (`screens/Mapa.tsx`) y árbol visual de habilidades (`screens/Habilidades.tsx`).
+- Experiencia en vivo (fase 6, sin migraciones D1):
+  - **Modo enfoque** (`ui/QuestMode.tsx`): pantalla de enfoque con cronómetro o cuenta regresiva persistente en `localStorage`, sub-pasos de sesión, avance del gran reto vinculado y audio ambiental sintético (`lib/sound.ts`: fuego / lluvia con WebAudio).
+  - **Resumen del día y Reto del día** (`lib/narrator.ts`): resumen del día con tono de coach, lo que tienes a tu favor / en contra, reto del día y vínculo reto↔misión calculados 100 % en el cliente desde `GameState` (sin IA ni costo).
   - **Estilo de la app** (`lib/themes.ts`, pestaña en `screens/Tienda.tsx`): paletas de color (Grafito, Bosque, Vino, Medianoche = `obsidian`, `emerald`, `crimson`, `royal`) que se desbloquean con oro usando `reward.redeemed` y se eligen en `settings.equipped.skin`. Las auras y emblemas del avatar (la antigua "Armería RPG") se retiraron por verse demasiado fantasía; si había canjes de ellos, la pestaña ofrece anularlos para recuperar el oro. Preferencia del usuario: estética sobria de "vida real", nada otaku.
-  - **Celebraciones y feedback** (`ui/fx.tsx`, `lib/sound.ts`): banners de logro desbloqueado, golpe al jefe, rango de habilidad, día perfecto, combo, y overlays de victoria de jefe y subida de nivel con retrato.
-  - **Dictado por voz** (`lib/voice.ts`): Web Speech API (`es-MX`) en QuickAdd y Game Master, con tarjetas de oferta de misión aceptables con 1 toque.
+  - **Celebraciones y feedback** (`ui/fx.tsx`, `lib/sound.ts`): banners de logro desbloqueado, "Avanzaste en el reto" (meta mensual de ingresos), rango de habilidad, día perfecto, misiones del día, y overlays de "Fase completada" / "Reto superado" y subida de nivel con monograma.
+  - **Cierre del día** (`CampfireCard` / `CloseDaySheet` en `screens/Hoy.tsx`, evento `day.closed`): resumen del día y una nota.
+  - **Dictado por voz** (`lib/voice.ts`): Web Speech API (`es-MX`) en QuickAdd y Coach, con tarjetas de oferta de misión aceptables con 1 toque.
 - Registro rápido: `ui/QuickAdd.tsx` (botón + global; `openQuickAdd({ mode, date })` desde cualquier pantalla; `/?accion=gasto` lo abre desde los accesos directos del manifest). Hoja de un día: `ui/DaySheet.tsx`.
 - Preferencias del dispositivo (sonido, vibración, notificaciones) en `localStorage` (`lib/prefs.ts`), no en D1.
-- Game Master (fase 4): `POST /api/gm/ask` (conversar) y `POST /api/gm/parse` (texto libre → propuestas de
+- Coach IA (fase 4; antes "Game Master", las rutas conservan `gm`): `POST /api/gm/ask` (conversar) y `POST /api/gm/parse` (texto libre → propuestas de
   registro con salida estructurada `output_config.format`; el cliente las muestra y el usuario confirma). Ambos usan el SDK oficial `@anthropic-ai/sdk`, modelo
   `claude-opus-5-5` (cambiable con la variable `ANTHROPIC_MODEL`), respaldo automático ante rechazos
   (`fallbacks: "default"`). El cliente arma un resumen del estado; la clave es el secreto
-  `ANTHROPIC_API_KEY` del Worker. El GM solo propone; no registra nada por sí mismo.
+  `ANTHROPIC_API_KEY` del Worker. El prompt (`apps/api/src/gm.ts`) es de un coach de rendimiento personal,
+  directo y cálido, en español de México, sin lenguaje de fantasía. El Coach solo propone; no registra nada por sí mismo.
 - Despliegue: GitHub Actions (`.github/workflows/deploy.yml`) → pruebas → crea la base D1 si no existe
   (por nombre `igv-experience`) → migraciones D1 → `wrangler deploy`. Secreto: `CLOUDFLARE_API_TOKEN` (`CLOUDFLARE_ACCOUNT_ID` opcional).
   `keep_vars: true` conserva las variables configuradas en el panel de Cloudflare.

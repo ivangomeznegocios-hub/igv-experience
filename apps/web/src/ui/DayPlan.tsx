@@ -130,7 +130,7 @@ export function PlanSheet() {
       if (t.data.date && t.data.date > date) continue;
       push({ missionId: t.id, title: t.data.title, size: t.data.size, attribute: t.data.attribute, kind: 'todo', group: 'Pendientes' });
     }
-    for (const kind of ['main', 'chapter', 'side', 'event'] as const) {
+    for (const kind of ['chapter', 'side', 'event'] as const) {
       for (const m of list<MissionData>('missions', kind)) {
         if (state.missions.completions[m.id]) continue;
         push({ missionId: m.id, title: m.data.title, size: m.data.size, attribute: m.data.attribute, kind, group: 'Misiones' });

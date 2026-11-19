@@ -13,7 +13,7 @@ export default function Inventario() {
   const [tab, setTab] = useState<Tab>('money');
   return (
     <>
-      <PageHeader title="Inventario" eyebrow="Mundo" />
+      <PageHeader title="Dinero y recursos" eyebrow="Más" />
       <Tabs
         value={tab}
         onChange={setTab}

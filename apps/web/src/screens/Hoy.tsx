@@ -4,6 +4,7 @@ import {
   ATTRIBUTE_NAMES,
   GAME_CONFIG,
   addDays,
+  dayCloseBonus,
   frequentMissions,
   isInRoutine,
   pickForDate,
@@ -30,6 +31,9 @@ import { LessonForm } from '../ui/MissionForm';
 import { startMissionQuest, startQuest, startTodoQuest } from '../ui/QuestMode';
 import { openQuickAdd } from '../ui/QuickAdd';
 import { SyncPill } from '../ui/SyncPill';
+import { openPlanSheet, TodayPlanCard } from '../ui/DayPlan';
+import { WeekPaceCard } from '../ui/WeekPace';
+import { WeekShareCard } from '../ui/WeekShare';
 
 export default function Hoy() {
   const { state } = useGame();
@@ -44,7 +48,7 @@ export default function Hoy() {
             {fmtWeekday(state.today)} {fmtDate(state.today, true)}
             {state.seasons.current && ` · T${state.seasons.current.data.number} sem. ${state.seasons.currentWeek}`}
           </div>
-          <h1>Campaña · Hoy</h1>
+          <h1>Hoy</h1>
         </div>
         <div className="row" style={{ gap: 4 }}>
           <SyncPill inline />
@@ -68,6 +72,7 @@ export default function Hoy() {
       <Hero />
       <MorningRitualCard />
       <NarratorBriefing />
+      <TodayPlanCard />
       <WeekReportCard />
       <BountyCard />
       <RoutineCard />
@@ -76,6 +81,7 @@ export default function Hoy() {
       <DailyEncounterCard onDefeatRecurring={(bossId) => setRecurring({ open: true, bossId })} />
       <NpcMissions />
       <WeeklyCard />
+      <WeekPaceCard />
       <CampfireCard />
 
       <Collapse title="Más en tu jornada">
@@ -86,7 +92,7 @@ export default function Hoy() {
             <Icon name="feather" /> Escribir lección
           </button>
           <button className="btn block" onClick={() => setRecurring({ open: true })}>
-            <Icon name="skull" /> Vencí a un jefe
+            <Icon name="flag" /> Superé un reto
           </button>
         </div>
       </Collapse>
@@ -130,14 +136,14 @@ function BirthDatePrompt() {
   );
 }
 
-/** Ritual de inicio de jornada: solo aparece si aún no registras sueño hoy. */
+/** Check-in de la mañana: solo aparece si aún no registras sueño hoy. */
 function MorningRitualCard() {
   const { state } = useGame();
   const [custom, setCustom] = useState('');
   if (state.energy.value !== null) return null;
   const log = (h: number) => {
     addEvent('checkin.morning', { sleepHours: h });
-    toast(h >= 7 ? '⚡ Buff Descansado activado (100 energía)' : h >= 6 ? 'Energía en 75 · listo para la campaña' : 'Modo Supervivencia (50 energía) · hoy prioriza misiones chicas');
+    toast(h >= 7 ? '⚡ Descansado: energía al 100' : h >= 6 ? 'Energía en 75 · listo para el día' : 'Energía baja (50) · hoy prioriza misiones chicas');
   };
   return (
     <div className="card ritual-card">
@@ -147,10 +153,10 @@ function MorningRitualCard() {
         </div>
         <div className="grow">
           <div className="eyebrow" style={{ color: 'var(--gold)' }}>
-            Ritual de la mañana · Energía
+            Check-in de la mañana · Energía
           </div>
           <div className="small" style={{ margin: '4px 0 10px' }}>
-            ¿Cuántas horas dormiste para activar tu estado de hoy?
+            ¿Cuántas horas dormiste?
           </div>
           <div className="row wrap" style={{ gap: 6 }}>
             <button className="btn sm" onClick={() => log(5)}>
@@ -187,7 +193,7 @@ function MorningRitualCard() {
   );
 }
 
-/** Briefing vivo del Narrador local (sin API) con acceso rápido al Game Master. */
+/** Resumen del día local (sin API) con acceso rápido al Coach. */
 function NarratorBriefing() {
   const { state, entities } = useGame();
   const brief = useMemo(() => buildDailyBriefing(state, entities), [state, entities]);
@@ -201,8 +207,8 @@ function NarratorBriefing() {
           <div className="narrator-head">{brief.headline}</div>
           <div className="small muted">{brief.body}</div>
         </div>
-        <Link to="/game-master" className="btn sm ghost" aria-label="Hablar con el Game Master">
-          GM
+        <Link to="/game-master" className="btn sm ghost" aria-label="Hablar con el Coach">
+          Coach
         </Link>
       </div>
     </div>
@@ -243,7 +249,7 @@ function RoutineCard() {
             </div>
           </div>
           {!done && (
-            <button className="btn icon sm play-btn" aria-label={`Jugar ${m.data.title}`} title="Iniciar en Modo Misión" onClick={() => startMissionQuest(m)}>
+            <button className="btn icon sm play-btn" aria-label={`Empezar ${m.data.title}`} title="Iniciar en Modo enfoque" onClick={() => startMissionQuest(m)}>
               <Icon name="play" />
             </button>
           )}
@@ -258,7 +264,7 @@ function RoutineCard() {
         <div>
           <h2>Rutina de hoy</h2>
           <div className="tiny muted">
-            {perfect ? `¡Día Perfecto! ${doneCount}/${routine.length} hechas` : `${doneCount}/${routine.length} hechas · toca ✓, desliza → o pulsa ▶ para jugar`}
+            {perfect ? `¡Día perfecto! ${doneCount}/${routine.length} hechas` : `${doneCount}/${routine.length} hechas · toca ✓, desliza → o pulsa ▶ para enfocarte`}
           </div>
         </div>
         <Link to="/misiones?tab=daily" className="btn sm ghost">
@@ -268,7 +274,7 @@ function RoutineCard() {
       {routine.length > 0 && <Bar value={doneCount} max={routine.length} tone={perfect ? 'gold' : 'green'} size="sm" />}
       {low && (
         <div className="banner warn" style={{ margin: '10px 0 4px' }}>
-          <Icon name="bolt" width={18} /> Modo Supervivencia: hoy prioriza misiones chicas y de recuperación.
+          <Icon name="bolt" width={18} /> Energía baja: hoy prioriza misiones chicas y de recuperación.
         </div>
       )}
       <div style={{ marginTop: 6 }}>
@@ -366,7 +372,7 @@ function AgendaCard() {
                 {t.data.date < state.today && <Badge tone="red">Desde {fmtDate(t.data.date)}</Badge>}
               </div>
             </div>
-            <button className="btn icon sm play-btn" aria-label={`Jugar ${t.data.title}`} title="Iniciar en Modo Misión" onClick={() => startTodoQuest(t)}>
+            <button className="btn icon sm play-btn" aria-label={`Empezar ${t.data.title}`} title="Iniciar en Modo enfoque" onClick={() => startTodoQuest(t)}>
               <Icon name="play" />
             </button>
             <button className="btn sm ghost" onClick={() => postpone(t)} aria-label="Pasar a mañana">
@@ -427,7 +433,7 @@ function BountyCard() {
         </div>
         {!b.completed && m && (
           <div className="row" style={{ gap: 6 }}>
-            <button className="btn icon sm play-btn" aria-label={`Jugar ${b.title}`} onClick={() => startMissionQuest(m)}>
+            <button className="btn icon sm play-btn" aria-label={`Empezar ${b.title}`} onClick={() => startMissionQuest(m)}>
               <Icon name="play" />
             </button>
             <button className="btn sm primary" onClick={() => completeMission(m)}>
@@ -440,7 +446,7 @@ function BountyCard() {
   );
 }
 
-/** Jefe activo en combate con arte ilustrado, barra de HP y ataque directo. */
+/** Gran reto activo: ícono, barra de avance y acción directa. */
 function ActiveBossCard() {
   const { state, list, byId } = useGame();
   const [income, setIncome] = useState(false);
@@ -474,9 +480,9 @@ function ActiveBossCard() {
   const hpRight =
     nextPhase?.progress && nextPhase.progress.target > 0
       ? nextPhase.progress.unit === 'MXN'
-        ? `${fmtMoney(Math.max(0, nextPhase.progress.target - nextPhase.progress.current), cur)} HP rest.`
+        ? `faltan ${fmtMoney(Math.max(0, nextPhase.progress.target - nextPhase.progress.current), cur)}`
         : `${nextPhase.progress.current}/${nextPhase.progress.target} ${nextPhase.progress.unit}`
-      : `${phaseHpPct}% HP`;
+      : `${100 - phaseHpPct}% de avance`;
 
   return (
     <div className="card boss-encounter">
@@ -484,12 +490,12 @@ function ActiveBossCard() {
         <BossArt bossId={boss.id} size={62} />
         <div className="grow" style={{ minWidth: 0 }}>
           <div className="row between" style={{ gap: 6 }}>
-            <div className="eyebrow" style={{ color: 'var(--red)' }}>
-              Jefe en combate · Fase {st.phasesDone + 1}/{boss.data.phases.length}
+            <div className="eyebrow" style={{ color: 'var(--gold)' }}>
+              Gran reto · Fase {st.phasesDone + 1}/{boss.data.phases.length}
             </div>
             {allBosses.length > 1 && (
               <button className="btn sm ghost" style={{ minHeight: 24, padding: '2px 8px', fontSize: 11 }} onClick={() => setIdx((i) => (i + 1) % allBosses.length)}>
-                Otro jefe →
+                Otro reto →
               </button>
             )}
           </div>
@@ -499,7 +505,7 @@ function ActiveBossCard() {
       </div>
 
       <div style={{ marginTop: 12 }}>
-        <BossHpBar hpPct={phaseHpPct} label={isDragon ? `Mes: ${fmtMoney(state.money.monthIncome, cur)} / ${fmtMoney(state.money.goal, cur)}` : `Vida de fase`} right={hpRight} />
+        <BossHpBar hpPct={phaseHpPct} label={isDragon ? `Mes: ${fmtMoney(state.money.monthIncome, cur)} / ${fmtMoney(state.money.goal, cur)}` : `Avance de la fase`} right={hpRight} />
       </div>
 
       <div className="row between" style={{ marginTop: 10, gap: 8 }}>
@@ -507,7 +513,7 @@ function ActiveBossCard() {
           {isDragon && (
             <>
               <button className="btn sm primary" onClick={() => setIncome(true)}>
-                <Icon name="sword" /> Atacar (+Ingreso)
+                <Icon name="plus" /> Registrar ingreso
               </button>
               <button className="btn sm ghost" onClick={() => setEditGoal(true)}>
                 Meta
@@ -516,23 +522,23 @@ function ActiveBossCard() {
           )}
           {!isDragon && linkedMission && (
             <button className="btn sm primary" onClick={() => startMissionQuest(linkedMission)}>
-              <Icon name="play" /> Atacar ({linkedMission.data.title})
+              <Icon name="play" /> Avanzar ({linkedMission.data.title})
             </button>
           )}
           {!isDragon && !linkedMission && nextMetric?.type === 'manual' && (
             <button
               className="btn sm primary"
               onClick={() =>
-                confirmAction(`¿Venciste "${nextPhase?.title}"? (+${GAME_CONFIG.rewards.bossPhase} XP)`) &&
+                confirmAction(`¿Completaste "${nextPhase?.title}"? (+${GAME_CONFIG.rewards.bossPhase} XP)`) &&
                 addEvent('boss.phase_completed', { bossId: boss.id, phaseIndex: nextIdx })
               }
             >
-              <Icon name="sword" /> Vencer fase
+              <Icon name="check" /> Completar fase
             </button>
           )}
         </div>
         <Link to="/jefes" className="btn sm ghost">
-          Ver jefes
+          Ver retos
         </Link>
       </div>
 
@@ -542,7 +548,7 @@ function ActiveBossCard() {
   );
 }
 
-/** Encuentro aleatorio del día: emboscada de jefe recurrente o prueba relámpago de tu atributo más bajo. */
+/** Reto del día: un reto recurrente o una prueba relámpago de tu atributo más bajo. */
 function DailyEncounterCard({ onDefeatRecurring }: { onDefeatRecurring: (bossId?: string) => void }) {
   const { state, entities } = useGame();
   const enc = useMemo(() => pickDailyEncounter(state, entities), [state, entities]);
@@ -559,7 +565,7 @@ function DailyEncounterCard({ onDefeatRecurring }: { onDefeatRecurring: (bossId?
         )}
         <div className="grow">
           <div className="eyebrow" style={{ color: enc.completed ? 'var(--green)' : 'var(--gold)' }}>
-            {enc.completed ? 'Encuentro superado' : 'Encuentro aleatorio del día'}
+            {enc.completed ? 'Reto del día superado' : 'Reto del día'}
           </div>
           <div className="item-title">{enc.title}</div>
           <div className="tiny muted">{enc.subtitle}</div>
@@ -568,13 +574,13 @@ function DailyEncounterCard({ onDefeatRecurring }: { onDefeatRecurring: (bossId?
           <div className="row" style={{ gap: 6 }}>
             {enc.kind === 'recurring_boss' ? (
               <button className="btn sm primary" onClick={() => onDefeatRecurring(enc.bossId)}>
-                Vencer
+                Lo hice
               </button>
             ) : (
               <>
                 <button
                   className="btn icon sm play-btn"
-                  aria-label="Jugar encuentro"
+                  aria-label="Empezar reto del día"
                   onClick={() =>
                     startQuest({
                       kind: 'quick',
@@ -607,7 +613,7 @@ function VicesMini() {
     <Link to="/enemigos" className="row between" style={{ textDecoration: 'none', color: 'inherit', padding: '8px 0' }}>
       <div className="grow">
         <div className="eyebrow" style={{ marginBottom: 6 }}>
-          Enemigos a raya
+          Hábitos a dejar
         </div>
         <div className="row wrap" style={{ gap: 6 }}>
           {vices.map((v) => (
@@ -628,17 +634,20 @@ function WeekReportCard() {
   if (wd !== 6 && wd !== 0) return null;
   const target = wd === 0 ? addDays(state.today, -7) : state.today;
   return (
+    <>
     <Link to={`/reporte?semana=${weekStart(target)}`} className="banner" style={{ textDecoration: 'none', color: 'inherit' }}>
       <Icon name="scroll" width={20} />
       <span>
-        <b>Reporte de batalla</b> de {wd === 0 ? 'la semana pasada' : 'esta semana'} listo.
+        <b>Reporte semanal</b> de {wd === 0 ? 'la semana pasada' : 'esta semana'} listo.
       </span>
       <span className="btn sm">Ver</span>
     </Link>
+    <WeekShareCard monday={weekStart(target)} compact />
+    </>
   );
 }
 
-/** La Hoguera: ritual nocturno para cerrar el día con crónica y resumen de batalla. */
+/** Cierre del día: resumen de la jornada y una nota para el registro. */
 function CampfireCard() {
   const { state } = useGame();
   const [open, setOpen] = useState(false);
@@ -653,9 +662,9 @@ function CampfireCard() {
         </div>
         <div className="grow" style={{ textAlign: 'left' }}>
           <div className="eyebrow" style={{ color: 'var(--flame)' }}>
-            La Hoguera · ritual nocturno
+            Cierre del día
           </div>
-          <b>{closed ? 'Crónica de hoy sellada' : 'Descansar en la hoguera y cerrar el día'}</b>
+          <b>{closed ? 'Día cerrado' : 'Cierra tu día'}</b>
           <div className="tiny muted">{closed ? closed.note || 'Toca para ver tu resumen' : `Hoy: +${state.xp.today} XP · +${state.gold.earnedToday} oro · racha ${state.streak.current}d`}</div>
         </div>
         <Icon name="right" width={18} />
@@ -680,17 +689,20 @@ function CloseDaySheet({ onClose }: { onClose: () => void }) {
     <Sheet
       open
       onClose={onClose}
-      title="La Hoguera · Cierre del día"
+      title="Cierre del día"
       actions={
         <button
           className="btn primary"
           onClick={() => {
             addEvent('day.closed', { note: note.trim(), mood: mood ?? undefined });
-            toast('🔥 Crónica sellada. Descansa, mañana continúa la campaña.');
+            const bonus = !prev && missions > 0 ? dayCloseBonus(state.today, GAME_CONFIG.goldBonus.dayCloseOptions) : 0;
+            toast(bonus ? `Día cerrado. Bono sorpresa: +${bonus} de oro.` : 'Día cerrado. Descansa, mañana seguimos.', bonus ? 'xp' : 'info');
             onClose();
+            const tomorrow = addDays(state.today, 1);
+            if (!state.plans[tomorrow]?.items.length) setTimeout(() => openPlanSheet(tomorrow), 350);
           }}
         >
-          {prev ? 'Actualizar crónica' : 'Sellar el día'}
+          {prev ? 'Actualizar cierre' : 'Cerrar el día'}
         </button>
       }
     >
@@ -698,7 +710,7 @@ function CloseDaySheet({ onClose }: { onClose: () => void }) {
         <div className="campfire-glow" aria-hidden="true">
           <Icon name="campfire" width={36} height={36} />
         </div>
-        <div className="small muted">Resumen de batalla · {fmtDate(state.today, true)}</div>
+        <div className="small muted">Resumen del día · {fmtDate(state.today, true)}</div>
       </div>
       <div className="grid2" style={{ gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
         <div className="stat-tile">
@@ -728,10 +740,10 @@ function CloseDaySheet({ onClose }: { onClose: () => void }) {
       <Field label="¿Cómo cerraste el día?">
         <Chips value={mood} onChange={setMood} size="lg" options={MOODS.map((m, i) => ({ value: i + 1, label: m }))} />
       </Field>
-      <Field label="Una línea para tu crónica">
-        <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="La victoria de hoy, lo que aprendí…" />
+      <Field label="Una línea sobre tu día">
+        <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Lo mejor de hoy, lo que aprendí…" />
       </Field>
-      <p className="tiny muted">Tu crónica aparece en el Historial y en Mi vida en semanas.</p>
+      <p className="tiny muted">Tu nota aparece en el Historial y en Mi vida en semanas.</p>
     </Sheet>
   );
 }
@@ -744,9 +756,9 @@ function NpcMissions() {
   return (
     <div className="card">
       <div className="card-head">
-        <h2>Tu party te extraña</h2>
+        <h2>Tu gente te extraña</h2>
         <Link to="/npcs" className="btn sm ghost">
-          NPCs
+          Mi gente
         </Link>
       </div>
       {gen.map((m) => {
@@ -803,7 +815,7 @@ function WeeklyCard() {
             </div>
           </div>
           {!done && (
-            <button className="btn icon sm play-btn" aria-label={`Jugar ${m.data.title}`} onClick={() => startMissionQuest(m)}>
+            <button className="btn icon sm play-btn" aria-label={`Empezar ${m.data.title}`} onClick={() => startMissionQuest(m)}>
               <Icon name="play" />
             </button>
           )}
@@ -924,7 +936,7 @@ function RecurringDefeatSheet({ initialBossId, onClose }: { initialBossId?: stri
     <Sheet
       open
       onClose={onClose}
-      title="Vencí a un jefe recurrente"
+      title="Superé un reto recurrente"
       actions={
         <button
           className="btn primary"
@@ -938,7 +950,7 @@ function RecurringDefeatSheet({ initialBossId, onClose }: { initialBossId?: stri
         </button>
       }
     >
-      <Field label="Jefe">
+      <Field label="Reto">
         <select className="input" value={bossId} onChange={(e) => setBossId(e.target.value)}>
           {bosses.map((b) => (
             <option key={b.id} value={b.id}>
@@ -947,7 +959,7 @@ function RecurringDefeatSheet({ initialBossId, onClose }: { initialBossId?: stri
           ))}
         </select>
       </Field>
-      {boss && <p className="small muted">Se vence con: {boss.data.defeatCondition}</p>}
+      {boss && <p className="small muted">Se supera con: {boss.data.defeatCondition}</p>}
       <Field label="Evidencia (la decisión, lo que entregaste…)">
         <textarea className="input" value={note} onChange={(e) => setNote(e.target.value)} />
       </Field>

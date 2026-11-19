@@ -8,7 +8,7 @@ import { Avatar } from './Avatar';
 import { Icon } from './icons';
 import { Bar, undoToast } from './kit';
 
-/** HUD principal del Personaje: retrato evolutivo, nivel, XP, oro, energía, racha y buffs activos. */
+/** Resumen principal del Perfil: monograma, nivel, XP, oro, energía, racha y lo que tienes a tu favor / en contra. */
 export function Hero({ compact = false }: { compact?: boolean }) {
   const { state, entities } = useGame();
   const { level, settings, energy, streak } = state;
@@ -20,7 +20,7 @@ export function Hero({ compact = false }: { compact?: boolean }) {
   return (
     <div className="card hero">
       <div className="row" style={{ alignItems: 'flex-start', gap: 12 }}>
-        <Link to="/personaje" className="hero-avatar" aria-label="Ver personaje">
+        <Link to="/personaje" className="hero-avatar" aria-label="Ver perfil">
           <Avatar size={70} />
           <span className="hero-level num" aria-label={`Nivel ${level.level}`}>
             {level.level}
@@ -98,7 +98,7 @@ export function Hero({ compact = false }: { compact?: boolean }) {
         </div>
       )}
 
-      {/* Buffs activos */}
+      {/* A tu favor / en contra */}
       {!compact && buffs.length > 0 && (
         <div className="row wrap" style={{ gap: 6, marginTop: 10 }}>
           {buffs.map((b) => (

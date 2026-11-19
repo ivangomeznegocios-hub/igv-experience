@@ -39,11 +39,11 @@ function Profile() {
   const dirty = d.name !== s.name || d.className !== s.className || d.birthDate !== (s.birthDate ?? '') || Number(d.monthlyGoal) !== s.monthlyGoal;
   return (
     <div className="card">
-      <h2>Personaje</h2>
+      <h2>Perfil</h2>
       <Field label="Nombre">
         <input className="input" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} />
       </Field>
-      <Field label="Clase">
+      <Field label="A qué te dedicas">
         <input className="input" value={d.className} onChange={(e) => setD({ ...d, className: e.target.value })} />
       </Field>
       <div className="grid2">
@@ -147,7 +147,7 @@ function NotifyCard() {
     <div className="card">
       <h2>Notificaciones</h2>
       <p className="small muted" style={{ marginTop: 0 }}>
-        Recordatorio del check-in en la mañana, aviso de racha en riesgo en la noche, NPCs olvidados y cierre de semana. Se calculan con tu progreso y se envían desde tu Worker (cada 15 min).
+        Recordatorio del check-in en la mañana, aviso de racha en riesgo en la noche, personas olvidadas y cierre de semana. Se calculan con tu progreso y se envían desde tu Worker (cada 15 min).
       </p>
       {needsInstall() && (
         <div className="banner warn">
@@ -166,7 +166,7 @@ function NotifyCard() {
           </div>
           <label className="checkbox">
             <input type="checkbox" checked={n.npcs} onChange={(e) => upNotify({ npcs: e.target.checked })} />
-            NPCs clave sin contacto
+            Personas clave sin contacto
           </label>
           <label className="checkbox">
             <input type="checkbox" checked={n.weekly} onChange={(e) => upNotify({ weekly: e.target.checked })} />
@@ -364,8 +364,8 @@ function ConfigCard() {
           <tr><td>Misiones</td><td className="r">chica {c.missionXp.chica} · media {c.missionXp.media} · grande {c.missionXp.grande} · épica {c.missionXp.epica}</td></tr>
           <tr><td>Racha</td><td className="r">+{c.streak.perDay}/día, máx. +{c.streak.maxPerDay}</td></tr>
           <tr><td>Descansos</td><td className="r">{c.streak.restDaysPerWeek} por semana</td></tr>
-          <tr><td>Logro / Rango / Fase de jefe</td><td className="r">{c.rewards.achievement} / {c.rewards.skillRank} / {c.rewards.bossPhase}</td></tr>
-          <tr><td>Jefe recurrente / Mapa / Lección</td><td className="r">{c.rewards.recurringBoss} / {c.rewards.discovery} / {c.rewards.lesson}</td></tr>
+          <tr><td>Logro / Rango / Fase de reto</td><td className="r">{c.rewards.achievement} / {c.rewards.skillRank} / {c.rewards.bossPhase}</td></tr>
+          <tr><td>Reto recurrente / Mapa / Lección</td><td className="r">{c.rewards.recurringBoss} / {c.rewards.discovery} / {c.rewards.lesson}</td></tr>
           <tr><td>Nivel n → n+1</td><td className="r">{c.levels.factor} × n XP</td></tr>
           <tr><td>Energía</td><td className="r">≥7 h 100 · ≥6 h 75 · menos 50</td></tr>
           <tr><td>Oro</td><td className="r">1 por cada {c.gold.xpPerGold} XP</td></tr>

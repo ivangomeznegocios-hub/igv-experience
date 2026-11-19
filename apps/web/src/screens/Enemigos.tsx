@@ -5,7 +5,7 @@ import { fmtDate, newId } from '../lib/time';
 import { Empty, Field, PageHeader, Sheet, confirmAction, undoToast } from '../ui/kit';
 import { Icon } from '../ui/icons';
 
-/** Malos hábitos como enemigos: se cuentan los días sin caer. Nunca dan ni quitan XP. */
+/** Hábitos a dejar: se cuentan los días sin recaída. Nunca dan ni quitan XP. */
 export default function Enemigos() {
   const { state, list } = useGame();
   const vices = list<ViceData>('habits', 'vice');
@@ -13,18 +13,18 @@ export default function Enemigos() {
   return (
     <>
       <PageHeader
-        title="Enemigos"
-        eyebrow="Malos hábitos"
+        title="Hábitos a dejar"
+        eyebrow="Días sin recaída"
         right={
           <button className="btn sm primary" onClick={() => setEdit('new')}>
-            <Icon name="plus" /> Enemigo
+            <Icon name="plus" /> Hábito
           </button>
         }
       />
       <p className="small muted" style={{ marginTop: -6 }}>
-        Cada enemigo cuenta los días seguidos que lo tienes a raya. Si caes, lo registras y la cuenta vuelve a empezar. Tu XP nunca baja por esto.
+        Cada hábito cuenta los días seguidos sin recaída. Si recaes, lo registras y la cuenta vuelve a empezar. Tu XP nunca baja por esto.
       </p>
-      {vices.length === 0 && <Empty>Agrega un hábito que quieras vencer: redes sociales de noche, comida chatarra, posponer…</Empty>}
+      {vices.length === 0 && <Empty>Agrega un hábito que quieras dejar: redes sociales de noche, comida chatarra, posponer…</Empty>}
       {vices.map((v) => {
         const st = state.vices[v.id];
         return (
@@ -38,7 +38,7 @@ export default function Enemigos() {
             <div className="row" style={{ gap: 18 }}>
               <div>
                 <div className="stat-big num green">{st?.current ?? 0}</div>
-                <div className="tiny muted">días sin caer</div>
+                <div className="tiny muted">días sin recaída</div>
               </div>
               <div>
                 <div className="stat-big num">{st?.best ?? 0}</div>
@@ -49,15 +49,15 @@ export default function Enemigos() {
                 className="btn sm danger"
                 disabled={st?.relapsedToday}
                 onClick={() => {
-                  if (!confirmAction(`¿Registrar una caída en "${v.data.name}"? La cuenta vuelve a 0 (tu XP no cambia).`)) return;
+                  if (!confirmAction(`¿Registrar una recaída en "${v.data.name}"? La cuenta vuelve a 0 (tu XP no cambia).`)) return;
                   const ev = addEvent('vice.relapse', { viceId: v.id });
                   undoToast('Registrado. Mañana empieza otra racha.', () => voidEvent(ev.id));
                 }}
               >
-                {st?.relapsedToday ? 'Caí hoy' : 'Caí'}
+                {st?.relapsedToday ? 'Recaída hoy' : 'Recaí'}
               </button>
             </div>
-            {st && st.relapses.length > 0 && <div className="tiny muted" style={{ marginTop: 8 }}>Última caída: {fmtDate(st.lastRelapse, true)} · {st.relapses.length} en total</div>}
+            {st && st.relapses.length > 0 && <div className="tiny muted" style={{ marginTop: 8 }}>Última recaída: {fmtDate(st.lastRelapse, true)} · {st.relapses.length} en total</div>}
           </div>
         );
       })}
@@ -73,11 +73,11 @@ function ViceSheet({ initial, onClose }: { initial: Entity<ViceData> | null; onC
     <Sheet
       open
       onClose={onClose}
-      title={initial ? 'Editar enemigo' : 'Nuevo enemigo'}
+      title={initial ? 'Editar hábito' : 'Nuevo hábito a dejar'}
       actions={
         <>
           {initial && (
-            <button className="btn ghost danger" onClick={() => confirmAction('¿Borrar este enemigo?') && (deleteEntity(initial.id), onClose())}>
+            <button className="btn ghost danger" onClick={() => confirmAction('¿Borrar este hábito?') && (deleteEntity(initial.id), onClose())}>
               Borrar
             </button>
           )}
@@ -94,14 +94,14 @@ function ViceSheet({ initial, onClose }: { initial: Entity<ViceData> | null; onC
         </>
       }
     >
-      <Field label="Mal hábito">
+      <Field label="Hábito">
         <input className="input" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} placeholder="Redes sociales después de las 10 pm" />
       </Field>
       <Field label="Contar desde">
         <input className="input" type="date" max={state.today} value={d.startDate} onChange={(e) => setD({ ...d, startDate: e.target.value })} />
       </Field>
       <Field label="Notas">
-        <textarea className="input" value={d.notes ?? ''} onChange={(e) => setD({ ...d, notes: e.target.value })} placeholder="Por qué lo quieres vencer, qué lo dispara…" />
+        <textarea className="input" value={d.notes ?? ''} onChange={(e) => setD({ ...d, notes: e.target.value })} placeholder="Por qué lo quieres dejar, qué lo dispara…" />
       </Field>
     </Sheet>
   );

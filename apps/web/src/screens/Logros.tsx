@@ -163,7 +163,7 @@ function AchievementForm({ initial, onClose }: { initial?: Entity<AchievementDat
           <option value="missions_completed">Misiones completadas</option>
           <option value="streak">Días de racha</option>
           <option value="lessons">Lecciones escritas</option>
-          <option value="discoveries">Descubrimientos en el mapa</option>
+          <option value="discoveries">Primeras visitas en el mapa</option>
           {!['manual', 'missions_completed', 'streak', 'lessons', 'discoveries'].includes(c.type) && <option value="other">Automática (predefinida)</option>}
         </select>
       </Field>

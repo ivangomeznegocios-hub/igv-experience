@@ -39,7 +39,7 @@ interface StoredQuest extends ActiveQuestPayload {
 const STORAGE_KEY = 'igv-active-quest-v1';
 const bus = new Set<(q: ActiveQuestPayload) => void>();
 
-/** Lanza cualquier misión en Modo Combate / Enfoque desde cualquier pantalla. */
+/** Lanza cualquier misión en Modo enfoque desde cualquier pantalla. */
 export function startQuest(q: ActiveQuestPayload) {
   sfx.questStart();
   haptic(20);
@@ -96,10 +96,10 @@ function fmtClock(sec: number): string {
 }
 
 /**
- * Modo Misión Activa ("Jugar durante el día"):
+ * Modo enfoque:
  * - Temporizador flexible (cuenta regresiva o cronómetro) persistente en localStorage.
- * - Muestra el jefe vinculado a la misión con su barra de HP.
- * - Sub-pasos rápidos de la sesión + sonido ambiente opcional (hoguera / lluvia).
+ * - Muestra el gran reto vinculado a la misión con su barra de avance.
+ * - Sub-pasos rápidos de la sesión + sonido ambiente opcional (fuego / lluvia).
  * - Se puede minimizar en una barra superior para consultar el resto de la app.
  */
 export function QuestMode() {
@@ -217,7 +217,7 @@ export function QuestMode() {
     setAmbientSound(m);
   };
 
-  // Barra minimizada cuando el usuario navega por la app mientras juega una misión
+  // Barra minimizada cuando el usuario navega por la app con una misión en curso
   if (!expanded) {
     return (
       <div className="quest-mini" role="region" aria-label="Misión en curso">
@@ -242,14 +242,14 @@ export function QuestMode() {
   const C = 2 * Math.PI * R;
 
   return (
-    <div className="quest-overlay" role="dialog" aria-modal="true" aria-label={`Misión activa: ${quest.title}`}>
+    <div className="quest-overlay" role="dialog" aria-modal="true" aria-label={`Modo enfoque: ${quest.title}`}>
       <div className="quest-shell">
         <div className="row between" style={{ marginBottom: 14 }}>
           <button className="btn sm ghost" onClick={() => setExpanded(false)}>
             <Icon name="down" /> Minimizar
           </button>
           <span className="eyebrow" style={{ color: 'var(--gold)' }}>
-            Misión Activa
+            Modo enfoque
           </span>
           <button className="btn sm ghost danger" onClick={cancel}>
             Salir
@@ -271,13 +271,13 @@ export function QuestMode() {
           <div className="quest-boss-strip">
             <BossArt bossId={linkedBoss.boss.id} size={46} />
             <div className="grow">
-              <div className="tiny muted">Atacando a {linkedBoss.boss.data.name}</div>
+              <div className="tiny muted">Avanzas en {linkedBoss.boss.data.name}</div>
               <BossHpBar hpPct={linkedBoss.hpRemainingPct} label={linkedBoss.phaseTitle} right={linkedBoss.currentText} />
             </div>
           </div>
         )}
 
-        {/* Reloj circular de batalla / enfoque */}
+        {/* Reloj circular de enfoque */}
         <div className="quest-clock-wrap">
           <svg viewBox="0 0 200 200" width={206} height={206} className="quest-ring">
             <circle cx="100" cy="100" r={R} fill="none" stroke="var(--line)" strokeWidth="8" />
@@ -298,7 +298,7 @@ export function QuestMode() {
           <div className="quest-clock-center">
             <div className={`quest-clock num ${overtime ? 'green' : ''}`}>{fmtClock(displaySec)}</div>
             <div className="tiny muted">
-              {overtime ? '¡Tiempo cumplido!' : quest.mode === 'countdown' ? (quest.running ? 'En combate…' : 'En pausa') : 'Cronómetro'}
+              {overtime ? '¡Tiempo cumplido!' : quest.mode === 'countdown' ? (quest.running ? 'Enfocado…' : 'En pausa') : 'Cronómetro'}
             </div>
           </div>
         </div>
@@ -338,7 +338,7 @@ export function QuestMode() {
               {(
                 [
                   ['off', 'Silencio'],
-                  ['fire', 'Hoguera'],
+                  ['fire', 'Fuego'],
                   ['rain', 'Lluvia'],
                 ] as const
               ).map(([m, label]) => (
@@ -353,7 +353,7 @@ export function QuestMode() {
 
           {/* Sub-pasos de la sesión */}
           <div className="eyebrow" style={{ marginBottom: 6 }}>
-            Pasos de esta batalla (opcional)
+            Pasos de esta sesión (opcional)
           </div>
           {quest.steps.map((s) => (
             <label key={s.id} className="item" style={{ padding: '6px 0', cursor: 'pointer' }}>
@@ -390,7 +390,7 @@ export function QuestMode() {
         </div>
 
         <button className="btn primary block quest-finish-btn" onClick={finish}>
-          <Icon name="sword" /> Completar misión (+{xp} XP · {ATTRIBUTE_NAMES[quest.attribute]})
+          <Icon name="check" /> Completar misión (+{xp} XP · {ATTRIBUTE_NAMES[quest.attribute]})
         </button>
       </div>
     </div>

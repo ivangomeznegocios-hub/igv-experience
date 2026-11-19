@@ -24,16 +24,16 @@ export function WeekPaceCard() {
 
   return (
     <Link to="/records" className="card" style={{ display: 'block', color: 'inherit', textDecoration: 'none' }}>
-      <div className="card-head">
-        <h2>Tú vs. tú</h2>
-        <div className="row" style={{ gap: 4 }}>
+      <h2 style={{ marginBottom: newRecords.length ? 6 : 8 }}>Tú vs. tú</h2>
+      {newRecords.length > 0 && (
+        <div className="row wrap" style={{ gap: 4, marginBottom: 8 }}>
           {newRecords.map((r) => (
             <Badge key={r.id} tone="gold">
               ¡Récord: {r.label.toLowerCase()}!
             </Badge>
           ))}
         </div>
-      </div>
+      )}
       <div className={`vs-verdict small ${verdict.cls}`}>{verdict.text}</div>
       <div className="vs-bars">
         <div className="vs-row">
@@ -52,7 +52,7 @@ export function WeekPaceCard() {
         </div>
       </div>
       <div className="tiny muted">
-        {p.missions} misiones vs {p.missionsLastWeek} · la semana pasada cerró con {fmtNum(p.xpLastWeekTotal)} XP
+        {p.missions} {p.missions === 1 ? 'misión' : 'misiones'} vs {p.missionsLastWeek} · la semana pasada cerró con {fmtNum(p.xpLastWeekTotal)} XP
         {p.xp > p.xpLastWeekTotal && p.xpLastWeekTotal > 0 ? ' — ya la superaste' : ''}
       </div>
     </Link>
