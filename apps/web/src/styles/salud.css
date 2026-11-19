@@ -1,0 +1,91 @@
+/* Salud (/salud y registro rápido): chequeos preventivos, mediciones y ficha médica. Usa los tokens de styles.css. */
+
+:root {
+  /* Series de las gráficas de mediciones (validadas contra la superficie: lightness, CVD y contraste). */
+  --salud-s1: #21a99c;
+  --salud-s2: #b98118;
+}
+:root[data-theme='light'] {
+  --salud-s1: #0d9488;
+  --salud-s2: #c67d0c;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']):not([data-theme='light']) {
+    --salud-s1: #0d9488;
+    --salud-s2: #c67d0c;
+  }
+}
+
+/* ---------- Encabezado: anillo de "Tu salud" ---------- */
+.salud-hero { display: flex; gap: 16px; align-items: center; }
+.salud-ring { position: relative; width: 104px; height: 104px; flex: none; }
+.salud-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.salud-ring circle { transition: stroke-dashoffset 0.6s ease; }
+.salud-ring-val { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; line-height: 1; }
+.salud-ring-val b { font-family: var(--font-mono); font-size: 26px; font-weight: 800; letter-spacing: -0.02em; }
+.salud-ring-val small { display: block; font-size: 10px; color: var(--muted); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-top: 3px; }
+.salud-hero-text { min-width: 0; flex: 1; }
+.salud-hero-text h2 { margin: 0 0 2px; font-size: 18px; }
+.salud-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.salud-tiles .stat-tile { min-width: 0; text-decoration: none; color: inherit; }
+.salud-tiles .stat-tile b { font-family: var(--font-mono); font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.salud-tiles .stat-tile span { font-size: 10px; letter-spacing: 0.06em; }
+.salud-tiles .stat-tile em { font-style: normal; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- Filas de chequeos ---------- */
+.salud-row { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-top: 1px solid var(--line); }
+.salud-row:first-child { border-top: 0; }
+.salud-row.tap { cursor: pointer; }
+.salud-ico { width: 38px; height: 38px; flex: none; border-radius: 11px; display: grid; place-items: center; background: var(--card-2); border: 1px solid var(--line); color: var(--muted); }
+.salud-ico svg { width: 20px; height: 20px; }
+.salud-ico.atrasado { color: var(--red); border-color: color-mix(in srgb, var(--red) 45%, var(--line)); background: color-mix(in srgb, var(--red) 10%, var(--card-2)); }
+.salud-ico.pronto { color: var(--flame); border-color: color-mix(in srgb, var(--flame) 45%, var(--line)); background: color-mix(in srgb, var(--flame) 10%, var(--card-2)); }
+.salud-ico.al_dia { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, var(--line)); }
+.salud-name { font-weight: 650; line-height: 1.25; }
+.salud-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.salud-sub.atrasado { color: var(--red); }
+.salud-sub.pronto { color: var(--flame); }
+.salud-link { background: none; border: 0; padding: 0; color: var(--gold); font: inherit; font-size: 12px; font-weight: 650; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.salud-do { flex: none; white-space: nowrap; }
+.salud-do small { font-family: var(--font-mono); font-weight: 800; opacity: 0.8; margin-left: 2px; }
+.salud-cool { height: 4px; border-radius: 999px; background: var(--card-2); margin-top: 7px; overflow: hidden; }
+.salud-cool > i { display: block; height: 100%; border-radius: 999px; background: var(--green); }
+.salud-allgood { display: flex; align-items: center; gap: 10px; color: var(--green); font-weight: 650; padding: 4px 0; }
+.salud-allgood svg { width: 22px; height: 22px; flex: none; }
+.salud-note { font-size: 11px; color: var(--muted); margin-top: 10px; display: flex; gap: 6px; align-items: flex-start; }
+.salud-note svg { width: 14px; height: 14px; flex: none; margin-top: 1px; }
+
+/* ---------- Mediciones ---------- */
+.salud-metric-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 6px 0 2px; }
+.salud-metric-val { font-family: var(--font-mono); font-size: 28px; font-weight: 800; letter-spacing: -0.02em; }
+.salud-metric-val small { font-size: 13px; color: var(--muted); font-weight: 600; margin-left: 4px; }
+.salud-level { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 650; }
+.salud-level::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.salud-level.ok { color: var(--green); }
+.salud-level.atencion { color: var(--flame); }
+.salud-level.alto { color: var(--red); }
+.salud-level.bajo { color: var(--season); }
+.salud-chart { position: relative; margin-top: 8px; touch-action: pan-y; }
+.salud-chart svg { width: 100%; height: auto; display: block; overflow: visible; }
+.salud-chart .guide { stroke: var(--faint); stroke-dasharray: 3 4; stroke-width: 1; }
+.salud-chart .guide-lbl { fill: var(--muted); font-size: 9px; font-family: var(--font-mono); }
+.salud-chart .axis-lbl { fill: var(--muted); font-size: 9px; }
+.salud-chart .cross { stroke: var(--muted); stroke-width: 1; }
+.salud-tip { position: absolute; top: -6px; transform: translate(-50%, -100%); background: var(--card-2); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; font-size: 11px; white-space: nowrap; pointer-events: none; box-shadow: var(--shadow); }
+.salud-tip b { font-family: var(--font-mono); }
+.salud-legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-top: 6px; }
+.salud-legend i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: 3px; }
+.salud-reading { font-size: 12px; margin-top: -4px; margin-bottom: 12px; }
+.salud-pair { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: end; }
+.salud-pair > span { padding-bottom: 22px; color: var(--muted); font-weight: 700; }
+
+/* ---------- Ficha médica ---------- */
+.salud-card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+.salud-card-grid > div { min-width: 0; }
+.salud-card-grid .full { grid-column: 1 / -1; }
+.salud-card-grid dt { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); font-weight: 700; margin-bottom: 2px; }
+.salud-card-grid dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.salud-card-grid dd.big { font-family: var(--font-mono); font-size: 22px; font-weight: 800; }
+.salud-card-grid dd.alert { color: var(--red); }
+.salud-card-grid a { color: var(--gold); text-decoration: none; font-weight: 650; }
+.salud-plain { display: block; background: none; border: 0; padding: 0; margin: 0; color: inherit; font: inherit; font-weight: 650; text-align: left; cursor: pointer; }

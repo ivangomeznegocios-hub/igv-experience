@@ -472,6 +472,7 @@ export const ENTITY_KINDS: Record<string, readonly string[]> = {
   // [[aprendizaje]]
 
   // [[salud]]
+  health: ['checkup', 'profile'],
 
   // [[habitos]]
 
@@ -498,6 +499,58 @@ export function isValidEntityKind(module: string, kind: string): boolean {
 // [[aprendizaje]]
 
 // [[salud]]
+
+// ---------- Salud: chequeos preventivos, mediciones y ficha médica ----------
+
+export const CHECKUP_CATEGORIES = ['estudios', 'consulta', 'dental', 'vista', 'piel', 'vacuna', 'otro'] as const;
+export type CheckupCategory = (typeof CHECKUP_CATEGORIES)[number];
+export const CHECKUP_CATEGORY_NAMES: Record<CheckupCategory, string> = {
+  estudios: 'Estudios',
+  consulta: 'Consulta',
+  dental: 'Dental',
+  vista: 'Vista',
+  piel: 'Piel',
+  vacuna: 'Vacuna',
+  otro: 'Otro',
+};
+
+/** Chequeo preventivo (`health/checkup`). La fecha siguiente se deriva: última vez + `everyMonths`. */
+export interface CheckupData {
+  name: string;
+  category: CheckupCategory;
+  /** Cada cuántos meses toca (0 = una sola vez). */
+  everyMonths: number;
+  notes?: string;
+  /** Activo = cuenta en "Ya te toca" y en tu puntaje de salud. */
+  active: boolean;
+  /** Tamaño de la XP al hacerlo (por defecto `health.checkupSize`). El registro guarda el del momento. */
+  size?: MissionSize;
+  /** Última vez aproximada, anotada a mano (no da XP). Un registro más reciente gana. */
+  lastDone?: string | null;
+  /** Recomendación de la que viene (HEALTH_SUGGESTIONS). */
+  suggestionId?: string | null;
+}
+
+export const HEALTH_METRIC_KINDS = ['presion', 'glucosa', 'colesterol', 'frecuencia_reposo', 'otro'] as const;
+export type HealthMetricKind = (typeof HEALTH_METRIC_KINDS)[number];
+
+export const BLOOD_TYPES = ['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'] as const;
+
+/** Ficha médica (`health/profile`, id fijo HEALTH_PROFILE_ID): lo que hay que leer rápido en una emergencia. */
+export interface HealthProfileData {
+  bloodType?: string;
+  allergies?: string;
+  conditions?: string;
+  medications?: string;
+  doctorName?: string;
+  doctorPhone?: string;
+  insurer?: string;
+  policyNumber?: string;
+  emergencyName?: string;
+  emergencyPhone?: string;
+  notes?: string;
+}
+export const HEALTH_PROFILE_ID = 'health-profile';
 
 // [[habitos]]
 

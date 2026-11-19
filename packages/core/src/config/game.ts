@@ -149,6 +149,15 @@ export const GAME_CONFIG = {
   // [[aprendizaje]]
 
   // [[salud]]
+  /** Salud: hacer un chequeo preventivo da la XP de una misión de su tamaño (una vez por chequeo por día). */
+  health: {
+    /** Tamaño por defecto de un chequeo (cada chequeo puede tener otro; el registro guarda el del momento). */
+    checkupSize: 'media',
+    /** Atributo al que suma la XP de los chequeos (salud física = Fuerza física). */
+    attribute: 'fuerza',
+    /** Días antes de su fecha en que un chequeo pasa a "te toca pronto". */
+    soonDays: 30,
+  },
 
   // [[habitos]]
 

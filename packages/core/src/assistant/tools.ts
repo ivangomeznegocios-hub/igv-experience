@@ -80,6 +80,7 @@ export type { EventQuery, AssistantStore, ActivityRefs, ToolResult, ToolGroup, A
 // [[aprendizaje]]
 
 // [[salud]]
+import { SALUD_GUIDE, SALUD_TOOLS, renderSaludOverview } from './tools-salud';
 
 // [[habitos]]
 
@@ -163,6 +164,7 @@ export function renderOverview(s: AssistantSnapshot): string {
   // [[aprendizaje]]
 
   // [[salud]]
+  L.push(...renderSaludOverview(s));
 
   // [[habitos]]
 
@@ -496,6 +498,7 @@ const GUIDE_SYSTEMS: string[] = [
   // [[aprendizaje]]
 
   // [[salud]]
+  SALUD_GUIDE,
 
   // [[habitos]]
 
@@ -1481,6 +1484,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
   // [[aprendizaje]]
 
   // [[salud]]
+  ...SALUD_TOOLS,
 
   // [[habitos]]
 
