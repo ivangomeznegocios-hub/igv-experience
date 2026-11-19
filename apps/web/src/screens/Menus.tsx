@@ -83,6 +83,8 @@ export function Mas() {
   const learningTopics = list('learning', 'topic').length;
   const ms = state.map.summary;
   const weight = state.body.lastWeight;
+  const ts = state.training.summary;
+  const trainingSub = ts.sessionsThisWeek ? `${ts.sessionsThisWeek} ${ts.sessionsThisWeek === 1 ? 'sesión' : 'sesiones'} esta semana` : 'Músculos, récords y qué te falta';
   const habitParts = [hs.bien && `${hs.bien} bien`, hs.medias && `${hs.medias} a medias`, hs.flojo && `${hs.flojo} ${hs.flojo === 1 ? 'flojo' : 'flojos'}`].filter(Boolean);
   const habitsSub = habitParts.length ? habitParts.join(' · ') : state.habits.routine.length ? `${state.habits.routine.length} en tu rutina` : 'Se arman con lo que registras';
   return (
@@ -106,6 +108,7 @@ export function Mas() {
         <Tile to="/npcs" icon="users" title="Mi gente" sub={today ? `${today} contacto${today === 1 ? '' : 's'} hoy${toAttend ? ` · ${toAttend} por atender` : ''}` : toAttend ? `${toAttend} por atender` : 'Familia, amigos y trabajo'} alert={toAttend > 0} />
         <Tile to="/salud" icon="salud-cross" title="Salud" sub={h.score === null ? 'Chequeos y ficha médica' : `${h.score}% al día${h.due.length ? ` · ${h.due.length} te toca${h.due.length === 1 ? '' : 'n'}` : ''}`} alert={h.due.some((d) => d.status === 'atrasado')} />
         <Tile to="/cuerpo" icon="heart" title="Cuerpo" sub={weight ? `${weight.kg} kg · sueño y medidas` : 'Peso, medidas y sueño'} />
+        <Tile to="/entreno" icon="bolt" title="Entrenamiento" sub={trainingSub} alert={false} />
         <Tile to="/habitos" icon="checklist" title="Hábitos" sub={habitsSub} alert={hs.flojo > 0} />
         <Tile to="/enemigos" icon="shield" title="Hábitos a dejar" sub={vices.length ? `${vices.length} bajo control` : 'Lo que quieres dejar'} />
         <Tile to="/mapa" icon="map" title="Mapa" sub={ms.known ? `${ms.known} ${ms.known === 1 ? 'lugar conocido' : 'lugares conocidos'}` : 'Lugares por conocer y tu empresa'} />

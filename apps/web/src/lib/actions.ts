@@ -1,6 +1,7 @@
 import { quickMissionId, type AttributeId, type CompletionKind, type Entity, type GameEvent, type GeneratedMission, type MissionData, type MissionSize, type SettingsData, type TodoData } from '@igv/core';
-import { addEvent, getEvents, restoreEvent, saveEntity, voidEvent } from '../data/store';
-import { undoToast } from '../ui/kit';
+import { addEvent, getEntity, getEvents, restoreEvent, saveEntity, voidEvent } from '../data/store';
+import { toast, undoToast } from '../ui/kit';
+import { openWorkout } from './entreno';
 import { newId } from './time';
 
 type CompletionInput = { missionId: string; title: string; size: MissionSize; attribute: AttributeId; kind: CompletionKind; mainQuestId?: string | null; npcId?: string | null };
@@ -12,7 +13,20 @@ export function complete(p: CompletionInput, date?: string, opts: { silent?: boo
   return ev;
 }
 
+/**
+ * ¿Esta misión es tu entreno? Solo la diaria ligada en Entrenamiento → Ajustes: así, al anotar el entreno después,
+ * no se crea otra misión "Entrenar" (la XP no se duplica).
+ */
+function isTrainingMission(m: Entity<MissionData>): boolean {
+  const linked = (getEntity('training-settings')?.data as { missionId?: string | null } | undefined)?.missionId;
+  return !!linked && linked === m.id;
+}
+
 export function completeMission(m: Entity<MissionData>, date?: string) {
+  if (isTrainingMission(m)) {
+    // Después del "✓", ofrece anotar qué entrenaste (músculos y récords). La misión ya contó: no se duplica la XP.
+    setTimeout(() => toast('¿Qué entrenaste?', 'info', { label: 'Anotar', run: () => openWorkout({ date }) }), 400);
+  }
   return complete(
     {
       missionId: m.id,

@@ -20,6 +20,7 @@ export const XP_SOURCE_LABELS: Record<XpSource, { one: string; group: string }> 
   relationship: { one: 'Mi gente', group: 'Mi gente' },
   learning: { one: 'Aprendizaje', group: 'Aprendizaje' },
   health: { one: 'Salud', group: 'Salud' },
+  training_record: { one: 'Récord de entreno', group: 'Récords de entreno' },
 };
 
 export function xpSourceLabel(source: string, form: 'one' | 'group' = 'one'): string {

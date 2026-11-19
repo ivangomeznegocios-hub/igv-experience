@@ -6,6 +6,7 @@ import { complete, completeMission, completeTodo } from '../lib/actions';
 import { Icon } from './icons';
 import { undoToast } from './kit';
 import { openQuickAdd } from './QuickAdd';
+import { openWorkout } from '../lib/entreno';
 
 /**
  * Cómo se llena cada revisión de "¿Cómo fue tu día?" en la app (el qué está en core: engine/day-review.ts).
@@ -43,6 +44,7 @@ export const DAY_CHECK_UI: Record<string, DayCheckUi> = {
   cierre: { icon: 'campfire', action: { label: 'Cerrar el día', run: () => document.getElementById('cierre')?.scrollIntoView({ behavior: 'smooth', block: 'center' }) } },
 
   // Sistemas integrados después: su entrada aquí (ver docs/sistemas/habitos.md).
+  entreno: { icon: 'bolt', action: { label: 'Anotar entreno', run: ({ date }) => openWorkout({ date }) } },
   tiempo: { icon: 'clock', action: { label: 'Registrar tiempo', run: ({ date, navigate }) => navigate(`/tiempo?registrar=1&area=trabajo&fecha=${date}`) } },
 };
 

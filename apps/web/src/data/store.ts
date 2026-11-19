@@ -288,6 +288,12 @@ export function getEvents(): GameEvent[] {
   return [...snap.events.values()];
 }
 
+/** Un elemento del catálogo (sin suscribirse). */
+export function getEntity(id: string): Entity | undefined {
+  const e = snap.entities.get(id);
+  return e && !e.deletedAt ? e : undefined;
+}
+
 /** Escucha cambios del store fuera de React (p. ej. para subir el plan de notificaciones). */
 export function onStoreChange(fn: () => void) {
   listeners.add(fn);

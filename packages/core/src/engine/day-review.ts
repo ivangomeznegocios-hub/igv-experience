@@ -345,6 +345,21 @@ export const DAY_CHECKS: DayCheck[] = [
   },
 
   // Sistemas integrados después: una entrada cada uno (ver docs/sistemas/habitos.md).
+  // Entrenamiento: solo pregunta si marcaste tu diaria de entreno (la ligada en Entrenamiento → Ajustes) sin anotar qué hiciste.
+  eventCheck({
+    id: 'entreno',
+    area: 'cuerpo',
+    label: 'Entrenamiento',
+    short: 'qué entrenaste',
+    question: 'Marcaste tu entreno: ¿qué ejercicios y músculos trabajaste?',
+    types: ['workout.logged'],
+    applies: (c) => {
+      const linked = (c.list<{ missionId?: string | null }>('training', 'settings')[0]?.data.missionId ?? null) as string | null;
+      return !!linked && c.doneOn.has(linked);
+    },
+    skipLabel: 'No quiero anotar detalles',
+    tool: 'registrar_entrenamiento',
+  }),
 ];
 
 export function getDayCheck(id: string): DayCheck | undefined {
