@@ -65,11 +65,10 @@ tus 7 atributos iniciales con la guía de 30 y 70.
 3. Abre **Mundo → Game Master**. Usa el modelo `claude-opus-5-5`; para cambiarlo, agrega la variable
    `ANTHROPIC_MODEL`. Cada pregunta consume tokens de tu cuenta de la API de Claude.
 
-### (Opcional) Notificaciones
+### Notificaciones
 
-**Mundo → Ajustes → Notificaciones → Activar**. No hace falta configurar nada en Cloudflare: el Worker genera
-sus propias llaves (VAPID) la primera vez y un cron cada 15 minutos envía los recordatorios. En iPhone,
-primero instala la app en la pantalla de inicio (Compartir → Agregar a inicio) y actívalas desde ahí.
+Están **apagadas**: la app no manda nada al celular ni corre tareas automáticas en Cloudflare. El código
+está listo por si algún día las quieres; se activan pidiéndoselo a Claude Code (ver `CLAUDE.md`).
 
 ---
 
@@ -118,5 +117,5 @@ apps/web        React + Vite + PWA
 
 ## Plan gratuito de Cloudflare
 
-Workers: 100,000 peticiones al día (el cron de notificaciones usa ~96 al día). D1: 5 GB y 5 millones de filas leídas al día. Access: hasta 50
+Workers: 100,000 peticiones al día. D1: 5 GB y 5 millones de filas leídas al día. Access: hasta 50
 usuarios. El uso de una persona queda muy por debajo de estos límites.

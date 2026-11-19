@@ -25,7 +25,7 @@ packages/core   Reglas del juego en TypeScript puro (sin red ni DOM). Probadas c
   src/seed/            Datos iniciales (IDs fijos) y guía de atributos (30/70).
 packages/db     Esquema Drizzle (events, entities, server_meta) y migraciones SQL de D1.
 apps/api        Worker de Cloudflare con Hono: /api/* (sync, eventos, catálogo, respaldo, Game Master, push).
-                Un cron (`scheduled`, cada 15 min) envía las notificaciones push que ya tocan.
+                Notificaciones push APAGADAS (sin cron); ver "Notificaciones push".
                 El mismo Worker sirve el frontend (Workers Static Assets, SPA).
 apps/web        React + Vite + PWA. Calcula el estado en el dispositivo con @igv/core.
 ```
@@ -64,7 +64,11 @@ Pruebas: `apps/api/test/access.test.ts` (tokens firmados reales + D1 en memoria 
 
 ### Notificaciones push
 
-El estado del juego solo existe en el cliente, así que el cliente arma un **plan** de recordatorios de los
+**Apagadas por decisión del usuario: no las actives por defecto.** No hay cron (`"triggers": { "crons": [] }`
+en `apps/api/wrangler.jsonc`) y la tarjeta de Ajustes está oculta (`PUSH_AVAILABLE = false` en
+`apps/web/src/lib/notifications.ts`). Solo si él lo pide: cron `["*/15 * * * *"]` + `PUSH_AVAILABLE = true`.
+
+Cómo funcionan cuando están activas: el estado del juego solo existe en el cliente, así que el cliente arma un **plan** de recordatorios de los
 próximos 3 días (`apps/web/src/lib/notifications.ts`: check-in, racha en riesgo, NPC olvidado, cierre de
 semana) y lo sube con `PUT /api/push/plan` tras cada cambio. El cron del Worker (`apps/api/src/push.ts`)
 envía los que ya tocan (máx. 2 h tarde, cada id una sola vez). Web Push sin dependencias

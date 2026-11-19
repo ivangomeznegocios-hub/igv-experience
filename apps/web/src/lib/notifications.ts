@@ -3,6 +3,12 @@ import { api, type PushPlanItem } from '../data/api';
 import { getPrefs, setPrefs, type Prefs } from './prefs';
 import { TZ } from './time';
 
+/**
+ * Las notificaciones están apagadas por decisión del usuario (no hay cron en el Worker).
+ * Solo se activan si él lo pide: poner `true` aquí y el cron en apps/api/wrangler.jsonc.
+ */
+export const PUSH_AVAILABLE = false;
+
 export function pushSupported(): boolean {
   return typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 }
@@ -87,7 +93,7 @@ let lastSent = '';
 /** Sube el plan (con retraso para agrupar cambios). Solo si las notificaciones están activas en este dispositivo. */
 export function schedulePlanUpload(state: GameState, entities: Entity[]) {
   const prefs = getPrefs().notify;
-  if (!prefs.enabled) return;
+  if (!PUSH_AVAILABLE || !prefs.enabled) return;
   if (timer) clearTimeout(timer);
   timer = setTimeout(() => {
     const plan = buildPlan(state, entities, prefs);

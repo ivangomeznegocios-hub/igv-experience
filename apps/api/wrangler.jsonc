@@ -22,8 +22,10 @@
   // Las variables de Access (ACCESS_TEAM_DOMAIN, ACCESS_AUD, ALLOWED_EMAILS) y el secreto
   // ANTHROPIC_API_KEY se configuran en el panel de Cloudflare y se conservan en cada despliegue.
   "keep_vars": true,
-  // Cada 15 minutos: envía los recordatorios push que ya tocan (ver src/push.ts).
-  "triggers": { "crons": ["*/15 * * * *"] },
+  // Notificaciones push APAGADAS por decisión del usuario: sin cron. La lista vacía además borra el cron
+  // que se haya desplegado antes. Para activarlas: ["*/15 * * * *"] y PUSH_AVAILABLE = true en
+  // apps/web/src/lib/notifications.ts (ver CLAUDE.md → Notificaciones push).
+  "triggers": { "crons": [] },
   // Sin URLs de vista previa: solo existe la URL principal, protegida por Access.
   "preview_urls": false,
   "observability": { "enabled": true }

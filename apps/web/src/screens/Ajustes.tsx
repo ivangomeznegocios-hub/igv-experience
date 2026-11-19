@@ -8,7 +8,7 @@ import { getTheme, setTheme, type Theme } from '../lib/theme';
 import { Field, PageHeader, Tabs, confirmAction, toast } from '../ui/kit';
 import { getPrefs, setPrefs, type Prefs } from '../lib/prefs';
 import { sfx } from '../lib/sound';
-import { disablePush, enablePush, needsInstall, pushSupported, schedulePlanUpload } from '../lib/notifications';
+import { PUSH_AVAILABLE, disablePush, enablePush, needsInstall, pushSupported, schedulePlanUpload } from '../lib/notifications';
 import { describeEvent } from '../ui/DaySheet';
 import { Icon } from '../ui/icons';
 
@@ -20,7 +20,7 @@ export default function Ajustes() {
       <Rewards />
       <ThemeCard />
       <FeelCard />
-      <NotifyCard />
+      {PUSH_AVAILABLE && <NotifyCard />}
       <BackupCard />
       <EventLog />
       <ConfigCard />
