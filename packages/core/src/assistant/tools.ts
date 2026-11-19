@@ -75,6 +75,7 @@ export type { EventQuery, AssistantStore, ActivityRefs, ToolResult, ToolGroup, A
 import { GENTE_GUIDE, GENTE_TOOLS, guardarPersonaTool, registrarContactoTool, renderPeopleOverview } from './tools-gente';
 
 // [[mapa]]
+import { MAPA_TOOLS, renderMapaOverview } from './tools-mapa';
 
 // [[habilidades]]
 import { HABILIDADES_GUIDE, HABILIDADES_TOOLS, renderHabilidadesOverview } from './tools-habilidades';
@@ -163,6 +164,7 @@ export function renderOverview(s: AssistantSnapshot): string {
   L.push(...renderPeopleOverview(s));
 
   // [[mapa]]
+  if (s.mapa) L.push(...renderMapaOverview(s.mapa));
 
   // [[habilidades]]
   L.push(...renderHabilidadesOverview(s));
@@ -501,6 +503,7 @@ const GUIDE_SYSTEMS: string[] = [
   GENTE_GUIDE,
 
   // [[mapa]]
+  `Mapa (capas vida y empresa): lugares por conocer / conocidos / habituales. Cada visita se registra con registrar_visita (con quién: solo, pareja, familia, amigos, trabajo u otro, y qué personas). La primera visita a cada lugar da ${GAME_CONFIG.rewards.discovery} XP una vez; con ${GAME_CONFIG.mapa.habitualVisits} visitas se vuelve habitual. Hay colecciones de lugares emblemáticos de Guadalajara y Jalisco (completar una da XP una vez). La capa empresa marca dónde opera su empresa (oficinas, sucursales, clientes, proveedores, zonas). Usa ver_mapa (no ver_catalogo) para ver estados y visitas.`,
 
   // [[habilidades]]
   HABILIDADES_GUIDE,
@@ -1465,6 +1468,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
   ...GENTE_TOOLS,
 
   // [[mapa]]
+  ...MAPA_TOOLS,
 
   // [[habilidades]]
   ...HABILIDADES_TOOLS,

@@ -460,14 +460,59 @@ export interface GuildData {
   description?: string;
 }
 
-export const PLACE_TYPES = ['lugar', 'experiencia', 'comunidad'] as const;
+/**
+ * Categorías de un lugar del mapa. `lugar`, `experiencia` y `comunidad` vienen de la primera versión (siguen
+ * valiendo). Las de la capa empresa están en EMPRESA_PLACE_TYPES (ver la sección [[mapa]] al final).
+ */
+export const PLACE_TYPES = [
+  'lugar',
+  'experiencia',
+  'comunidad',
+  'restaurante',
+  'cafe',
+  'bar',
+  'parque',
+  'naturaleza',
+  'museo',
+  'cultura',
+  'deporte',
+  'compras',
+  'evento',
+  'pueblo',
+  'playa',
+  'viaje',
+  'oficina',
+  'sucursal',
+  'cliente',
+  'proveedor',
+  'zona',
+] as const;
+export type PlaceType = (typeof PLACE_TYPES)[number];
+/** Estados internos (en pantalla: por conocer / conocido / habitual). */
 export const PLACE_STATUSES = ['inexplorado', 'descubierto', 'dominado'] as const;
 export type PlaceStatus = (typeof PLACE_STATUSES)[number];
 
 export interface PlaceData {
   name: string;
-  placeType: (typeof PLACE_TYPES)[number];
+  placeType: PlaceType;
   notes?: string;
+  /** Capa del mapa (por defecto 'vida'). */
+  layer?: PlaceLayer;
+  /** Ciudad o municipio (Guadalajara, Zapopan, Tlaquepaque…). Texto libre. */
+  city?: string;
+  /** Colonia o zona (Centro, Americana, Providencia…). */
+  zone?: string;
+  /** Coordenadas aproximadas (grados). Sin ellas, el lugar sale en la lista pero no en el mapa. */
+  lat?: number | null;
+  lng?: number | null;
+  /** Lugar del catálogo de Jalisco al que corresponde (cuenta para sus colecciones). */
+  catalogId?: string | null;
+  /** Personas ligadas al lugar (en la capa empresa: los contactos del cliente o proveedor). */
+  npcIds?: string[];
+  /** Capa empresa: false = ya no opera ahí (sigue en el historial). */
+  active?: boolean;
+  /** Capa empresa: desde cuándo opera ahí (YYYY-MM-DD). */
+  since?: string | null;
 }
 
 // ---------- Sistemas de la fase 5 ----------
@@ -616,6 +661,52 @@ export function isValidEntityKind(module: string, kind: string): boolean {
 // [[gente]]
 
 // [[mapa]]
+/** Capas del mapa: tu vida (lugares que conoces) y tu empresa (dónde opera, clientes, proveedores). */
+export const PLACE_LAYERS = ['vida', 'empresa'] as const;
+export type PlaceLayer = (typeof PLACE_LAYERS)[number];
+export const PLACE_LAYER_NAMES: Record<PlaceLayer, string> = { vida: 'Vida', empresa: 'Empresa' };
+export const VIDA_PLACE_TYPES = ['restaurante', 'cafe', 'bar', 'parque', 'naturaleza', 'museo', 'cultura', 'deporte', 'compras', 'evento', 'experiencia', 'comunidad', 'pueblo', 'playa', 'viaje', 'lugar'] as const satisfies readonly PlaceType[];
+export const EMPRESA_PLACE_TYPES = ['oficina', 'sucursal', 'cliente', 'proveedor', 'zona'] as const satisfies readonly PlaceType[];
+export const PLACE_TYPE_NAMES: Record<PlaceType, string> = {
+  lugar: 'Otro lugar',
+  experiencia: 'Experiencia',
+  comunidad: 'Comunidad',
+  restaurante: 'Restaurante',
+  cafe: 'Café',
+  bar: 'Bar',
+  parque: 'Parque',
+  naturaleza: 'Naturaleza',
+  museo: 'Museo',
+  cultura: 'Cultura',
+  deporte: 'Deporte',
+  compras: 'Compras',
+  evento: 'Evento',
+  pueblo: 'Pueblo',
+  playa: 'Playa',
+  viaje: 'Ciudad / viaje',
+  oficina: 'Oficina',
+  sucursal: 'Sucursal',
+  cliente: 'Cliente',
+  proveedor: 'Proveedor',
+  zona: 'Zona de operación',
+};
+export const PLACE_STATUS_NAMES: Record<PlaceStatus, string> = { inexplorado: 'Por conocer', descubierto: 'Conocido', dominado: 'Habitual' };
+/** Con quién fuiste (evento `place.visited`). */
+export const VISIT_COMPANIES = ['solo', 'pareja', 'familia', 'amigos', 'trabajo', 'otro'] as const;
+export type VisitCompany = (typeof VISIT_COMPANIES)[number];
+export const VISIT_COMPANY_NAMES: Record<VisitCompany, string> = {
+  solo: 'Solo',
+  pareja: 'En pareja',
+  familia: 'En familia',
+  amigos: 'Con amigos',
+  trabajo: 'Por trabajo',
+  otro: 'Con alguien más',
+};
+/** Capa de un lugar (los guardados antes de las capas son de 'vida'). */
+export function placeLayer(d: Pick<PlaceData, 'layer' | 'placeType'> | null | undefined): PlaceLayer {
+  if (d?.layer === 'empresa' || d?.layer === 'vida') return d.layer;
+  return (EMPRESA_PLACE_TYPES as readonly string[]).includes(d?.placeType ?? '') ? 'empresa' : 'vida';
+}
 
 // [[habilidades]]
 // ---- Habilidades, tiempo y biblioteca (sistema "habilidades") ----

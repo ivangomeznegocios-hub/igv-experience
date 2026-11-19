@@ -72,6 +72,7 @@ export const EVENT_TEXT: Record<string, string> = {
   // [[gente]]
 
   // [[mapa]]
+  'place.visited': 'Visita',
 
   // [[habilidades]]
   'time.logged': 'Tiempo',
@@ -186,6 +187,12 @@ export function describeEvent(e: GameEvent, byId: Map<string, Entity>, currency 
     // [[gente]]
 
     // [[mapa]]
+    case 'place.visited': {
+      const who: Record<string, string> = { solo: 'solo', pareja: 'en pareja', familia: 'en familia', amigos: 'con amigos', trabajo: 'por trabajo', otro: 'con alguien más' };
+      const people = Array.isArray(p.npcIds) && p.npcIds.length ? ` (${p.npcIds.map(name).join(', ')})` : '';
+      detail = `${name(p.placeId)} · ${who[p.company] ?? p.company}${people}${p.rating ? ` · ${p.rating}/5` : ''}${p.note ? ` · ${String(p.note).slice(0, 100)}` : ''}`;
+      break;
+    }
 
     // [[habilidades]]
     case 'time.logged': {
