@@ -18,7 +18,7 @@ código los nombres internos se conservan (módulos, tipos de evento, ids, rutas
 |---|---|
 | `bosses/boss`, `/jefes`, `BossArt` | Grandes retos / Reto (fases = fases; "avance", "Reto superado", "Se abre al superar X") |
 | `bosses/recurring` | Reto recurrente |
-| `npcs/npc`, `npcs/guild`, `/npcs` | Mi gente: Personas y Círculos ("persona clave") |
+| `npcs/npc`, `npcs/guild`, `/npcs` | Mi gente: Personas (con `circle` = círculo: familia, pareja, amigos…) y **Grupos** (`npcs/guild`); "persona clave"; niveles de cercanía |
 | `map` (`inexplorado`/`descubierto`/`dominado`) | Mapa: por conocer / conocido / habitual; "primera visita" |
 | `habits/vice`, `/enemigos` | Hábitos a dejar ("recaída") |
 | `/personaje` | Perfil ("Tu fuerte" = atributo más alto) |
@@ -31,6 +31,13 @@ código los nombres internos se conservan (módulos, tipos de evento, ids, rutas
 | `QuestMode` | Modo enfoque (ambiente: Fuego / Lluvia) |
 | `day.closed` / `CampfireCard` | Cierre del día |
 | `/conectar-ia`, `ai/*`, `mcp-worker.ts` | Conectar IA (servidor MCP, llaves, apps conectadas, actividad) |
+| `note.captured`, `ui/Cuentame.tsx` | Cuéntame (botón de micrófono "Hablar"), notas por procesar |
+| `training/*`, `workout.logged`, `/entreno` | Entrenamiento (series, músculos, recuperación, récords) |
+| `health/*`, `/salud` | Salud (chequeos "ya te toca", mediciones, ficha médica) |
+| `learning/*`, `/aprendizaje` | Aprendizaje (temas como Inglés, frases, tarjetas, tests con IA) |
+| `time.logged`, `/tiempo` | Tu tiempo ("¿a qué te dedicas?", cronómetro) |
+| `habits` (estado), `/habitos`, `/dia` | Hábitos (de la rutina) y "¿Cómo fue tu día?" |
+| `place.visited`, `layer: 'empresa'` | Visita (solo / en pareja / en familia / con amigos), capa Mi empresa |
 
 ## Arquitectura
 
@@ -48,8 +55,11 @@ packages/core   Reglas del juego en TypeScript puro (sin red ni DOM). Probadas c
   src/engine/reports.ts  Funciones puras para reportes: XP por día, reporte semanal, año en review,
                        favoritos, id de misión rápida, elección determinista por fecha.
   src/assistant/       Herramientas para IA (las usan el servidor MCP y el Coach): `snapshot.ts` (foto
-                       compacta del estado), `tools.ts` (32 herramientas con zod → JSON Schema y un
-                       `AssistantStore` inyectable), `memory.ts` (almacén en memoria para pruebas).
+                       compacta del estado), `tools.ts` (registro de herramientas, zod → JSON Schema y un
+                       `AssistantStore` inyectable), `toolkit.ts` (piezas comunes para escribir herramientas),
+                       `tools-<sistema>.ts` (las de cada sistema nuevo), `memory.ts` (almacén en memoria para pruebas).
+  src/voice/           Lector local de lo que dictas (`parseDictation`) e `inferMission` (tamaño y atributo solos).
+  src/training/        Biblioteca de ejercicios y músculos (entrenamiento).
   src/seed/            Datos iniciales (IDs fijos) y guía de atributos (30/70).
 packages/db     Esquema Drizzle (events, entities, server_meta) y migraciones SQL de D1.
 apps/api        Worker de Cloudflare con Hono: /api/* (sync, eventos, catálogo, respaldo, Coach IA en /api/gm, push,
@@ -58,9 +68,12 @@ apps/api        Worker de Cloudflare con Hono: /api/* (sync, eventos, catálogo,
                 Segundo Worker `igv-experience-mcp` (wrangler.mcp.jsonc, src/mcp-worker.ts): servidor MCP público
                 con OAuth; misma base D1. Ver "Conectar IA (MCP)".
 apps/web        React + Vite + PWA. Calcula el estado en el dispositivo con @igv/core.
+  src/ui/quick/        Formularios del "+" de cada sistema (`<X>Quick.tsx`, se registran en `QUICK_ENTRIES` de ui/QuickAdd.tsx).
   src/character/       Personaje 3D (three.js, se descarga solo al abrir Perfil): geom.ts (tubos por
                        secciones), figure.ts (cuerpo, rostro, cabello, ropa), stage.ts (cámara, luces, giro),
                        CharacterView.tsx (lienzo). La tarjeta y sus formularios: ui/CharacterCard.tsx.
+docs/sistemas   Notas completas de cada sistema de la fase 10 (voz, entreno, gente, mapa, habilidades,
+                aprendizaje, salud, habitos). Léelas antes de tocar ese sistema.
 ```
 
 ### Event sourcing (decisión central)
@@ -247,18 +260,83 @@ Para usar la app desde Claude (web, escritorio, móvil, Claude Code), ChatGPT, C
   Apariencia y ropa sí son ajustes: `settings.character` (`look` + `outfit`, ver "Personaje 3D"). No da XP.
 - Sin XP (solo registro): enemigos (`habits/vice`, `vice.relapse`; cuenta días sin caer), cuerpo
   (`body.logged`), ahorro (`finance/savings`, `savings.moved`), presupuesto (`settings.budgets`), cierre del
-  día (`day.closed`).
+  día (`day.closed`), tiempo (`time.logged`), notas de voz (`note.*`), avance y notas de libros, mediciones de salud
+  y la revisión del día (`day.check_skipped`).
+
+## Sistemas de vida (fase 10)
+
+Ocho sistemas construidos en paralelo; el detalle (eventos, reglas, números, pruebas) está en `docs/sistemas/<sistema>.md`.
+Ninguno rompe las reglas de oro: cada uno tiene una prueba de propiedades "agregar eventos nunca baja la XP".
+
+- **Voz** (`voz`): botón de micrófono encima del "+" → hoja **Cuéntame** (dictado continuo es-MX). Al guardar, siempre se
+  guarda el texto (`note.captured`); con Coach activo y en línea se manda a `/api/gm/ask` con `mode: 'dictado'` (registra
+  solo, cada acción con "Deshacer"); si no, el lector local (`src/voice/parse.ts`) propone tarjetas de un toque. Las
+  notas `pendiente` se procesan luego (`note.processed`). `inferMission` elige tamaño/atributo por su historial y luego
+  por palabras clave (lo usan "Hice algo" y "Por hacer"). Sin XP.
+- **Entrenamiento** (`entreno`, `/entreno`): `workout.logged` (tipo, dónde, minutos, esfuerzo, ejercicios con series).
+  Entidades `training/exercise|routine|settings` (id `training-settings`: diaria ligada). Un entreno NO da XP solo: se
+  registra junto una `mission.completed` (la diaria ligada o la rápida "Entrenar", media · Fuerza física) salvo que esa
+  misión ya contara ese día; deshacer anula ambas. Récord personal sobre un registro previo: +10 XP (`training_record`,
+  máx. 1 por ejercicio por día y 3 por día). Análisis con números de `config.training`: 6/10/20 series duras por músculo
+  por semana (secundarios 0.5), frecuencia 2×, recuperación 48 h (chicos) / 72 h (grandes), cardio 150 min.
+  `muscleStatus()` deja listo el pintado en el personaje 3D (aún no se pinta). Al marcar la diaria ligada, Hoy ofrece
+  "¿Qué entrenaste?".
+- **Mi gente** (`gente`, `/npcs`, `/npcs/:id`): ficha con `circle`, `role`, dónde/cuándo se conocieron, cumpleaños,
+  `startLevel` y `cadenceDays`; `npcType` viejo se mapea a círculo. `npc.interaction` con `channel` y `placeId`; varias
+  personas = un evento por persona; `place.visited` con `npcIds` cuenta como convivencia en persona. Niveles de cercanía
+  1–5 con requisitos acumulados (días, días en persona, semanas y meses distintos): +20/30/50/100 XP (`relationship`)
+  una vez por nivel; el nivel nunca baja. Temperatura (cálida/tibia/fría) por días sin contacto vs. frecuencia esperada
+  del rol. La misión "Escribirle a X" sigue (30 días, o antes si una persona clave se enfría).
+- **Mapa** (`mapa`, `/mapa`): `PlaceData` con `layer` vida/empresa, ciudad, colonia, lat/lng, `catalogId`, `npcIds`.
+  `place.visited { placeId, company, npcIds?, note?, rating? }`: 1 visita = conocido, 5 = habitual (o a mano con el evento
+  viejo). Primera visita: 30 XP una vez (Creatividad; capa empresa → Finanzas). 35 lugares de Guadalajara/Jalisco y 6
+  colecciones (`engine/map-catalog.ts`); completar una da la XP de una misión de su tamaño, una vez. Mapa propio con
+  teselas de OpenStreetMap (sin librería). Reductor en `engine/modules/map.ts`.
+- **Habilidades, tiempo y biblioteca** (`habilidades`, `/habilidades`, `/tiempo`, `/biblioteca`): `SkillData.category`,
+  `livelihood` ("De esto vivo"); `time.logged { minutes, area, skillId?, note?, start? }` con áreas fijas (trabajo
+  incluye la oficina); cronómetro en `localStorage` que sobrevive cerrar la app y se parte a medianoche. **El tiempo
+  nunca da XP.** Biblioteca: `library.progress` (página/%), `library.note` ("Lo que aprendí"), calificación; sin XP extra.
+- **Aprendizaje** (`aprendizaje`, `/aprendizaje`): `learning/topic` y `learning/item`; `learning.reviewed` (tarjetas,
+  cajas 1–5 con 1/2/4/8/16 días) y `learning.test_taken` (puntaje y errores). "Errores que repites" agrupa por etiqueta y
+  corrección. XP (`learning`): 10 por tema por día al hacer un test/sesión; hitos de frases dominadas (25/100/250/500/1000)
+  +50 una vez. Tests con IA en `apps/api/src/learn.ts` (`/api/learn/quiz|grade`, detrás de Access; el puntaje se cuenta
+  en el servidor). Práctica en voz alta en inglés (`lib/vozIdioma.ts`).
+- **Salud** (`salud`, `/salud`): `health/checkup` (cada N meses) y `health/profile` (ficha médica, id fijo);
+  `health.checkup_done` (guarda nombre y tamaño del momento) y `health.metric` (presión exige 2 valores). Estado: al día /
+  pronto (≤30 días) / atrasado / sin registro, `state.health.due`. XP (`health`): la de una misión de su tamaño (media)
+  a Fuerza física, máx. una por chequeo por día. 9 recomendaciones para hombre adulto (por edad si hay `birthDate`),
+  siempre con "Orientación general; no sustituye a tu médico".
+- **Hábitos y tu día** (`habitos`, `/habitos`, `/dia?fecha=`): cada diaria de la rutina se mide solo en los días que le
+  tocaban, desde que existe, sin contar descansos ni hoy; veredicto ≥80 % / 40–80 % / <40 % (`config.habits`). "Hazlo
+  hábito": lo que registras ≥3 días de 14 fuera de la rutina. "¿Cómo fue tu día?" (`engine/day-review.ts`): revisiones
+  `DAY_CHECKS` (sueño, actividad, rutina, tiempo, gastos, gente, agenda, plan, hábitos a dejar, cierre, entreno) con %
+  del día; "nada que registrar" = `day.check_skipped`. Sin XP.
+- **Integración**: "Más" agrupado (Tu vida · Crecer · Dinero y herramientas) con "Pide tu atención"; Hoy muestra
+  cumpleaños y chequeos que ya tocan; nombres de fuentes de XP en `engine/xp-sources.ts` (Record completo: TypeScript
+  pide el nombre de cada fuente nueva); el historial describe eventos nuevos con `describeEvent` de core; deshacer de la
+  IA no borra lo que la IA creó si Iván ya registró algo ahí (`UNDO_GUARDS` en `apps/api/src/ai/store.ts`).
 
 ## Cómo agregar un sistema nuevo
 
 1. `packages/core/src/events.ts`: agrega sus tipos de evento (schema zod + etiqueta).
 2. `packages/core/src/types.ts`: tipos de su entidad y su entrada en `ENTITY_KINDS`.
 3. `packages/core/src/engine/modules/<sistema>.ts`: un reductor `reduceX(ctx, deps)` que lea eventos con
-   `ofType`, entidades con `entitiesOf` y dé XP solo con `ctx.addXp`. Regístralo en `project.ts`.
-4. Pruebas en `packages/core/test/`. Corre `pnpm test`.
-5. Pantalla en `apps/web/src/screens/`, ruta en `App.tsx` y acceso en `screens/Menus.tsx`.
-6. Si necesita columnas nuevas en D1: edita `packages/db/src/schema.ts` y `pnpm db:generate`.
+   `ofType`, entidades con `entitiesOf` y dé XP solo con `ctx.addXp`. Regístralo en `project.ts` (antes de logros,
+   atributos y oro si da XP). Si da XP con una fuente nueva: agrégala a `XpSource` (`engine/context.ts`) y su nombre a
+   `XP_SOURCE_LABELS` (`engine/xp-sources.ts`).
+4. Pruebas en `packages/core/test/` (incluye una de propiedades: agregar eventos nunca baja la XP). Corre `pnpm test`.
+5. Pantalla en `apps/web/src/screens/`, ruta en `App.tsx` (y en `WORLD`/`PROGRESS` para resaltar la pestaña), acceso
+   en `screens/Menus.tsx`; formulario del "+" en `ui/quick/<X>Quick.tsx` registrado en `QUICK_ENTRIES`; si el día
+   debería preguntarlo, una entrada en `DAY_CHECKS` (`engine/day-review.ts`) y su acción en `ui/dayCheckActions.tsx`.
+6. IA: herramientas en `assistant/tools-<sistema>.ts` (con `toolkit.ts`), agrégalas a `ASSISTANT_TOOLS`; descripción
+   en `EVENT_TEXT`/`describeEvent` (format.ts), categoría en `HISTORY_CATEGORIES` y, si se puede borrar, `DELETABLE`
+   (tools.ts) y `UNDO_GUARDS` (api/ai/store.ts).
+7. Si necesita columnas nuevas en D1: edita `packages/db/src/schema.ts` y `pnpm db:generate`.
    Normalmente NO hace falta (el catálogo es JSON).
+8. Deja sus notas en `docs/sistemas/<sistema>.md`.
+
+Los archivos compartidos tienen anclas por sistema (`// [[sistema]]`): sirven para que varios agentes trabajen en
+paralelo sin conflictos (cada uno agrega líneas solo debajo de la suya). Se pueden quitar cuando ya no se usen.
 
 ## Comandos
 
@@ -308,7 +386,7 @@ cd apps/api && pnpm dev:mcp   # servidor MCP en :8788 (misma D1 local)
   - **Estilo de la app** (`lib/themes.ts`, pestaña en `screens/Tienda.tsx`): paletas de color (Grafito, Bosque, Vino, Medianoche = `obsidian`, `emerald`, `crimson`, `royal`) que se desbloquean con oro usando `reward.redeemed` y se eligen en `settings.equipped.skin`. Las auras y emblemas del avatar (la antigua "Armería RPG") se retiraron por verse demasiado fantasía; si había canjes de ellos, la pestaña ofrece anularlos para recuperar el oro. Preferencia del usuario: estética sobria de "vida real", nada otaku.
   - **Celebraciones y feedback** (`ui/fx.tsx`, `lib/sound.ts`): banners de logro desbloqueado, "Avanzaste en el reto" (meta mensual de ingresos), rango de habilidad, día perfecto, misiones del día, y overlays de "Fase completada" / "Reto superado" y subida de nivel con monograma.
   - **Cierre del día** (`CampfireCard` / `CloseDaySheet` en `screens/Hoy.tsx`, evento `day.closed`): resumen del día y una nota.
-  - **Dictado por voz** (`lib/voice.ts`): Web Speech API (`es-MX`) en QuickAdd y Coach, con tarjetas de oferta de misión aceptables con 1 toque.
+  - **Dictado por voz** (`lib/voice.ts`): Web Speech API (`es-MX`) continuo (se reinicia solo tras silencios; en Android se evita repetir resultados), en el botón global "Hablar" (Cuéntame), QuickAdd y Coach, con tarjetas de un toque (`ui/Proposals.tsx`).
 - Registro rápido: `ui/QuickAdd.tsx` (botón + global; `openQuickAdd({ mode, date })` desde cualquier pantalla; `/?accion=gasto` lo abre desde los accesos directos del manifest). Hoja de un día: `ui/DaySheet.tsx`.
 - Preferencias del dispositivo (sonido, vibración, notificaciones) en `localStorage` (`lib/prefs.ts`), no en D1.
 - Coach IA (fase 4; antes "Game Master", las rutas conservan `gm`): `POST /api/gm/ask` (conversar y ACTUAR con las herramientas de

@@ -25,6 +25,7 @@ Mecánicas de juego, lenguaje y estética sobrios de app de rendimiento personal
 | 7. Vida real | Lenguaje sobrio (Perfil, Grandes retos, Mi gente, Coach, Cierre del día), **Tus 3 de hoy** (planear el día y mañana, bono de oro al cumplir), **Tú vs. tú** contra la semana pasada a la misma hora, **Récords y datos** (récords personales, patrones de sueño/día/hora, ritmo de metas e ingresos), **Retos de N días** (no rompas la cadena), **Compromisos** con oro en juego, bono sorpresa al cerrar el día y **resumen semanal** compartible por imagen o WhatsApp |
 | 8. Personaje 3D | **Tu personaje** en Perfil: figura 3D que giras con el dedo y que toma tu complexión de tus medidas reales (estatura, peso, % de grasa y contornos), con **línea de tiempo** para ver cómo cambia tu cuerpo, apariencia afinada a tu cara a partir de una foto y editable (tono de piel, cabello, barba, ojos, lentes y 19 rasgos del rostro a detalle) y **ropa** (playera, manga larga, camisa, sudadera, jeans, pantalón, pants, short, tenis, zapatos, reloj, gorra) |
 | 9. Conectar IA | **Servidor MCP** para usar tu app desde Claude (web, escritorio, celular y Claude Code), ChatGPT, Codex, Antigravity o Cursor: ve tu progreso y registra, planea y organiza por ti desde el chat. Conexión con inicio de sesión (OAuth, apruebas en la app) o con llaves, modo solo lectura, **bitácora de lo que hizo la IA con "Deshacer"**, y el **Coach de la app ahora también actúa** (registra por ti) |
+| 10. Tu vida completa | **Háblale a tu app**: botón de micrófono en cualquier pantalla ("Cuéntame"); el Coach registra todo solo con "Deshacer" y, sin conexión, un lector local te propone los registros con un toque; nada de lo que dices se pierde. Misiones que se clasifican solas (tamaño y atributo). **Entrenamiento** con mapa muscular de frente y espalda, series por músculo, recuperación de 48–72 h, qué te falta, sesión sugerida y récords. **Mi gente** para toda la vida: familia arriba, círculos, roles, de dónde conoces a cada quien, niveles de cercanía que suben con convivencias reales, temperatura y cumpleaños. **Mapa** de Guadalajara por desbloquear (solo, en pareja, en familia, con amigos), colecciones y capa **Mi empresa**. **Habilidades** por categoría, **Tu tiempo** con cronómetro y **Biblioteca** con lo que aprendiste. **Aprendizaje** (inglés) con tarjetas, tests con IA, errores que repites y práctica en voz alta. **Salud**: chequeos que ya te tocan, mediciones y ficha médica. **Hábitos** que se arman solos y **¿Cómo fue tu día?** con lo que registraste y lo que faltó |
 
 Los números del juego están en [`packages/core/src/config/game.ts`](packages/core/src/config/game.ts).
 Las reglas y decisiones técnicas están en [`CLAUDE.md`](CLAUDE.md).
@@ -111,16 +112,19 @@ está listo por si algún día las quieres; se activan pidiéndoselo a Claude Co
 
 1. **En la mañana**: check-in de sueño (energía). Tu **rutina** de diarias ya aparece como lista de checks.
 2. **Durante el día**: toca el check (o desliza →) al completar. ¿Algo que no está en el catálogo? Botón
-   **+ → Hice algo**. Ingresos, gastos, personas, metas y entrenos también van por el **+**.
+   **+ → Hice algo**. Ingresos, gastos, personas, entrenos, tiempo, lugares, salud y metas también van por el **+**.
+   **¿Prefieres hablar?** Toca el micrófono (arriba del **+**) y cuéntale tu día: "gasté 200 en comida, comí con
+   mi papá y fui al gym".
 3. **¿Te equivocaste?** Toca otra vez el check o "Deshacer" en el aviso. Para días pasados: Progreso →
    Historial → toca el día. Nada se borra; solo deja de contar.
 4. **¿Se te olvidó ayer?** En el **+** elige "Ayer" (o cualquier fecha) antes de registrar.
 5. **Si fallaste**: "Escribir lección" (+30 XP). **Si no puedes**: "Día de descanso" (máx. 2 por semana).
-6. **En la noche**: "Cerrar el día" (resumen + una línea). Planea mañana con **+ → Por hacer**.
+6. **En la noche**: "¿Cómo fue tu día?" te dice qué registraste y qué faltó (un toque para llenar cada hueco).
+   Luego "Cerrar el día" (resumen + una línea). Planea mañana con **+ → Por hacer**.
 7. **Domingo**: diario semanal de 3 líneas en Temporadas y Reporte semanal.
 8. **Respaldo**: Ajustes → Exportar respaldo (JSON). Guárdalo de vez en cuando.
 
-Atajos: mantén presionado el ícono de la app instalada para "Registrar misión / gasto / ingreso / Planear".
+Atajos: mantén presionado el ícono de la app instalada para "Hablar / Registrar misión / gasto / ingreso / Planear".
 
 ## Desarrollo local
 
@@ -151,6 +155,7 @@ packages/core   reglas del juego + pruebas (Vitest)
 packages/db     esquema y migraciones de D1 (Drizzle)
 apps/api        Workers (Hono): API + web, y el servidor MCP (wrangler.mcp.jsonc)
 apps/web        React + Vite + PWA
+docs/sistemas   notas de cada sistema (voz, entreno, gente, mapa, habilidades, aprendizaje, salud, hábitos)
 ```
 
 ## Plan gratuito de Cloudflare
