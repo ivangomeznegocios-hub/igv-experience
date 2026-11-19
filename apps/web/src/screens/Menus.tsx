@@ -83,6 +83,8 @@ export function Mas() {
   const learningTopics = list('learning', 'topic').length;
   const ms = state.map.summary;
   const weight = state.body.lastWeight;
+  const habitParts = [hs.bien && `${hs.bien} bien`, hs.medias && `${hs.medias} a medias`, hs.flojo && `${hs.flojo} ${hs.flojo === 1 ? 'flojo' : 'flojos'}`].filter(Boolean);
+  const habitsSub = habitParts.length ? habitParts.join(' · ') : state.habits.routine.length ? `${state.habits.routine.length} en tu rutina` : 'Se arman con lo que registras';
   return (
     <>
       <PageHeader title="Más" right={<Link to="/buscar" className="btn sm ghost"><Icon name="search" /> Buscar</Link>} />
@@ -104,15 +106,15 @@ export function Mas() {
         <Tile to="/npcs" icon="users" title="Mi gente" sub={today ? `${today} contacto${today === 1 ? '' : 's'} hoy${toAttend ? ` · ${toAttend} por atender` : ''}` : toAttend ? `${toAttend} por atender` : 'Familia, amigos y trabajo'} alert={toAttend > 0} />
         <Tile to="/salud" icon="salud-cross" title="Salud" sub={h.score === null ? 'Chequeos y ficha médica' : `${h.score}% al día${h.due.length ? ` · ${h.due.length} te toca${h.due.length === 1 ? '' : 'n'}` : ''}`} alert={h.due.some((d) => d.status === 'atrasado')} />
         <Tile to="/cuerpo" icon="heart" title="Cuerpo" sub={weight ? `${weight.kg} kg · sueño y medidas` : 'Peso, medidas y sueño'} />
-        <Tile to="/habitos" icon="checklist" title="Hábitos" sub={state.habits.routine.length ? `${hs.bien} van bien${hs.flojo ? ` · ${hs.flojo} flojos` : ''}` : 'Se arman con lo que registras'} alert={hs.flojo > 0} />
+        <Tile to="/habitos" icon="checklist" title="Hábitos" sub={habitsSub} alert={hs.flojo > 0} />
         <Tile to="/enemigos" icon="shield" title="Hábitos a dejar" sub={vices.length ? `${vices.length} bajo control` : 'Lo que quieres dejar'} />
-        <Tile to="/mapa" icon="map" title="Mapa" sub={ms.known ? `${ms.known} lugares conocidos` : 'Lugares por conocer y tu empresa'} />
+        <Tile to="/mapa" icon="map" title="Mapa" sub={ms.known ? `${ms.known} ${ms.known === 1 ? 'lugar conocido' : 'lugares conocidos'}` : 'Lugares por conocer y tu empresa'} />
       </div>
 
       <div className="section-title">Crecer</div>
       <div className="menu-grid">
-        <Tile to="/habilidades" icon="shield" title="Habilidades" sub={`Lo que sabes hacer · ${list('skills', 'skill').length}`} />
-        <Tile to="/aprendizaje" icon="translate" title="Aprendizaje" sub={learningTopics ? `${state.learning.mastered} dominadas${state.learning.streak ? ` · racha ${state.learning.streak}` : ''}` : 'Inglés con tests de IA'} />
+        <Tile to="/habilidades" icon="wrench" title="Habilidades" sub={`Lo que sabes hacer · ${list('skills', 'skill').length}`} />
+        <Tile to="/aprendizaje" icon="translate" title="Aprendizaje" sub={learningTopics ? (state.learning.mastered ? `${state.learning.mastered} ${state.learning.mastered === 1 ? 'frase dominada' : 'frases dominadas'}` : 'Repasa y haz tu test') + (state.learning.streak > 1 ? ` · racha ${state.learning.streak}` : '') : 'Inglés con tests de IA'} />
         <Tile to="/biblioteca" icon="book" title="Biblioteca" sub={books ? `${books} en curso` : 'Libros y lo aprendido'} />
         <Tile to="/tiempo" icon="clock" title="Tu tiempo" sub={state.time.weekMinutes ? `${hours(state.time.weekMinutes)} esta semana` : '¿A qué le dedicas tu tiempo?'} />
       </div>
