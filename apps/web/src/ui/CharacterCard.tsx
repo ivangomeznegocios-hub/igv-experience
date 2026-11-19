@@ -37,21 +37,27 @@ const CharacterView = lazy(() => import('../character/CharacterView'));
 
 type Tab = 'resumen' | 'medidas' | 'apariencia' | 'ropa';
 
-const HAIR_LABEL: Record<HairStyle, string> = { calvo: 'Calvo', rapado: 'Rapado', corto: 'Corto', volumen: 'Con volumen', lado: 'De lado', chino: 'Chino' };
+const HAIR_LABEL: Record<HairStyle, string> = { calvo: 'Calvo', rapado: 'Rapado', corto: 'Corto', copete: 'Copete', volumen: 'Con volumen', lado: 'De lado', chino: 'Chino' };
 const BEARD_LABEL: Record<BeardStyle, string> = { ninguna: 'Sin barba', sombra: 'Sombra', corta: 'Corta', completa: 'Completa', candado: 'Candado', bigote: 'Bigote' };
 const TOP_LABEL: Record<TopStyle, string> = { ninguna: 'Sin playera', playera: 'Playera', 'manga-larga': 'Manga larga', camisa: 'Camisa', sudadera: 'Sudadera' };
 const BOTTOM_LABEL: Record<BottomStyle, string> = { short: 'Short', jeans: 'Jeans', pantalon: 'Pantalón', jogger: 'Pants' };
 const SHOE_LABEL: Record<ShoeStyle, string> = { tenis: 'Tenis', zapato: 'Zapatos' };
 const FACE_LABEL: Record<FaceTrait, [string, string, string]> = {
   jaw: ['Mandíbula', 'Angosta', 'Ancha'],
+  chin: ['Mentón', 'Angosto', 'Ancho'],
   faceLength: ['Largo de cara', 'Corta', 'Larga'],
+  lowerFace: ['De la nariz al mentón', 'Corto', 'Largo'],
   cheeks: ['Pómulos', 'Suaves', 'Marcados'],
+  crown: ['Altura del cráneo', 'Bajo', 'Alto'],
+  forehead: ['Frente', 'Corta', 'Amplia'],
   nose: ['Nariz', 'Chica', 'Grande'],
   noseWidth: ['Ancho de nariz', 'Fina', 'Ancha'],
   brows: ['Cejas', 'Delgadas', 'Pobladas'],
+  browHeight: ['Altura de cejas', 'Bajas', 'Altas'],
   eyes: ['Ojos', 'Chicos', 'Grandes'],
   eyeSpacing: ['Separación de ojos', 'Juntos', 'Separados'],
   lips: ['Labios', 'Delgados', 'Gruesos'],
+  mouthWidth: ['Boca', 'Chica', 'Ancha'],
   ears: ['Orejas', 'Pegadas', 'Salidas'],
 };
 
@@ -465,6 +471,9 @@ function LookForm({ look, setLook }: { look: CharacterLook; setLook: (p: Partial
           {FACE_TRAITS.map((t) => (
             <Slider key={t} label={FACE_LABEL[t][0]} low={FACE_LABEL[t][1]} high={FACE_LABEL[t][2]} value={look.face?.[t] ?? 0} onChange={(v) => setLook({ face: { ...look.face, [t]: v } })} />
           ))}
+          <Slider label="Cabello: arriba" low="Bajo" high="Alto" value={look.hairShape?.top ?? 0} onChange={(v) => setLook({ hairShape: { ...look.hairShape, top: v } })} />
+          <Slider label="Cabello: al frente" low="Plano" high="Levantado" value={look.hairShape?.front ?? 0} onChange={(v) => setLook({ hairShape: { ...look.hairShape, front: v } })} />
+          <Slider label="Cabello: a los lados" low="Pegado" high="Lleno" value={look.hairShape?.sides ?? 0} onChange={(v) => setLook({ hairShape: { ...look.hairShape, sides: v } })} />
           <Slider label="Hombros" low="Angostos" high="Anchos" value={look.build?.shoulders ?? 0} onChange={(v) => setLook({ build: { ...look.build, shoulders: v } })} />
           <Slider label="Piernas" low="Cortas" high="Largas" value={look.build?.legs ?? 0} onChange={(v) => setLook({ build: { ...look.build, legs: v } })} />
         </>

@@ -83,7 +83,7 @@ export interface SettingsData {
 
 // ---------- Personaje 3D ----------
 
-export const HAIR_STYLES = ['calvo', 'rapado', 'corto', 'volumen', 'lado', 'chino'] as const;
+export const HAIR_STYLES = ['calvo', 'rapado', 'corto', 'copete', 'volumen', 'lado', 'chino'] as const;
 export type HairStyle = (typeof HAIR_STYLES)[number];
 export const BEARD_STYLES = ['ninguna', 'sombra', 'corta', 'completa', 'candado', 'bigote'] as const;
 export type BeardStyle = (typeof BEARD_STYLES)[number];
@@ -96,11 +96,31 @@ export type ShoeStyle = (typeof SHOE_STYLES)[number];
 
 /**
  * Rasgos del rostro, cada uno de −1 a 1 (0 = promedio). Pensados para afinarse a partir de fotos:
- * `jaw` mandíbula angosta ↔ ancha · `faceLength` cara corta ↔ larga · `cheeks` pómulos · `nose` nariz chica ↔ grande ·
- * `noseWidth` nariz fina ↔ ancha · `brows` cejas delgadas ↔ pobladas · `eyes` ojos chicos ↔ grandes ·
- * `eyeSpacing` ojos juntos ↔ separados · `lips` labios delgados ↔ gruesos · `ears` orejas pegadas ↔ salidas.
+ * `jaw` mandíbula angosta ↔ ancha · `chin` mentón angosto ↔ ancho · `faceLength` cara corta ↔ larga ·
+ * `lowerFace` tercio inferior (nariz a mentón) corto ↔ largo · `cheeks` pómulos · `crown` cráneo bajo ↔ alto ·
+ * `forehead` frente corta ↔ amplia (altura del nacimiento del pelo) · `nose` nariz chica ↔ grande ·
+ * `noseWidth` nariz fina ↔ ancha · `brows` cejas delgadas ↔ pobladas · `browHeight` cejas bajas ↔ altas ·
+ * `eyes` ojos chicos ↔ grandes · `eyeSpacing` ojos juntos ↔ separados · `lips` labios delgados ↔ gruesos ·
+ * `mouthWidth` boca chica ↔ ancha · `ears` orejas pegadas ↔ salidas.
  */
-export const FACE_TRAITS = ['jaw', 'faceLength', 'cheeks', 'nose', 'noseWidth', 'brows', 'eyes', 'eyeSpacing', 'lips', 'ears'] as const;
+export const FACE_TRAITS = [
+  'jaw',
+  'chin',
+  'faceLength',
+  'lowerFace',
+  'cheeks',
+  'crown',
+  'forehead',
+  'nose',
+  'noseWidth',
+  'brows',
+  'browHeight',
+  'eyes',
+  'eyeSpacing',
+  'lips',
+  'mouthWidth',
+  'ears',
+] as const;
 export type FaceTrait = (typeof FACE_TRAITS)[number];
 
 export interface CharacterLook {
@@ -112,6 +132,8 @@ export interface CharacterLook {
   eyeColor: string;
   glasses: boolean;
   face?: Partial<Record<FaceTrait, number>>;
+  /** Volumen del cabello (−1 a 1): arriba, al frente y a los lados. */
+  hairShape?: { top?: number; front?: number; sides?: number };
   /** Ajuste fino de proporciones (−1 a 1): hombros angostos ↔ anchos, piernas cortas ↔ largas. */
   build?: { shoulders?: number; legs?: number };
 }

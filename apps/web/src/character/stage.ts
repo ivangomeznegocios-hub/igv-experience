@@ -87,7 +87,7 @@ export class Stage {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = PCFSoftShadowMap;
 
-    this.scene.add(new HemisphereLight('#f3f1ea', '#6b5f52', 1.3));
+    this.scene.add(new HemisphereLight('#f3f1ea', '#8a7d70', 1.35));
     const key = new DirectionalLight('#fff4e4', 2.6);
     key.position.set(2.2, 3.6, 3.2);
     key.castShadow = true;
@@ -105,8 +105,8 @@ export class Stage {
     const rim = new DirectionalLight('#bcd3ff', 1.5);
     rim.position.set(-2.6, 2.4, -2.8);
     this.scene.add(rim);
-    const fill = new DirectionalLight('#ffe9d2', 0.5);
-    fill.position.set(-2.5, 1.2, 2.2);
+    const fill = new DirectionalLight('#ffe9d2', 0.7);
+    fill.position.set(-2.2, 0.4, 3);
     this.scene.add(fill);
 
     // Piso: sombra de contacto suave y anillo de avance de nivel.

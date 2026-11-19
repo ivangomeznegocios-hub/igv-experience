@@ -305,24 +305,43 @@ export function buildFigure(spec: FigureSpec): Figure {
   }
 
   // ---------- Cabeza ----------
+  // Alturas de los rasgos en `t` (0 = mentón, ~1 = coronilla) con proporciones promedio de adulto:
+  // ojos a media cabeza, base de la nariz a ~7 cm del mentón, boca a un tercio de ese tramo,
+  // cejas ~1.8 cm sobre la pupila y orejas de la ceja a la base de la nariz.
   const J = trait('jaw');
-  const fa = 0.007 * fat;
-  const hk = (t: number, w: number, cz: number, f: number, b: number, n: number): RingKey => ({ y: t, w: w * ws, cz: cz * ws, f: f * ws, b: b * ws, n });
+  const CH = trait('chin');
+  const CK = trait('cheeks');
+  const lowerF = 1 + 0.12 * trait('lowerFace');
+  const tNose = 0.3 * lowerF;
+  const tMouth = 0.203 * lowerF;
+  const tChin = 0.07 * lowerF;
+  const tEye = tNose + 0.195;
+  const tBrow = tEye + 0.075 + 0.014 * trait('browHeight');
+  const tHairline = 0.815 + 0.03 * trait('forehead');
+  const tEar = tEye - 0.095;
+  const capH = 0.2 * (1 + 0.3 * trait('crown'));
+  /** Coronilla. */
+  const tTop = 0.8 + capH;
+  const soft = 0.007 * fat;
+  // Anillo de la cabeza: medio ancho `w`, frente en `front`, centro en `cz` (lo más ancho queda ahí) y fondo atrás `b`.
+  // En la mandíbula el centro va atrás, bajo la oreja, para que el contorno se funda con el cuello.
+  const hk = (t: number, w: number, front: number, cz: number, b: number, n: number): RingKey => ({ y: t, w: w * ws, cz: cz * ws, f: (front - cz) * ws, b: b * ws, n });
   const headT = tube(
     profile([
-      hk(0.0, 0.03 + 0.005 * J + fa * 0.5, 0.05, 0.031, 0.042, 2.4),
-      hk(0.06, 0.044 + 0.007 * J + fa, 0.044, 0.041, 0.056, 2.4),
-      hk(0.16, 0.056 + 0.008 * J + fa, 0.035, 0.052, 0.068, 2.35),
-      hk(0.28, 0.064 + 0.006 * J + fa, 0.024, 0.064, 0.082, 2.25),
-      hk(0.42, 0.0685 + 0.003 * trait('cheeks') + fa * 0.6, 0.015, 0.073, 0.099, 2.15),
-      hk(0.55, 0.0735, 0.009, 0.078, 0.107, 2.1),
-      hk(0.68, 0.0755, 0.005, 0.08, 0.108, 2.1),
-      hk(0.8, 0.0715, 0.0, 0.076, 0.101, 2.1),
+      hk(0, 0.029 + 0.007 * CH + soft * 0.4, 0.078, 0.02, 0.034, 2.3),
+      hk(0.045 * lowerF, 0.043 + 0.008 * CH + 0.003 * J + soft * 0.8, 0.085, 0.018, 0.04, 2.3),
+      hk(0.11 * lowerF, 0.054 + 0.006 * CH + 0.006 * J + soft * 1.1, 0.086, 0.015, 0.046, 2.3),
+      hk(tMouth + 0.005, 0.0625 + 0.007 * J + soft * 1.2, 0.087, 0.013, 0.058, 2.3),
+      hk(tNose + 0.01, 0.068 + 0.004 * J + 0.002 * CK + soft, 0.087, 0.012, 0.082, 2.2),
+      hk(tNose + 0.1, 0.0712 + 0.003 * CK + soft * 0.5, 0.086, 0.01, 0.1, 2.15),
+      hk(tEye + 0.005, 0.0735, 0.085, 0.008, 0.107, 2.1),
+      hk(0.65, 0.0755, 0.084, 0.005, 0.108, 2.1),
+      hk(0.8, 0.0715, 0.074, 0, 0.101, 2.1),
     ]),
     0,
     0.8,
     84,
-    { top: 0.2, bottom: 0.022 },
+    { top: capH, bottom: 0.02 },
   );
   // Los mismos anillos se piden miles de veces (cabello, barba, parches): se guardan por altura.
   const headRingCache = new Map<number, Ring>();
@@ -332,28 +351,30 @@ export function buildFigure(spec: FigureSpec): Figure {
     if (!r) headRingCache.set(t, (r = headRingRaw(t)));
     return r;
   };
-  const noseH = 0.021 * (1 + 0.3 * trait('nose'));
+  const noseH = 0.0165 * (1 + 0.3 * trait('nose'));
   const noseW = 1 + 0.3 * trait('noseWidth');
-  const noseHeight = pchip([0.355, 0.4, 0.5, 0.585, 0.625], [0, noseH, 0.0095, 0.004, 0]);
-  const noseSigma = pchip([0.355, 0.4, 0.5, 0.6], [0.0135 * noseW, 0.0115 * noseW, 0.0085, 0.0075]);
+  // La base sube en dos tramos (columela y punta) para que la sombra bajo la nariz sea suave.
+  const noseHeight = pchip([tNose - 0.024, tNose + 0.002, tNose + 0.032, tNose + 0.1, tBrow - 0.035, tBrow, tBrow + 0.04], [0, noseH * 0.42, noseH, 0.0095, 0.0035, 0.002, 0]);
+  const noseSigma = pchip([tNose - 0.024, tNose + 0.03, tNose + 0.1, tBrow], [0.0155 * noseW, 0.0125 * noseW, 0.009 * (0.6 + 0.4 * noseW), 0.008]);
   const eyeX = (0.0315 + 0.003 * trait('eyeSpacing')) * ws;
-  const eyeT = 0.555;
-  /** Relieve de la cara (nariz, cuencas, pómulos, boca, mentón): desplazamiento en Z. */
+  /** Relieve de la cara (nariz y aletas, arco de las cejas, cuencas, pómulos, boca, mentón): desplazamiento en Z. */
   const faceRelief = (x: number, t: number): number => {
     if (t < -0.02 || t > 0.8) return 0;
     const xs = x / ws;
     const ax2 = Math.abs(xs);
     let d = 0;
-    if (t > 0.355 && t < 0.625) d += noseHeight(t) * gauss(xs, noseSigma(t));
-    d += 0.0035 * gauss(t - 0.608, 0.03) * (1 - smoothstep(0.045, 0.065, ax2));
-    d -= 0.007 * gauss(ax2 - eyeX / ws, 0.015) * gauss(t - eyeT, 0.035);
-    d += 0.003 * (1 + trait('cheeks')) * gauss(ax2 - 0.045, 0.02) * gauss(t - 0.43, 0.06);
-    d += 0.004 * gauss(xs, 0.025) * gauss(t - 0.27, 0.05);
-    d += 0.004 * gauss(xs, 0.018) * gauss(t - 0.09, 0.05);
+    if (t > tNose - 0.024 && t < tBrow + 0.04) d += noseHeight(t) * gauss(xs, noseSigma(t));
+    d += 0.0048 * gauss(ax2 - 0.014 * noseW, 0.0055) * gauss(t - (tNose + 0.02), 0.02);
+    d += 0.0045 * gauss(t - tBrow, 0.028) * (1 - smoothstep(0.045, 0.068, ax2));
+    d -= 0.0095 * gauss(ax2 - eyeX / ws, 0.017) * gauss(t - tEye, 0.03);
+    d += 0.003 * (1 + CK) * gauss(ax2 - 0.046, 0.022) * gauss(t - (tNose + 0.085), 0.06);
+    d += 0.0045 * gauss(xs, 0.028) * gauss(t - tMouth, 0.04);
+    d -= 0.002 * gauss(xs, 0.02) * gauss(t - tMouth * 0.62, 0.025);
+    d += 0.0045 * gauss(xs, 0.02) * gauss(t - tChin, 0.04);
     return d * ws;
   };
   const headY = (t: number) => chinY + t * hh;
-  /** Punto de la superficie de la cabeza en (ángulo u, altura t de 0 = mentón a 1 = coronilla). */
+  /** Punto de la superficie de la cabeza en (ángulo u, altura t de 0 = mentón a `tTop` = coronilla). */
   const headRaw = (u: number, t: number): Vector3 => {
     const ring = headT.ringAt(t);
     const [x, z] = ringXZ(ring, u);
@@ -361,7 +382,7 @@ export function buildFigure(spec: FigureSpec): Figure {
     return new Vector3(x, headY(t), z + (s > 0 ? faceRelief(x, t) * Math.min(1, s * 3) : 0));
   };
   const headPoint = (u: number, t: number, off = 0): Vector3 => {
-    const tt = clamp(t, -0.025, 0.992);
+    const tt = clamp(t, -0.016, tTop - 0.008);
     const pt = headRaw(u, tt);
     if (off === 0) return pt;
     const du = headRaw(u + 0.02, tt).sub(headRaw(u - 0.02, tt));
@@ -394,93 +415,137 @@ export function buildFigure(spec: FigureSpec): Figure {
     skinMat,
   );
 
-  // Orejas
-  const earRing = headT.ringAt(0.47);
+  // Orejas: pabellón delgado, un poco abierto y echado hacia atrás, con la concha más oscura.
+  const earRing = headT.ringAt(tEar);
   const earGeo = new SphereGeometry(1, 18, 14);
+  const conchaMat = mat(mix(look.skin, '#5a2f27', 0.38), 0.7);
   for (const side of [1, -1]) {
-    const ear = add(root, earGeo, skinMat);
-    ear.scale.set(0.0055 * ws, 0.028 * ws, 0.015 * ws);
-    ear.position.set(side * (earRing.w - 0.0005 * ws + 0.002 * ws * trait('ears')), headY(0.47), earRing.cz - 0.012 * ws);
-    ear.rotation.y = -side * (0.3 + 0.3 * trait('ears'));
-    ear.rotation.z = -side * 0.08;
+    const ear = new Group();
+    ear.position.set(side * (earRing.w + (0.001 + 0.003 * trait('ears')) * ws), headY(tEar), earRing.cz - 0.012 * ws);
+    ear.rotation.set(-0.16, -side * (0.42 + 0.3 * trait('ears')), -side * 0.07);
+    const shellMesh = add(ear, earGeo, skinMat);
+    shellMesh.scale.set(0.0058 * ws, 0.0285 * ws, 0.015 * ws);
+    const concha = add(ear, earGeo, conchaMat, false);
+    concha.scale.set(0.003 * ws, 0.015 * ws, 0.007 * ws);
+    concha.position.set(side * 0.0036 * ws, -0.002 * ws, 0.002 * ws);
+    root.add(ear);
   }
 
-  // Ojos, cejas y labios (parches pegados a la superficie de la cara)
-  const eyeHW = 0.0135 * ws * (1 + 0.12 * trait('eyes'));
-  const eyeHH = 0.0052 * ws * (1 + 0.25 * trait('eyes'));
-  const scleraMat = mat('#e9e3da', 0.35, { double: true, decal: true });
-  const irisMat = mat(look.eyeColor, 0.3, { double: true, decal: true });
-  const pupilMat = mat('#0c0a09', 0.25, { double: true, decal: true });
-  const lidMat = mat(mix(look.skin, '#1a100c', 0.78), 0.6, { double: true, decal: true });
+  // Ojos, cejas y labios: parches pegados a la cara, pintados por vértice para que los bordes sean suaves.
+  const paint = mat('#ffffff', 0.55, { double: true, decal: true, vertex: true });
+  const patch = (cols: number, rows: number, fn: (i: number, j: number) => { p: P3; c: Color }): BufferGeometry => {
+    const colors = new Float32Array(cols * rows * 3);
+    let n = 0;
+    const geo = gridGeometry(cols, rows, (i, j) => {
+      const r = fn(i, j);
+      colors[n++] = r.c.r;
+      colors[n++] = r.c.g;
+      colors[n++] = r.c.b;
+      return r.p;
+    });
+    geo.setAttribute('color', new BufferAttribute(colors, 3));
+    return geo;
+  };
+  const skinC = new Color(look.skin);
+  const eyeHW = 0.0155 * ws * (1 + 0.15 * trait('eyes'));
+  const eyeHH = 0.0058 * ws * (1 + 0.22 * trait('eyes'));
+  const irisR = 0.0059 * ws;
+  const pupilR = 0.0021 * ws;
+  const scleraC = new Color('#d8d2ca');
+  const irisC = new Color(look.eyeColor);
+  const limbC = irisC.clone().multiplyScalar(0.4);
+  const pupilC = new Color('#0b0908');
+  const lidC = new Color(mix(look.skin, '#1a100c', 0.82));
+  const creaseC = new Color(mix(look.skin, '#5a352b', 0.42));
   const browColor = look.hair === 'calvo' ? mix(look.hairColor, '#2a1e17', 0.5) : look.hairColor;
-  const browMat = mat(shade(browColor, 0.9), 0.75, { double: true, decal: true });
-  const lipMat = mat(mix(look.skin, '#9c4a45', 0.32), 0.5, { double: true, decal: true });
-  const mouthMat = mat(mix(look.skin, '#3a1c1a', 0.65), 0.6, { double: true, decal: true });
-  const lidCurve = (s: number) => (1 - s * s) ** 0.75;
+  const browC = new Color(mix(browColor, look.skin, 0.06));
+  const almond = (s: number) => (1 - s * s) ** 0.7;
   for (const side of [1, -1]) {
     const cx = side * eyeX;
+    // Ojo: esclerótica, iris grande que los párpados recortan, pupila y línea de pestañas.
     add(
       root,
-      gridGeometry(13, 7, (i, j) => {
-        const s = (i / 12) * 2 - 1;
-        const v = (j / 6) * 2 - 1;
-        return facePoint(cx + s * eyeHW, eyeT + (v * eyeHH * lidCurve(s)) / hh, 0.0005);
+      patch(61, 25, (i, j) => {
+        const s = (i / 60) * 2 - 1;
+        const v = (j / 24) * 2 - 1;
+        const dx = s * eyeHW;
+        const dy = v * eyeHH * (v > 0 ? 1.25 : 0.75) * almond(s) + s * side * 0.0005 * ws;
+        const r = Math.hypot(dx, dy - 0.0004 * ws);
+        const c = scleraC.clone().multiplyScalar(1 - 0.22 * smoothstep(0.2, 1, v));
+        c.lerp(limbC, 1 - smoothstep(irisR * 0.9, irisR * 1.06, r));
+        c.lerp(irisC, 1 - smoothstep(irisR * 0.72, irisR * 0.92, r));
+        c.lerp(pupilC, 1 - smoothstep(pupilR * 0.8, pupilR * 1.25, r));
+        c.lerp(lidC, smoothstep(0.84, 0.98, v));
+        c.lerp(creaseC, smoothstep(-0.86, -1, v) * 0.6);
+        return { p: facePoint(cx + dx, tEye + dy / hh, 0.0006), c };
       }),
-      scleraMat,
+      paint,
       false,
     );
-    const disc = (r: number, off: number) =>
-      gridGeometry(19, 3, (i, j) => {
-        const a = (i / 18) * TAU;
-        const rr = (j / 2) * r;
-        return facePoint(cx + rr * Math.cos(a), eyeT + (rr * Math.sin(a)) / hh, off);
-      });
-    add(root, disc(eyeHH * 0.98, 0.0008), irisMat, false);
-    add(root, disc(eyeHH * 0.42, 0.0011), pupilMat, false);
+    // Pliegue del párpado: una sombra suave sobre el ojo.
     add(
       root,
-      gridGeometry(13, 2, (i, j) => {
-        const s = (i / 12) * 2 - 1;
-        return facePoint(cx + s * eyeHW * 1.04, eyeT + (eyeHH * lidCurve(s * 0.98) + (j - 0.35) * 0.0016 * ws) / hh, 0.0012);
+      patch(21, 3, (i, j) => {
+        const s = (i / 20) * 2 - 1;
+        const y = eyeHH * 1.25 * almond(s * 0.9) + (0.0016 + 0.0009 * (j - 1)) * ws + s * side * 0.0005 * ws;
+        const c = skinC.clone().lerp(creaseC, j === 1 ? 0.75 * almond(s) : 0);
+        return { p: facePoint(cx + s * eyeHW * 1.05, tEye + y / hh, 0.0005), c };
       }),
-      lidMat,
+      paint,
       false,
     );
-    // Ceja
-    const browTh = (0.0026 + 0.0013 * trait('brows')) * ws;
+    // Ceja: casi recta, gruesa al inicio y afinada hacia la cola, con bordes difuminados.
+    const browHalf = (0.0033 + 0.0013 * trait('brows')) * ws;
+    const browLen = 0.0245 * ws;
     add(
       root,
-      gridGeometry(11, 3, (i, j) => {
-        const s = (i / 10) * 2 - 1;
-        const v = j - 1;
-        const arch = (0.004 * (1 - s * s) - 0.0015 * s) * ws;
-        const th = browTh * (1 - 0.5 * Math.max(0, s)) * (1 - 0.25 * Math.max(0, -s));
-        return facePoint(side * (eyeX * 1.04 + s * 0.022 * ws), 0.612 + (arch + v * th) / hh, 0.0012);
+      patch(19, 5, (i, j) => {
+        const s = (i / 18) * 2 - 1;
+        const v = (j - 2) / 2;
+        const so = s; // −1 = entrecejo, +1 = cola (hacia la sien)
+        const arch = (0.002 * (1 - so * so) - 0.0013 * Math.max(0, so) ** 2) * ws;
+        const th = browHalf * (1 - 0.6 * Math.max(0, so) ** 1.5) * (1 - 0.2 * Math.max(0, -so) ** 3);
+        const edge = Math.max(Math.abs(v), Math.abs(so) ** 6);
+        const c = browC.clone().lerp(skinC, smoothstep(0.45, 1, edge) * 0.85);
+        return { p: facePoint(side * (eyeX + 0.0025 * ws + so * browLen), tBrow + (arch + v * th * 1.25) / hh, 0.001), c };
       }),
-      browMat,
+      paint,
       false,
     );
   }
-  const lipHW = 0.0235 * ws * (1 + 0.08 * trait('lips'));
-  const lipHH = 0.0058 * ws * (1 + 0.45 * trait('lips'));
-  const mouthT = 0.268;
+  // Fosas nasales: dos sombras pequeñas y suaves bajo la punta.
+  const nostrilC = new Color(mix(look.skin, '#2e1513', 0.7));
+  for (const side of [1, -1])
+    add(
+      root,
+      patch(9, 7, (i, j) => {
+        const a = (i / 8) * 2 - 1;
+        const b = (j / 6) * 2 - 1;
+        const c = skinC.clone().lerp(nostrilC, (1 - smoothstep(0.25, 1, Math.hypot(a, b))) * 0.9);
+        return { p: facePoint(side * (0.0078 * noseW + a * 0.0042) * ws, tNose - 0.004 + (b * 0.0026 * ws) / hh, 0.0006), c };
+      }),
+      paint,
+      false,
+    );
+  // Labios: superior delgado con arco, inferior más lleno, comisuras apenas levantadas.
+  const lipHW = 0.025 * ws * (1 + 0.12 * trait('mouthWidth'));
+  const lipHH = 0.006 * ws * (1 + 0.4 * trait('lips'));
+  const lipC = new Color(mix(look.skin, '#a03f4a', 0.55));
+  const mouthC = new Color(mix(look.skin, '#3a1c1a', 0.72));
   add(
     root,
-    gridGeometry(21, 7, (i, j) => {
-      const s = (i / 20) * 2 - 1;
-      const v = (j / 6) * 2 - 1;
-      return facePoint(s * lipHW, mouthT + (v * lipHH * (v < 0 ? 1.12 : 0.85) * (1 - s * s) ** 0.7) / hh, 0.0013);
+    patch(29, 9, (i, j) => {
+      const s = (i / 28) * 2 - 1;
+      const v = (j - 4) / 4;
+      const upper = 0.72 * (1 - s * s) ** 0.55 * (1 - 0.2 * gauss(s, 0.13));
+      const lower = 1.2 * (1 - s * s) ** 0.6;
+      const dy = (v > 0 ? v * upper : v * lower) * lipHH + 0.001 * ws * s * s;
+      const c = lipC.clone();
+      if (j === 4) c.lerp(mouthC, 0.85 * (1 - s * s * 0.5));
+      c.lerp(skinC, smoothstep(0.6, 1, Math.max(Math.abs(v), Math.abs(s) ** 4)) * 0.8);
+      return { p: facePoint(s * lipHW, tMouth + dy / hh, 0.0013), c };
     }),
-    lipMat,
-    false,
-  );
-  add(
-    root,
-    gridGeometry(15, 2, (i, j) => {
-      const s = (i / 14) * 2 - 1;
-      return facePoint(s * lipHW * 0.94, mouthT + ((j - 0.5) * 0.0011 * ws * (1 - s * s) ** 0.5) / hh, 0.0017);
-    }),
-    mouthMat,
+    paint,
     false,
   );
 
@@ -492,8 +557,13 @@ export function buildFigure(spec: FigureSpec): Figure {
     if (d < -PI) d += TAU;
     return Math.abs(d);
   };
-  /** Cáscara sobre la cabeza: `fn` da el punto y qué tanto existe ahí (0 = nada). */
-  const shell = (ts: number[], fn: (u: number, t: number) => { p: Vector3; m: number }, apex?: Vector3, fade?: { from: string; to: string }): BufferGeometry => {
+  /** Cáscara sobre la cabeza: `fn` da el punto y qué tanto existe ahí (0 = nada). Con `fade`, el color se funde con la piel. */
+  const shell = (
+    ts: number[],
+    fn: (u: number, t: number) => { p: Vector3; m: number },
+    apex?: Vector3,
+    fade?: { from: string; to: string; linear?: boolean },
+  ): BufferGeometry => {
     const rows = ts.length;
     const pos: number[] = [];
     const mask: number[] = [];
@@ -509,7 +579,7 @@ export function buildFigure(spec: FigureSpec): Figure {
         pos.push(r.p.x, r.p.y, r.p.z);
         mask.push(r.m);
         if (fade) {
-          tmp.copy(c0).lerp(c1, smoothstep(0.1, 0.7, r.m));
+          tmp.copy(c0).lerp(c1, fade.linear ? clamp(r.m) : smoothstep(0.1, 0.7, r.m));
           col.push(tmp.r, tmp.g, tmp.b);
         }
       }
@@ -539,29 +609,46 @@ export function buildFigure(spec: FigureSpec): Figure {
     return geo;
   };
   const steps = (a: number, b: number, n: number) => Array.from({ length: n + 1 }, (_, i) => lerp(a, b, i / n));
+  const crown = headT.ringAt(0.8);
 
+  // Nacimiento del pelo: casi recto en la frente, entradas ligeras, baja por la sien a una patilla
+  // corta que termina a media oreja, rodea la oreja y cae a la nuca.
   const hairline = pchip(
-    [0, 0.2, 0.32, 0.385, 0.43, 0.47, 0.5, 0.6, 0.68, 0.82, 1].map((x) => x * PI),
-    [0.8, 0.785, 0.72, 0.56, 0.5, 0.56, 0.615, 0.6, 0.42, 0.3, 0.28],
+    [0, 0.15, 0.27, 0.335, 0.375, 0.405, 0.43, 0.46, 0.49, 0.6, 0.68, 0.82, 1].map((x) => x * PI),
+    [tHairline, tHairline - 0.006, tHairline - 0.05, tEye + 0.2, tEye + 0.11, tEye + 0.01, tEar - 0.03, tEar + 0.03, tEar + 0.135, tEar + 0.13, tEar - 0.04, 0.27, 0.25],
   );
   /** Borde de la gorra: sobre la frente al frente, más abajo en la nuca. */
-  const capLine = (phi: number) => 0.7 - 0.17 * (1 - Math.cos(phi)) * 0.5;
-  const hairMat = mat(look.hairColor, 0.86);
+  const capLine = (phi: number) => tBrow + 0.105 - 0.17 * (1 - Math.cos(phi)) * 0.5;
+  const hairMat = mat(look.hairColor, 0.8);
   if (look.hair !== 'calvo') {
-    const volume = (u: number, phi: number, t: number): number => {
-      const top = smoothstep(0.6, 0.9, t);
+    const shape = look.hairShape ?? {};
+    const kTop = 1 + 0.5 * clamp(shape.top ?? 0, -1, 1);
+    const kFront = 1 + 0.6 * clamp(shape.front ?? 0, -1, 1);
+    const kSide = 1 + 0.5 * clamp(shape.sides ?? 0, -1, 1);
+    /** Grosor del pelo (metros, a lo largo de la normal) en cada punto de la cabeza. */
+    const volume = (u: number, phi: number, t: number, pt: Vector3): number => {
+      const top = smoothstep(0.62, 0.88, t);
       const fw = Math.cos(phi / 2) ** 2;
       switch (look.hair) {
         case 'rapado':
           return 0.0022;
         case 'corto':
-          return 0.005 + 0.008 * top + 0.002 * top * fw;
+          return 0.0045 * kSide + 0.007 * kTop * top + 0.003 * kFront * top * fw * fw;
         case 'volumen':
-          return 0.007 + 0.015 * top + 0.016 * top * fw * fw;
+          return 0.006 * kSide + 0.013 * kTop * top + 0.014 * kFront * top * fw * fw;
         case 'lado':
-          return 0.006 + 0.009 * top + 0.009 * top * Math.max(0, Math.cos(u - 0.5)) - 0.006 * top * gauss(u - (PI - 0.95), 0.1);
+          return 0.006 * kSide + 0.009 * kTop * top + 0.008 * kFront * top * Math.max(0, Math.cos(u - 0.5)) - 0.005 * top * gauss(u - (PI - 0.95), 0.1);
         case 'chino':
-          return 0.011 + 0.012 * top + 0.005 * Math.sin(u * 11 + t * 27) * Math.sin(t * 37 + u * 5);
+          return 0.011 * kSide + 0.012 * kTop * top + 0.005 * Math.sin(u * 11 + t * 27) * Math.sin(t * 37 + u * 5);
+        case 'copete': {
+          // Lados cortos y pegados; arriba peinado hacia atrás y hacia su izquierda (+X); al frente se
+          // levanta desde el nacimiento, más lleno del lado derecho (−X), con surcos suaves de peinado.
+          const side = 0.0075 * kSide * (0.5 + 0.5 * smoothstep(tEar + 0.06, 0.7, t));
+          const front = (1 - smoothstep(0.2 * PI, 0.46 * PI, phi)) * (1 - smoothstep(tHairline + 0.07, tTop, t));
+          const lift = 0.0095 * kFront * front * (1 - 0.4 * Math.cos(u));
+          const comb = 0.0014 * Math.sin((0.83 * pt.x + 0.55 * pt.z) * (TAU / (0.017 * ws))) * smoothstep(tHairline - 0.02, tHairline + 0.06, t);
+          return side + 0.008 * kTop * top * (0.55 + 0.45 * fw) + lift + comb;
+        }
         default:
           return 0.006;
       }
@@ -571,40 +658,51 @@ export function buildFigure(spec: FigureSpec): Figure {
       const hl = hairline(phi);
       if (t <= hl) return { p: headPoint(u, hl, 0.001), m: 1 };
       // El volumen crece desde el nacimiento del pelo; a los lados y en la nuca más gradual (degradado).
-      const ramp = lerp(0.06, 0.11, smoothstep(0.28 * PI, 0.42 * PI, phi));
-      let off = Math.max(0.001, volume(u, phi, t) * ws * smoothstep(0, ramp, t - hl));
+      const frontRamp = look.hair === 'copete' ? 0.03 : 0.06;
+      const ramp = lerp(frontRamp, 0.11, smoothstep(0.28 * PI, 0.42 * PI, phi));
+      let off = Math.max(0.001, volume(u, phi, t, headPoint(u, t)) * ws * smoothstep(0, ramp, t - hl));
       if (outfit.cap && t > capLine(phi) - 0.03) off = Math.min(off, 0.0035);
       return { p: headPoint(u, t, off), m: 1 };
     };
-    const apexOff = outfit.cap ? 0.0035 : volume(0, PI / 2, 1) * ws;
-    add(root, shell(steps(0.26, 0.992, 56), hairAt, new Vector3(headT.ringAt(0.8).cx, headY(1) + apexOff, headT.ringAt(0.8).cz)), hairMat);
+    const apexOff = outfit.cap ? 0.0035 : volume(0, PI / 2, tTop, new Vector3(crown.cx, 0, crown.cz)) * ws;
+    add(root, shell(steps(0.24, tTop - 0.008, 56), hairAt, new Vector3(crown.cx, headY(tTop) + apexOff, crown.cz)), hairMat);
   }
 
   if (look.beard !== 'ninguna') {
-    const beardTop = pchip([0, 0.12, 0.2, 0.3, 0.38, 0.43].map((x) => x * PI), [0.345, 0.345, 0.33, 0.37, 0.44, 0.5]);
-    const thick = { sombra: 0.0007, corta: 0.0035, completa: 0.0095, candado: 0.006, bigote: 0.004 }[look.beard] * ws;
+    const sombra = look.beard === 'sombra';
+    const beardTop = pchip([0, 0.12, 0.2, 0.3, 0.38, 0.43].map((x) => x * PI), [tNose - 0.02, tNose - 0.02, tNose - 0.035, tNose + 0.005, tNose + 0.07, tEar - 0.02]);
+    const thick = { sombra: 0.0006, corta: 0.0035, completa: 0.0095, candado: 0.006, bigote: 0.004 }[look.beard] * ws;
     const beardAt = (u: number, t: number) => {
       const phi = fromFront(u);
       const pt0 = headPoint(u, t);
-      let m = smoothstep(0, look.beard === 'sombra' ? 0.08 : 0.045, beardTop(Math.min(phi, 0.43 * PI)) - t);
-      const side = 1 - smoothstep(0.43 * PI, 0.47 * PI, phi);
-      if (look.beard === 'candado') m *= 1 - smoothstep(0.15 * PI, 0.19 * PI, phi);
-      else if (look.beard === 'bigote') m *= (1 - smoothstep(0.13 * PI, 0.17 * PI, phi)) * smoothstep(0.285, 0.3, t);
-      else m *= side;
-      const e = Math.hypot(pt0.x / (0.027 * ws), (t - mouthT) / 0.03);
-      if (look.beard !== 'sombra') m *= smoothstep(1.0, 1.7, e);
-      const chin = look.beard === 'completa' ? 1 + 0.5 * gauss(t - 0.05, 0.1) * gauss(phi, 0.5) : 1;
-      return { p: headPoint(u, t, Math.max(0.0003, thick * chin * smoothstep(0.05, 0.75, m))), m };
+      const xs = Math.abs(pt0.x) / ws;
+      let m = smoothstep(0, sombra ? 0.08 : 0.045, beardTop(Math.min(phi, 0.43 * PI)) - t) * (1 - smoothstep(0.43 * PI, 0.47 * PI, phi));
+      if (sombra) {
+        // Barba de uno o dos días: bigote (más a los lados que al centro), mentón, mosca y un rastro
+        // por el borde de la mandíbula; las mejillas quedan casi limpias.
+        const moustache = smoothstep(tMouth + 0.012, tMouth + 0.03, t) * (1 - smoothstep(tNose - 0.035, tNose - 0.012, t)) * (1 - smoothstep(0.03, 0.04, xs)) * (0.4 + 0.6 * smoothstep(0.004, 0.013, xs));
+        const chin = (1 - smoothstep(0.08 * lowerF, 0.12 * lowerF, t)) * (1 - smoothstep(0.26 * PI, 0.36 * PI, phi));
+        const soul = 0.6 * gauss(xs, 0.006) * gauss(t - (tMouth - 0.04), 0.012);
+        const jawEdge = lerp(0.1 * lowerF, tNose, clamp(phi / (0.42 * PI)) ** 1.6);
+        const jaw = 0.5 * (1 - smoothstep(jawEdge - 0.02, jawEdge + 0.05, t)) * (1 - smoothstep(0.3 * PI, 0.42 * PI, phi));
+        m *= Math.min(1, Math.max(moustache, chin, soul, jaw, 0.08));
+      } else {
+        if (look.beard === 'candado') m *= 1 - smoothstep(0.15 * PI, 0.19 * PI, phi);
+        else if (look.beard === 'bigote') m *= (1 - smoothstep(0.13 * PI, 0.17 * PI, phi)) * smoothstep(tMouth + 0.012, tMouth + 0.028, t);
+        m *= smoothstep(1.0, 1.7, Math.hypot(pt0.x / (lipHW * 1.12), (t - tMouth) / 0.035));
+      }
+      const chinBulk = look.beard === 'completa' ? 1 + 0.5 * gauss(t - 0.04, 0.1) * gauss(phi, 0.5) : 1;
+      return { p: headPoint(u, t, Math.max(0.0003, thick * chinBulk * smoothstep(0.05, 0.75, m))), m };
     };
-    const beardColor = look.beard === 'sombra' ? mix(look.skin, look.hairColor, 0.4) : look.beard === 'corta' ? mix(look.skin, look.hairColor, 0.85) : look.hairColor;
-    add(root, shell(steps(0.004, 0.54, 48), beardAt, undefined, { from: look.skin, to: beardColor }), mat('#ffffff', 0.75, { decal: true, vertex: true }), false);
+    const beardColor = sombra ? mix(look.skin, look.hairColor, 0.5) : look.beard === 'corta' ? mix(look.skin, look.hairColor, 0.85) : look.hairColor;
+    add(root, shell(steps(0.004, tEar + 0.02, 52), beardAt, undefined, { from: look.skin, to: beardColor, linear: sombra }), mat('#ffffff', 0.75, { decal: true, vertex: true }), false);
   }
 
   // ---------- Lentes y gorra ----------
   if (look.glasses) {
     const frame = mat('#15171b', 0.35, { metalness: 0.3 });
-    const zg = facePoint(eyeX, eyeT).z + 0.013 * ws;
-    const gy = headY(eyeT) - 0.001;
+    const zg = facePoint(eyeX, tEye).z + 0.014 * ws;
+    const gy = headY(tEye) - 0.001;
     const rx = 0.0235 * ws;
     const ry = 0.0185 * ws;
     const tubeOf = (pts: Vector3[], closed: boolean, r = 0.0014 * ws) => new TubeGeometry(new CatmullRomCurve3(pts, closed), closed ? 48 : 16, r, 6, closed);
@@ -618,7 +716,7 @@ export function buildFigure(spec: FigureSpec): Figure {
       });
       add(root, tubeOf(rim, true), frame);
       const hinge = new Vector3(side * (eyeX + rx), gy + ry * 0.35, zg - 0.004 * ws);
-      add(root, tubeOf([hinge, new Vector3(side * (earRing.w + 0.004 * ws), gy + ry * 0.3, zg - 0.05 * ws), new Vector3(side * (earRing.w + 0.004 * ws), headY(0.55), earRing.cz - 0.002)], false), frame);
+      add(root, tubeOf([hinge, new Vector3(side * (earRing.w + 0.004 * ws), gy + ry * 0.3, zg - 0.05 * ws), new Vector3(side * (earRing.w + 0.004 * ws), headY(tEar + 0.11), earRing.cz - 0.004)], false), frame);
     }
     add(root, tubeOf([new Vector3(-(eyeX - rx), gy + ry * 0.3, zg - 0.004 * ws), new Vector3(0, gy + ry * 0.45, zg + 0.001), new Vector3(eyeX - rx, gy + ry * 0.3, zg - 0.004 * ws)], false), frame);
   }
@@ -626,10 +724,9 @@ export function buildFigure(spec: FigureSpec): Figure {
     const capMat = mat(outfit.capColor, 0.85, { double: true });
     const capOff = 0.0065 * ws;
     const capAt = (u: number, t: number) => ({ p: headPoint(u, Math.max(t, capLine(fromFront(u))), capOff), m: 1 });
-    const crown = headT.ringAt(0.8);
-    add(root, shell(steps(0.5, 0.992, 36), capAt, new Vector3(crown.cx, headY(1) + capOff, crown.cz)), capMat);
+    add(root, shell(steps(0.45, tTop - 0.008, 36), capAt, new Vector3(crown.cx, headY(tTop) + capOff, crown.cz)), capMat);
     const button = add(root, new SphereGeometry(0.008 * ws, 12, 8), capMat);
-    button.position.set(crown.cx, headY(1) + capOff + 0.001, crown.cz);
+    button.position.set(crown.cx, headY(tTop) + capOff + 0.001, crown.cz);
     button.scale.y = 0.5;
     const span = 0.34 * PI;
     add(
