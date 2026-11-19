@@ -3,3 +3,6 @@
 DEV_BYPASS_AUTH=true
 # Opcional, para probar el Game Master en local:
 # ANTHROPIC_API_KEY=sk-ant-...
+# Conectar IA (MCP) en local: la app corre en :8787 y el servidor MCP en :8788
+#   pnpm dev            (app)
+#   pnpm dev:mcp        (servidor MCP, en otra terminal)

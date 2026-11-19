@@ -23,6 +23,7 @@ Mecánicas de juego, lenguaje y estética sobrios de app de rendimiento personal
 | 5. Registro rápido | Botón **+** para registrar todo con un toque (misión sin catálogo, dinero con montos rápidos, persona, agenda, meta, cuerpo, descanso, días pasados), rutina de diarias con checks y "Deshacer", deslizar para completar, favoritos, agenda, misión sorpresa con bono, oro y tienda de premios reales, avatar que evoluciona, sonidos y vibración, cierre del día, reporte semanal con resumen del Coach, registro por texto libre con el Coach, notificaciones push, Mi vida en semanas por año calendario con zoom a año y a días, hitos de vida, historial en calendario, estadísticas, metas con contador, hábitos a dejar, presupuesto y ahorro, biblioteca, cuerpo, buscador y "Mi año en review" (imagen/PDF) |
 | 6. Experiencia en vivo | Identidad visual sobria en grafito y oro con tipografía Plus Jakarta Sans (más estilos de color desbloqueables), monograma evolutivo (iniciales + anillo de nivel), **Modo enfoque** (temporizador/cronómetro, sub-pasos, avance del reto vinculado y sonido ambiental de fuego/lluvia), Resumen del día local sin IA, lo que tienes a tu favor / en contra y Reto del día, grandes retos con ícono y barra de avance segmentada, **Estilo de la app** en la tienda (paletas de color con oro), **Cierre del día**, celebraciones de logros, día perfecto y avance en retos, mapa interactivo (por conocer → conocido → habitual), árbol visual de habilidades, tarjetas de misión aceptables con un toque en el Coach y dictado por voz |
 | 7. Vida real | Lenguaje sobrio (Perfil, Grandes retos, Mi gente, Coach, Cierre del día), **Tus 3 de hoy** (planear el día y mañana, bono de oro al cumplir), **Tú vs. tú** contra la semana pasada a la misma hora, **Récords y datos** (récords personales, patrones de sueño/día/hora, ritmo de metas e ingresos), **Retos de N días** (no rompas la cadena), **Compromisos** con oro en juego, bono sorpresa al cerrar el día y **resumen semanal** compartible por imagen o WhatsApp |
+| 8. Conectar IA | **Servidor MCP** para usar tu app desde Claude (web, escritorio, celular y Claude Code), ChatGPT, Codex, Antigravity o Cursor: ve tu progreso y registra, planea y organiza por ti desde el chat. Conexión con inicio de sesión (OAuth, apruebas en la app) o con llaves, modo solo lectura, **bitácora de lo que hizo la IA con "Deshacer"**, y el **Coach de la app ahora también actúa** (registra por ti) |
 
 Los números del juego están en [`packages/core/src/config/game.ts`](packages/core/src/config/game.ts).
 Las reglas y decisiones técnicas están en [`CLAUDE.md`](CLAUDE.md).
@@ -68,6 +69,32 @@ tus 7 atributos iniciales con la guía de 30 y 70.
 3. Abre **Más → Coach**. Usa el modelo `claude-opus-5-5`; para cambiarlo, agrega la variable
    `ANTHROPIC_MODEL`. Cada pregunta consume tokens de tu cuenta de la API de Claude.
 
+### Conecta tu app a tu asistente de IA (MCP)
+
+Abre **Más → Conectar IA**: ahí está la URL del servidor MCP, las instrucciones con tus datos ya puestos y
+la bitácora de todo lo que hizo la IA (con "Deshacer"). La URL es:
+
+```
+https://igv-experience-mcp.<tu-subdominio>.workers.dev/mcp
+```
+
+- **Claude (claude.ai, escritorio y celular)**: Configuración → Conectores → *Agregar conector personalizado*
+  → pega la URL → **Conectar**. Se abre tu app (con el código de Cloudflare a tu correo si hace falta) y
+  tocas **Permitir**. Queda disponible en todas tus apps de Claude.
+- **Claude Code**: `claude mcp add --transport http --scope user igv <URL>` y luego `/mcp` → *Authenticate*.
+- **Codex**: `codex mcp add igv --url <URL>` y `codex mcp login igv` (o una llave con `bearer_token_env_var`).
+- **Antigravity**: en *MCP Servers → View raw config* agrega `"igv": { "serverUrl": "<URL>", "headers": { "Authorization": "Bearer <llave>" } }`.
+- **Otros** (ChatGPT en modo desarrollador, Cursor, VS Code…): URL + OAuth, o el encabezado `Authorization: Bearer <llave>`.
+
+Las **llaves** se crean en esa misma pantalla (se muestran una sola vez; revócalas cuando quieras). Con
+el interruptor **Permisos** dejas a la IA en solo lectura. Ejemplos para el chat: *"¿cómo voy hoy?"*,
+*"registra que entrené y leí"*, *"anota un gasto de $350 en comida"*, *"agéndame llamar al contador el
+viernes"*, *"arma mis 3 de mañana"*, *"crea una meta de leer 12 libros este año"*.
+
+No cuesta nada extra: el servidor MCP es un segundo Worker en el plan gratuito y la IA la pagas en tu
+propia suscripción (Claude, ChatGPT…). Se despliega solo con el resto; no lleva Cloudflare Access (los
+asistentes no pueden pasar por él), por eso cada conexión se aprueba en la app, que sí lo lleva.
+
 ### Notificaciones
 
 Están **apagadas**: la app no manda nada al celular ni corre tareas automáticas en Cloudflare. El código
@@ -104,6 +131,9 @@ pnpm --filter @igv/web build && pnpm dev     # todo en http://localhost:8787
 Para trabajar en la interfaz con recarga instantánea, deja `pnpm dev` corriendo en `apps/api` y en otra
 terminal corre `pnpm --filter @igv/web dev` (http://localhost:5173, con proxy de `/api`).
 
+Servidor MCP en local: en otra terminal, `cd apps/api && pnpm dev:mcp` (http://localhost:8788/mcp; comparte
+la base D1 local con la app).
+
 ## Cambiar números del juego
 
 Edita [`packages/core/src/config/game.ts`](packages/core/src/config/game.ts), corre `pnpm test` y sube el
@@ -114,11 +144,11 @@ cambio a `main`. Al desplegarse, todo tu historial se recalcula con los números
 ```
 packages/core   reglas del juego + pruebas (Vitest)
 packages/db     esquema y migraciones de D1 (Drizzle)
-apps/api        Worker (Hono): API + sirve la web
+apps/api        Workers (Hono): API + web, y el servidor MCP (wrangler.mcp.jsonc)
 apps/web        React + Vite + PWA
 ```
 
 ## Plan gratuito de Cloudflare
 
-Workers: 100,000 peticiones al día. D1: 5 GB y 5 millones de filas leídas al día. Access: hasta 50
+Workers: 100,000 peticiones al día (entre la app y el servidor MCP). D1: 5 GB y 5 millones de filas leídas al día. Access: hasta 50
 usuarios. El uso de una persona queda muy por debajo de estos límites.

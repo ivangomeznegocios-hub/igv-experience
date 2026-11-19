@@ -59,11 +59,15 @@ jobs:
           fi
           if [ -z "$ID" ]; then echo "::error::No se pudo obtener el ID de la base de datos D1"; exit 1; fi
           echo "Base de datos: $ID"
-          sed -i "s/00000000-0000-0000-0000-000000000000/$ID/" wrangler.jsonc
+          # La app y el servidor MCP usan la misma base.
+          sed -i "s/00000000-0000-0000-0000-000000000000/$ID/" wrangler.jsonc wrangler.mcp.jsonc
       - run: pnpm --filter @igv/web build
       - name: Aplicar migraciones de D1
         working-directory: apps/api
         run: npx wrangler d1 migrations apply DB --remote
-      - name: Desplegar Worker
+      - name: Desplegar Worker (app y API)
         working-directory: apps/api
         run: npx wrangler deploy
+      - name: Desplegar servidor MCP (Conectar IA)
+        working-directory: apps/api
+        run: npx wrangler deploy -c wrangler.mcp.jsonc

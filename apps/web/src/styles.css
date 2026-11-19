@@ -938,3 +938,15 @@ input[type='range'] { width: 100%; accent-color: var(--gold); }
   border: 1px solid color-mix(in srgb, var(--gold) 38%, var(--line)); text-decoration: none;
 }
 .sync-pill.inline { position: static; backdrop-filter: none; }
+
+/* ---------- Conectar IA ---------- */
+.code-block { display: flex; align-items: flex-start; gap: 6px; margin: 6px 0 10px; padding: 8px 8px 8px 12px; border-radius: 12px; background: var(--card-2); border: 1px solid var(--line); }
+.code-block pre { flex: 1; min-width: 0; margin: 0; padding-top: 4px; font-family: var(--font-mono); font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; color: var(--text); }
+.code-block .btn { flex: none; }
+.steps { margin: 4px 0 8px; padding-left: 20px; font-size: 14px; }
+.steps li { margin: 6px 0; }
+.steps li::marker { color: var(--gold); font-weight: 700; }
+.secret-box { margin: 4px 0 12px; padding: 10px 12px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--gold) 45%, var(--line)); background: color-mix(in srgb, var(--gold) 8%, var(--card)); }
+.coach-actions { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; max-width: 90%; }
+.coach-action { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--card-2); font-size: 13px; }
+.coach-action.undone { opacity: 0.55; text-decoration: line-through; }

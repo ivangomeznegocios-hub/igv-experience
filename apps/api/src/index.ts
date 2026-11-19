@@ -8,6 +8,8 @@ import { requireAccess } from './auth';
 import { changesSince, db, ensureSeeded, getEntity, rowToEntity, rowToEvent, runChunked } from './repo';
 import { gmRoute } from './gm';
 import { pushRoute, runScheduledPush } from './push';
+import { aiRoute } from './ai/routes';
+import { consentRoute } from './ai/oauth';
 import type { Env } from './env';
 
 const app = new Hono<AppEnv>().basePath('/api');
@@ -195,6 +197,8 @@ app.post('/backup/import', async (c) => {
 
 app.route('/gm', gmRoute);
 app.route('/push', pushRoute);
+app.route('/ai', aiRoute);
+app.route('/oauth', consentRoute);
 
 app.notFound((c) => c.json({ error: 'No encontrado' }, 404));
 

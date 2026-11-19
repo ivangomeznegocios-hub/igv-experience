@@ -11,6 +11,10 @@ export interface Env {
   /** Clave de la API de Claude para el Game Master (secreto, opcional) */
   ANTHROPIC_API_KEY?: string;
   ANTHROPIC_MODEL?: string;
+  /** Opcional (dominio propio): URL pública de la app, p. ej. https://igv.midominio.com */
+  APP_URL?: string;
+  /** Opcional (dominio propio): URL pública del servidor MCP, p. ej. https://mcp.midominio.com */
+  MCP_URL?: string;
 }
 
 export type AppEnv = { Bindings: Env; Variables: { email: string } };

@@ -79,12 +79,26 @@ el correo en el primer ingreso, y desde ahí solo acepta exactamente eso.
 - iPhone (Safari): Compartir → **Agregar a pantalla de inicio**.
 - Android (Chrome): menú ⋮ → **Instalar app**.
 
+### Paso 7 (opcional). Conectar IA (MCP)
+
+El despliegue también crea el Worker **`igv-experience-mcp`** (el servidor MCP). **No le actives Cloudflare
+Access**: los asistentes de IA no pueden pasar por ese inicio de sesión; cada conexión se aprueba en la app
+(que sí tiene Access) o usa una llave creada en la app. Si la cuenta protege *todos* los Workers con Access
+(política a nivel de cuenta), agrega una excepción (Bypass) solo para `igv-experience-mcp`.
+
+Iván abre **Más → Conectar IA** en la app y sigue las instrucciones de su asistente (Claude, Claude Code,
+Codex, Antigravity…). Verifica que `https://igv-experience-mcp.<subdominio>.workers.dev/` responde un JSON
+con `"mcp": ".../mcp"`.
+
 ### Si algo falla
 
 - *El workflow dice "Falta el secreto CLOUDFLARE_API_TOKEN"*: repite el paso 2.
 - *Error de permisos de D1 o de cuenta*: el token necesita **Account · D1 · Edit** y una sola cuenta
   (o agrega `CLOUDFLARE_ACCOUNT_ID`).
 - *La app dice "Activa Cloudflare Access"*: falta el paso 4.
+- *Claude/Codex no logran conectar al MCP*: revisa que `igv-experience-mcp` NO tenga Access y que su URL
+  termine en `/mcp`. Con dominio propio, define `MCP_URL` (en `igv-experience`) y `APP_URL` (en
+  `igv-experience-mcp`) en Settings → Variables.
 - *Hay que cambiar el correo autorizado* (reinicia el anclaje; los datos del juego no se tocan):
 
   ```bash

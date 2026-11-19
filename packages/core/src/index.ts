@@ -32,3 +32,7 @@ export type { BodyState, BodyEntry, SavingsState, DayClosure } from './engine/mo
 export { REPEATABLE_KINDS } from './engine/modules/missions';
 export * from './seed/index';
 export * from './backup';
+export * from './assistant/snapshot';
+export * from './assistant/tools';
+export * from './assistant/format';
+export * from './assistant/memory';

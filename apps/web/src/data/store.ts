@@ -278,6 +278,11 @@ export function deleteEntity(id: string) {
   enqueue({ op: 'delete', id });
 }
 
+/** Estado de la sincronización (para saber si lo local coincide exactamente con el servidor). */
+export function getSyncInfo() {
+  return { cursor, pending: pending.length, status: snap.status };
+}
+
 /** Eventos actuales (sin suscribirse). */
 export function getEvents(): GameEvent[] {
   return [...snap.events.values()];

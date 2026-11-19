@@ -1,4 +1,4 @@
-import type { Entity, GameEvent } from '@igv/core';
+import type { AssistantSnapshot, Entity, GameEvent } from '@igv/core';
 
 export class AuthError extends Error {}
 
@@ -28,6 +28,36 @@ export interface GmParseResult {
   reply: string;
   proposals: GmProposal[];
 }
+/** Una llave personal o una app conectada por OAuth (Claude, ChatGPT…). */
+export interface AiAccess {
+  id: string;
+  name: string;
+  createdAt: number;
+  lastUsedAt: number | null;
+}
+export interface AiStatus {
+  mcpUrl: string | null;
+  coach: boolean;
+  allowWrites: boolean;
+  keys: AiAccess[];
+  connections: AiAccess[];
+}
+export interface AiActivityItem {
+  id: string;
+  at: number;
+  source: string;
+  tool: string;
+  summary: string;
+  undoneAt: number | null;
+  undoable: boolean;
+}
+/** Algo que el Coach hizo en la app durante una respuesta. */
+export interface CoachAction {
+  tool: string;
+  summary: string;
+  activityId: string;
+}
+
 export class ApiError extends Error {
   constructor(message: string, public status: number) {
     super(message);
@@ -75,6 +105,14 @@ export const api = {
   pushUnsubscribe: (endpoint: string) => req<{ ok: true }>('/push/unsubscribe', { method: 'POST', body: JSON.stringify({ endpoint }) }),
   pushPlan: (items: PushPlanItem[]) => req<{ ok: true }>('/push/plan', { method: 'PUT', body: JSON.stringify({ items }) }),
   pushTest: () => req<{ ok: true; sent: number }>('/push/test', { method: 'POST' }),
-  gmAsk: (body: { question: string; context: string; history: { role: 'user' | 'assistant'; content: string }[] }) =>
-    req<{ answer: string }>('/gm/ask', { method: 'POST', body: JSON.stringify(body) }),
+  gmAsk: (body: { question: string; history: { role: 'user' | 'assistant'; content: string }[]; context?: string; readOnly?: boolean }) =>
+    req<{ answer: string; actions: CoachAction[] }>('/gm/ask', { method: 'POST', body: JSON.stringify(body) }),
+  aiStatus: () => req<AiStatus>('/ai/status'),
+  aiSettings: (allowWrites: boolean) => req<{ ok: true }>('/ai/settings', { method: 'PUT', body: JSON.stringify({ allowWrites }) }),
+  aiCreateKey: (name: string) => req<{ ok: true; key: AiAccess; token: string }>('/ai/keys', { method: 'POST', body: JSON.stringify({ name }) }),
+  aiRevokeKey: (id: string) => req<{ ok: true }>(`/ai/keys/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  aiRevokeConnection: (id: string) => req<{ ok: true }>(`/ai/connections/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  aiActivity: () => req<{ items: AiActivityItem[] }>('/ai/activity'),
+  aiUndo: (id: string) => req<{ ok: true }>(`/ai/activity/${encodeURIComponent(id)}/undo`, { method: 'POST' }),
+  aiSnapshot: (snapshot: AssistantSnapshot) => req<{ ok: boolean; reason?: string }>('/ai/snapshot', { method: 'PUT', body: JSON.stringify(snapshot) }),
 };
