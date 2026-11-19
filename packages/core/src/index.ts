@@ -25,6 +25,7 @@ export type { ChallengeState, ChallengeAttempt } from './engine/modules/challeng
 export { challengeAttempts, challengeDayNumber } from './engine/modules/challenges';
 export type { DayPlan, PlanItem } from './engine/modules/plans';
 export * from './engine/insights';
+export * from './engine/physique';
 export type { GoalState } from './engine/modules/goals';
 export type { ViceState } from './engine/modules/vices';
 export type { LibraryState } from './engine/modules/library';

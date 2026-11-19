@@ -41,6 +41,8 @@ export default defineConfig({
       },
     }),
   ],
+  // three.js (personaje 3D) va en su propio archivo, que solo se descarga al abrir Perfil.
+  build: { chunkSizeWarningLimit: 700 },
   server: {
     proxy: { '/api': 'http://localhost:8787' },
   },

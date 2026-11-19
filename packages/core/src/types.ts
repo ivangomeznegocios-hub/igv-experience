@@ -75,6 +75,147 @@ export interface SettingsData {
   partner?: { name: string; phone?: string };
   /** Estilo de color de la app (`skin`). `aura` y `emblem` son de una versión anterior y ya no se usan. */
   equipped?: { aura?: string; emblem?: string; skin?: string };
+  /** Estatura en cm (para el personaje 3D y el IMC). */
+  heightCm?: number;
+  /** Personaje 3D: apariencia y ropa. La forma del cuerpo NO va aquí: sale de los registros `body.logged`. */
+  character?: CharacterData;
+}
+
+// ---------- Personaje 3D ----------
+
+export const HAIR_STYLES = ['calvo', 'rapado', 'corto', 'copete', 'volumen', 'lado', 'chino'] as const;
+export type HairStyle = (typeof HAIR_STYLES)[number];
+export const BEARD_STYLES = ['ninguna', 'sombra', 'corta', 'completa', 'candado', 'bigote'] as const;
+export type BeardStyle = (typeof BEARD_STYLES)[number];
+export const TOP_STYLES = ['ninguna', 'playera', 'manga-larga', 'camisa', 'sudadera'] as const;
+export type TopStyle = (typeof TOP_STYLES)[number];
+export const BOTTOM_STYLES = ['short', 'jeans', 'pantalon', 'jogger'] as const;
+export type BottomStyle = (typeof BOTTOM_STYLES)[number];
+export const SHOE_STYLES = ['tenis', 'zapato'] as const;
+export type ShoeStyle = (typeof SHOE_STYLES)[number];
+
+/**
+ * Rasgos del rostro, cada uno de −1 a 1 (0 = promedio). Pensados para afinarse a partir de fotos:
+ * `jaw` mandíbula angosta ↔ ancha · `chin` mentón angosto ↔ ancho · `fullness` cara afilada ↔ llena ·
+ * `faceLength` cara corta ↔ larga · `midFace` de los ojos a la nariz corto ↔ largo ·
+ * `lowerFace` de la nariz al mentón corto ↔ largo · `cheeks` pómulos · `crown` cráneo bajo ↔ alto ·
+ * `forehead` frente corta ↔ amplia (altura del nacimiento del pelo) · `nose` nariz chica ↔ grande ·
+ * `noseWidth` nariz fina ↔ ancha · `brows` cejas delgadas ↔ pobladas · `browHeight` cejas bajas ↔ altas ·
+ * `eyes` ojos chicos ↔ grandes · `eyeOpen` ojos entrecerrados ↔ abiertos · `eyeSpacing` ojos juntos ↔ separados · `lips` labios delgados ↔ gruesos ·
+ * `mouthWidth` boca chica ↔ ancha · `ears` orejas pegadas ↔ salidas.
+ */
+export const FACE_TRAITS = [
+  'jaw',
+  'chin',
+  'fullness',
+  'faceLength',
+  'midFace',
+  'lowerFace',
+  'cheeks',
+  'crown',
+  'forehead',
+  'nose',
+  'noseWidth',
+  'brows',
+  'browHeight',
+  'eyes',
+  'eyeOpen',
+  'eyeSpacing',
+  'lips',
+  'mouthWidth',
+  'ears',
+] as const;
+export type FaceTrait = (typeof FACE_TRAITS)[number];
+
+export interface CharacterLook {
+  /** Colores en hexadecimal (#rrggbb). */
+  skin: string;
+  hair: HairStyle;
+  hairColor: string;
+  beard: BeardStyle;
+  eyeColor: string;
+  glasses: boolean;
+  face?: Partial<Record<FaceTrait, number>>;
+  /** Volumen del cabello (−1 a 1): arriba, al frente y a los lados. */
+  hairShape?: { top?: number; front?: number; sides?: number };
+  /** Qué tan cerrada se ve la sombra de barba (−1 apenas visible ↔ 1 marcada). */
+  beardTone?: number;
+  /** Ajuste fino de proporciones (−1 a 1): hombros angostos ↔ anchos, piernas cortas ↔ largas. */
+  build?: { shoulders?: number; legs?: number };
+}
+
+export interface CharacterOutfit {
+  top: TopStyle;
+  topColor: string;
+  bottom: BottomStyle;
+  bottomColor: string;
+  shoes: ShoeStyle;
+  shoesColor: string;
+  watch: boolean;
+  cap: boolean;
+  capColor: string;
+}
+
+export interface CharacterData {
+  look: CharacterLook;
+  outfit: CharacterOutfit;
+}
+
+/**
+ * Apariencia por defecto = la del usuario, afinada contra una foto suya (ver "Parecido con el usuario" en
+ * CLAUDE.md). Lo que guarde en Perfil → Apariencia / Ropa (`settings.character`) gana sobre esto.
+ */
+export const DEFAULT_CHARACTER: CharacterData = {
+  look: {
+    skin: '#d8a58e',
+    hair: 'copete',
+    hairColor: '#1a1514',
+    beard: 'sombra',
+    beardTone: -0.5,
+    eyeColor: '#2f1f1a',
+    glasses: false,
+    face: {
+      jaw: 0.3,
+      chin: 0,
+      fullness: 0.3,
+      faceLength: -0.3,
+      midFace: -0.8,
+      lowerFace: 0.25,
+      cheeks: 0.5,
+      crown: -0.2,
+      forehead: 0.3,
+      nose: -0.3,
+      noseWidth: 0.05,
+      brows: 0.2,
+      browHeight: 0.1,
+      eyes: 0.35,
+      eyeOpen: 0.3,
+      eyeSpacing: 0.2,
+      lips: 0.7,
+      mouthWidth: 0.5,
+      ears: 0,
+    },
+    hairShape: { top: -0.1, front: 0, sides: 0.5 },
+  },
+  outfit: {
+    top: 'camisa',
+    topColor: '#f1efe9',
+    bottom: 'pantalon',
+    bottomColor: '#23272f',
+    shoes: 'zapato',
+    shoesColor: '#3b2416',
+    watch: true,
+    cap: false,
+    capColor: '#23272f',
+  },
+};
+
+/** Completa lo que falte con los valores por defecto (para ajustes guardados con versiones anteriores). */
+export function resolveCharacter(c: Partial<CharacterData> | null | undefined): CharacterData {
+  return {
+    look: { ...DEFAULT_CHARACTER.look, ...(c?.look ?? {}) },
+    outfit: { ...DEFAULT_CHARACTER.outfit, ...(c?.outfit ?? {}) },
+  };
 }
 
 export interface MainQuestData {

@@ -2,11 +2,11 @@ import type { Ctx } from '../context';
 import { entitiesOf, ofType } from '../context';
 import type { SavingsData } from '../../types';
 import { weekStart } from '../../util/dates';
+import { measureDates, measuresAsOf, type BodyMeasures } from '../physique';
 
-export interface BodyEntry {
+export interface BodyEntry extends BodyMeasures {
   eventId: string;
   date: string;
-  weightKg?: number;
   workout?: string;
   note?: string;
 }
@@ -18,11 +18,15 @@ export interface BodyState {
   workoutsThisWeek: number;
   /** Horas de sueño por día (del check-in de la mañana). */
   sleep: { date: string; hours: number }[];
+  /** Último valor conocido de cada medida (peso, % de grasa, contornos). */
+  latest: BodyMeasures;
+  /** Fechas en las que cambió alguna medida (puntos de la línea de tiempo del personaje). */
+  measureDates: string[];
 }
 
 /** Cuerpo: peso, entrenamientos y sueño. Solo registro: no da XP (la XP viene de las misiones). */
 export function reduceBody(ctx: Ctx): BodyState {
-  const entries: BodyEntry[] = ofType<{ weightKg?: number; workout?: string; note?: string }>(ctx, 'body.logged').map((e) => ({ eventId: e.id, date: e.localDate, ...e.payload }));
+  const entries: BodyEntry[] = ofType<BodyMeasures & { workout?: string; note?: string }>(ctx, 'body.logged').map((e) => ({ eventId: e.id, date: e.localDate, ...e.payload }));
   const weights = entries.filter((e) => typeof e.weightKg === 'number');
   const wk = weekStart(ctx.today);
   const sleepByDate = new Map<string, number>();
@@ -33,6 +37,8 @@ export function reduceBody(ctx: Ctx): BodyState {
     firstWeight: weights.length ? { date: weights[0].date, kg: weights[0].weightKg! } : null,
     workoutsThisWeek: entries.filter((e) => e.workout?.trim() && e.date >= wk).length,
     sleep: [...sleepByDate.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([date, hours]) => ({ date, hours })),
+    latest: measuresAsOf(entries, ctx.today),
+    measureDates: measureDates(entries),
   };
 }
 

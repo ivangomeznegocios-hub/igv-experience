@@ -1,11 +1,14 @@
 import { z } from 'zod';
 import { ATTRIBUTE_IDS, COMPLETION_KINDS, DAILY_SLOTS, MISSION_SIZES, PLACE_STATUSES } from './types';
 import { isDateString } from './util/dates';
+import { BODY_MEASURE_KEYS } from './engine/physique';
 
 const attr = z.enum(ATTRIBUTE_IDS);
 const size = z.enum(MISSION_SIZES);
 const date = z.string().refine(isDateString, 'Fecha inválida (YYYY-MM-DD)');
 const id = z.string().min(1).max(100);
+/** Contorno medido con cinta, en cm. */
+const girth = z.number().positive().max(300);
 
 /**
  * Catálogo de tipos de evento. Cada módulo registra aquí los suyos.
@@ -86,13 +89,24 @@ export const EVENT_SCHEMAS = {
   'goal.progress': z.object({ goalId: id, amount: z.number().positive().max(1e9), note: z.string().max(2000).optional() }),
   'vice.relapse': z.object({ viceId: id, note: z.string().max(2000).optional() }),
   'library.finished': z.object({ bookId: id, title: z.string().min(1).max(300), size, attribute: attr, note: z.string().max(4000).optional() }),
+  /** Cuerpo: peso, % de grasa y contornos (dan forma al personaje 3D), entrenamiento o nota. No da XP. */
   'body.logged': z
     .object({
       weightKg: z.number().positive().max(500).optional(),
+      bodyFatPct: z.number().min(2).max(70).optional(),
+      neckCm: girth.optional(),
+      shouldersCm: girth.optional(),
+      chestCm: girth.optional(),
+      waistCm: girth.optional(),
+      hipsCm: girth.optional(),
+      armCm: girth.optional(),
+      forearmCm: girth.optional(),
+      thighCm: girth.optional(),
+      calfCm: girth.optional(),
       workout: z.string().max(300).optional(),
       note: z.string().max(2000).optional(),
     })
-    .refine((p) => p.weightKg !== undefined || !!p.workout?.trim() || !!p.note?.trim(), 'Registra peso, entrenamiento o nota'),
+    .refine((p) => BODY_MEASURE_KEYS.some((k) => p[k] !== undefined) || !!p.workout?.trim() || !!p.note?.trim(), 'Registra una medida, entrenamiento o nota'),
   // --- Planear, retos y compromisos ---
   /** Las (máx. 3) cosas que planeas para un día. La última versión para ese día gana. No da XP. */
   'plan.set': z.object({

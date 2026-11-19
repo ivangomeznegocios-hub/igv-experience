@@ -1,4 +1,4 @@
-import { EVENT_LABELS, MISSION_SIZE_NAMES, addDays, type EventType, type GameEvent } from '@igv/core';
+import { EVENT_LABELS, MISSION_SIZE_NAMES, addDays, describeMeasures, type EventType, type GameEvent } from '@igv/core';
 import { restoreEvent, useGame, voidEvent } from '../data/store';
 import { fmtDate, fmtMoney, fmtWeekday } from '../lib/time';
 import { Badge, Empty, Sheet, confirmAction } from './kit';
@@ -48,7 +48,7 @@ export function describeEvent(e: GameEvent, currency = 'MXN'): string {
     case 'library.finished':
       return p.title;
     case 'body.logged':
-      return [p.weightKg ? `${p.weightKg} kg` : '', p.workout ?? '', p.note ?? ''].filter(Boolean).join(' · ');
+      return [describeMeasures(p), p.workout ?? '', p.note ?? ''].filter(Boolean).join(' · ');
     case 'savings.moved':
       return fmtMoney(p.amount, currency);
     default:

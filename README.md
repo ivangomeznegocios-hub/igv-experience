@@ -23,7 +23,8 @@ Mecánicas de juego, lenguaje y estética sobrios de app de rendimiento personal
 | 5. Registro rápido | Botón **+** para registrar todo con un toque (misión sin catálogo, dinero con montos rápidos, persona, agenda, meta, cuerpo, descanso, días pasados), rutina de diarias con checks y "Deshacer", deslizar para completar, favoritos, agenda, misión sorpresa con bono, oro y tienda de premios reales, avatar que evoluciona, sonidos y vibración, cierre del día, reporte semanal con resumen del Coach, registro por texto libre con el Coach, notificaciones push, Mi vida en semanas por año calendario con zoom a año y a días, hitos de vida, historial en calendario, estadísticas, metas con contador, hábitos a dejar, presupuesto y ahorro, biblioteca, cuerpo, buscador y "Mi año en review" (imagen/PDF) |
 | 6. Experiencia en vivo | Identidad visual sobria en grafito y oro con tipografía Plus Jakarta Sans (más estilos de color desbloqueables), monograma evolutivo (iniciales + anillo de nivel), **Modo enfoque** (temporizador/cronómetro, sub-pasos, avance del reto vinculado y sonido ambiental de fuego/lluvia), Resumen del día local sin IA, lo que tienes a tu favor / en contra y Reto del día, grandes retos con ícono y barra de avance segmentada, **Estilo de la app** en la tienda (paletas de color con oro), **Cierre del día**, celebraciones de logros, día perfecto y avance en retos, mapa interactivo (por conocer → conocido → habitual), árbol visual de habilidades, tarjetas de misión aceptables con un toque en el Coach y dictado por voz |
 | 7. Vida real | Lenguaje sobrio (Perfil, Grandes retos, Mi gente, Coach, Cierre del día), **Tus 3 de hoy** (planear el día y mañana, bono de oro al cumplir), **Tú vs. tú** contra la semana pasada a la misma hora, **Récords y datos** (récords personales, patrones de sueño/día/hora, ritmo de metas e ingresos), **Retos de N días** (no rompas la cadena), **Compromisos** con oro en juego, bono sorpresa al cerrar el día y **resumen semanal** compartible por imagen o WhatsApp |
-| 8. Conectar IA | **Servidor MCP** para usar tu app desde Claude (web, escritorio, celular y Claude Code), ChatGPT, Codex, Antigravity o Cursor: ve tu progreso y registra, planea y organiza por ti desde el chat. Conexión con inicio de sesión (OAuth, apruebas en la app) o con llaves, modo solo lectura, **bitácora de lo que hizo la IA con "Deshacer"**, y el **Coach de la app ahora también actúa** (registra por ti) |
+| 8. Personaje 3D | **Tu personaje** en Perfil: figura 3D que giras con el dedo y que toma tu complexión de tus medidas reales (estatura, peso, % de grasa y contornos), con **línea de tiempo** para ver cómo cambia tu cuerpo, apariencia afinada a tu cara a partir de una foto y editable (tono de piel, cabello, barba, ojos, lentes y 19 rasgos del rostro a detalle) y **ropa** (playera, manga larga, camisa, sudadera, jeans, pantalón, pants, short, tenis, zapatos, reloj, gorra) |
+| 9. Conectar IA | **Servidor MCP** para usar tu app desde Claude (web, escritorio, celular y Claude Code), ChatGPT, Codex, Antigravity o Cursor: ve tu progreso y registra, planea y organiza por ti desde el chat. Conexión con inicio de sesión (OAuth, apruebas en la app) o con llaves, modo solo lectura, **bitácora de lo que hizo la IA con "Deshacer"**, y el **Coach de la app ahora también actúa** (registra por ti) |
 
 Los números del juego están en [`packages/core/src/config/game.ts`](packages/core/src/config/game.ts).
 Las reglas y decisiones técnicas están en [`CLAUDE.md`](CLAUDE.md).
@@ -60,6 +61,10 @@ Resumen de lo que se hace (a mano son unos 5 minutos):
 
 La primera vez te pedirá tu fecha de nacimiento (para *Mi vida en semanas*) y, en Perfil, calificar
 tus 7 atributos iniciales con la guía de 30 y 70.
+
+**Tu personaje 3D** (Perfil): en la pestaña *Medidas* registra tu estatura y tu peso (y si puedes, % de
+grasa y cintura) para que la figura tome tu complexión. Vuelve a medirte cada 2 a 4 semanas y en
+*Evolución* verás cómo cambias. *Apariencia* y *Ropa* se ajustan a tu gusto; no da XP.
 
 ### (Opcional) Activa el Coach IA
 

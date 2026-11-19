@@ -22,6 +22,8 @@ código los nombres internos se conservan (módulos, tipos de evento, ids, rutas
 | `map` (`inexplorado`/`descubierto`/`dominado`) | Mapa: por conocer / conocido / habitual; "primera visita" |
 | `habits/vice`, `/enemigos` | Hábitos a dejar ("recaída") |
 | `/personaje` | Perfil ("Tu fuerte" = atributo más alto) |
+| `character/`, `settings.character`, `CharacterCard` | Tu personaje (3D): Evolución · Medidas · Apariencia · Ropa (`copete` = Copete; `sombra` = barba de 1–2 días) |
+| `Physique`, `physiqueFrom` | Complexión (peso, grasa, masa magra, contornos) |
 | `/mas` (pestaña) | Más |
 | `/inventario` | Dinero y recursos |
 | `/game-master`, `/api/gm/*` | Coach |
@@ -42,6 +44,7 @@ packages/core   Reglas del juego en TypeScript puro (sin red ni DOM). Probadas c
                        habilidades, mapa/NPCs, temporadas, logros, atributos, misión sorpresa, oro,
                        metas, enemigos, biblioteca, cuerpo/ahorro/cierres del día, plan del día, retos).
   src/engine/insights.ts Tú vs. tú (weekPace), récords personales, "datos sobre ti" e ritmo de metas/ingresos.
+  src/engine/physique.ts Complexión del personaje 3D: medidas reales → contornos, grasa y músculo (puro, con pruebas).
   src/engine/reports.ts  Funciones puras para reportes: XP por día, reporte semanal, año en review,
                        favoritos, id de misión rápida, elección determinista por fecha.
   src/assistant/       Herramientas para IA (las usan el servidor MCP y el Coach): `snapshot.ts` (foto
@@ -55,6 +58,9 @@ apps/api        Worker de Cloudflare con Hono: /api/* (sync, eventos, catálogo,
                 Segundo Worker `igv-experience-mcp` (wrangler.mcp.jsonc, src/mcp-worker.ts): servidor MCP público
                 con OAuth; misma base D1. Ver "Conectar IA (MCP)".
 apps/web        React + Vite + PWA. Calcula el estado en el dispositivo con @igv/core.
+  src/character/       Personaje 3D (three.js, se descarga solo al abrir Perfil): geom.ts (tubos por
+                       secciones), figure.ts (cuerpo, rostro, cabello, ropa), stage.ts (cámara, luces, giro),
+                       CharacterView.tsx (lienzo). La tarjeta y sus formularios: ui/CharacterCard.tsx.
 ```
 
 ### Event sourcing (decisión central)
@@ -230,6 +236,15 @@ Para usar la app desde Claude (web, escritorio, móvil, Claude Code), ChatGPT, C
   Pantalla `/records`; aviso de récord en vivo con `ui/RecordWatcher.tsx`.
 - Resumen semanal para compartir (`ui/WeekShare.tsx`): imagen PNG o texto por WhatsApp al compañero de
   cuentas (`settings.partner`).
+- Personaje 3D (Perfil): la **forma del cuerpo nunca se guarda**; sale de los registros `body.logged` (peso,
+  `bodyFatPct` y contornos en cm: cuello, hombros, pecho, cintura, cadera, brazo, antebrazo, muslo, pantorrilla)
+  y de `settings.heightCm`, vía `physiqueAsOf(registros, fecha)` → `physiqueFrom` (`engine/physique.ts`). Lo
+  medido siempre gana; lo que falta se estima (grasa: por cintura/estatura, o por IMC y edad; contornos: por
+  grasa e índice de masa magra). Si el peso se registró DESPUÉS de una medida (lo normal: peso seguido, cinta de
+  vez en cuando), esa medida vieja se proyecta con el cambio de peso conservando la diferencia personal contra
+  la estimación, y se marca como estimada (≈). La línea de tiempo son las fechas en que alguna medida cambió
+  (`measureDates`); se anima con `lerpPhysique`; los cambios solo se muestran entre valores medidos.
+  Apariencia y ropa sí son ajustes: `settings.character` (`look` + `outfit`, ver "Personaje 3D"). No da XP.
 - Sin XP (solo registro): enemigos (`habits/vice`, `vice.relapse`; cuenta días sin caer), cuerpo
   (`body.logged`), ahorro (`finance/savings`, `savings.moved`), presupuesto (`settings.budgets`), cierre del
   día (`day.closed`).
@@ -262,7 +277,31 @@ cd apps/api && pnpm dev:mcp   # servidor MCP en :8788 (misma D1 local)
 - Un solo Worker con Static Assets (no Pages + Worker): una URL, una política de Access, sin CORS.
 - Estado de la app con un store propio (`useSyncExternalStore` + IndexedDB) en lugar de TanStack Query:
   hace falta cola sin conexión y proyección local; es más simple así.
-- Sin librería de UI ni de íconos: CSS propio con tokens (`apps/web/src/styles.css`, paleta grafito y oro + estilos de color desbloqueables `[data-skin]`, tipografía `Plus Jakarta Sans` (también como `--font-display`, peso 800 y tracking cerrado) + `JetBrains Mono`; sin serif medieval) e íconos SVG en `ui/icons.tsx`. Tema claro/oscuro/automático (`lib/theme.ts`). Gráficas SVG propias (`ui/charts.tsx`), monograma evolutivo con iniciales, marco por título y anillo de avance de nivel (`ui/Avatar.tsx`), ícono sobrio de cada gran reto en un mosaico redondeado con anillo de avance opcional y barra de avance segmentada (`ui/BossArt.tsx`; `BossHpBar` recibe lo que falta y pinta el avance), mapa SVG por conocer/conocido/habitual (`screens/Mapa.tsx`) y árbol visual de habilidades (`screens/Habilidades.tsx`).
+- **Personaje 3D** (`apps/web/src/character/`): figura humana 100 % paramétrica, sin modelos ni texturas
+  externas. Todo (torso, brazos, piernas, cabeza, ropa) son "lofts": tubos que pasan por anillos horizontales
+  con forma de superelipse (`geom.ts`); la ropa es el mismo perfil del cuerpo con holgura (`garment`: `ease` =
+  holgura, `fit` = qué tanto cae recta la tela). La piel que la ropa tapa no se dibuja. Unidades en metros,
+  pies en y = 0, mira a +Z. Única dependencia de UI del proyecto: `three`, en un archivo aparte que solo se
+  descarga al abrir Perfil (`lazy`). Dibuja solo cuando algo cambia (giro, inercia, transición); en táctil el
+  gesto horizontal gira y el vertical desplaza la página (`touch-action: pan-y`); pellizco = acercar.
+  El anillo del piso es el avance al siguiente nivel. Estética sobria tipo maniquí realista (nada caricatura).
+  Para probarlo en local sin GPU: Chromium con `--use-gl=angle --use-angle=swiftshader`.
+  - **Cabeza**: los rasgos van en alturas `t` (0 = mentón, ~1 = coronilla) con proporciones anatómicas (ojos a
+    media cabeza, base de la nariz a ~7 cm del mentón). Ojos, cejas, fosas, labios y sombra de barba son parches
+    pintados por vértice con transparencia (bordes difuminados, sin recuadros). Mapeo de tonos neutro: los
+    colores se ven como su hex.
+  - **Parecido con el usuario**: `DEFAULT_CHARACTER.look` (`packages/core/src/types.ts`) ES su cara, afinada
+    contra una foto suya (cara ancha y llena, frente amplia, cejas gruesas y bajas, nariz corta y ancha, copete
+    peinado hacia atrás y a su izquierda, barba de uno o dos días). Si guarda otra apariencia en Ajustes, gana la
+    guardada. Para volver a afinar con fotos nuevas: `look.skin`/`hairColor`/`eyeColor` (hex de la foto), `hair`
+    (incluye `copete`), `hairShape` (volumen arriba / al frente / a los lados), `beard` + `beardTone`, `glasses`,
+    `face` (19 rasgos de −1 a 1, ver `FACE_TRAITS`) y `build`. Método que funcionó: medir la foto en unidades de
+    distancia entre pupilas (alturas de nacimiento del pelo, cejas, nariz, boca, mentón; anchos de pómulos,
+    mandíbula, ojos, nariz, boca), renderizar frente / tres cuartos / perfil junto a la foto (página de
+    laboratorio local con `Stage` + Chromium con SwiftShader) y comparar; cuando un rasgo llega a ±1 y aún no
+    alcanza, el problema es del modelo (anillos o relieve en `figure.ts`), no del valor. La complexión NO se
+    ajusta a ojo: se registra con medidas reales.
+- Sin librería de UI ni de íconos (salvo `three` para el personaje 3D): CSS propio con tokens (`apps/web/src/styles.css`, paleta grafito y oro + estilos de color desbloqueables `[data-skin]`, tipografía `Plus Jakarta Sans` (también como `--font-display`, peso 800 y tracking cerrado) + `JetBrains Mono`; sin serif medieval) e íconos SVG en `ui/icons.tsx`. Tema claro/oscuro/automático (`lib/theme.ts`). Gráficas SVG propias (`ui/charts.tsx`), monograma evolutivo con iniciales, marco por título y anillo de avance de nivel (`ui/Avatar.tsx`), ícono sobrio de cada gran reto en un mosaico redondeado con anillo de avance opcional y barra de avance segmentada (`ui/BossArt.tsx`; `BossHpBar` recibe lo que falta y pinta el avance), mapa SVG por conocer/conocido/habitual (`screens/Mapa.tsx`) y árbol visual de habilidades (`screens/Habilidades.tsx`).
 - Experiencia en vivo (fase 6, sin migraciones D1):
   - **Modo enfoque** (`ui/QuestMode.tsx`): pantalla de enfoque con cronómetro o cuenta regresiva persistente en `localStorage`, sub-pasos de sesión, avance del gran reto vinculado y audio ambiental sintético (`lib/sound.ts`: fuego / lluvia con WebAudio).
   - **Resumen del día y Reto del día** (`lib/narrator.ts`): resumen del día con tono de coach, lo que tienes a tu favor / en contra, reto del día y vínculo reto↔misión calculados 100 % en el cliente desde `GameState` (sin IA ni costo).
