@@ -12,7 +12,8 @@ export type XpSource =
   | 'discovery'
   | 'bounty'
   | 'goal'
-  | 'library';
+  | 'library'
+  | 'challenge';
 
 /** Una línea del libro de XP. Siempre amount ≥ 0 (la XP nunca se resta). */
 export interface XpEntry {

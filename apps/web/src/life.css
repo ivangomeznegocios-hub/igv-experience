@@ -1,0 +1,39 @@
+/* Estilos de las funciones de "vida real": tú vs. tú, plan del día, retos, compromisos, récords. */
+.vs-bars { display: grid; gap: 8px; margin: 10px 0 6px; }
+.vs-row { display: grid; grid-template-columns: 92px 1fr 64px; align-items: center; gap: 8px; font-size: 13px; }
+.vs-track { height: 10px; border-radius: 999px; background: var(--card-2); overflow: hidden; border: 1px solid var(--line); }
+.vs-fill { height: 100%; border-radius: 999px; background: var(--gold); transition: width 0.4s ease; }
+.vs-fill.past { background: var(--faint); }
+.vs-num { text-align: right; font-family: var(--font-mono); font-weight: 700; }
+.vs-verdict { font-weight: 750; }
+.vs-verdict.up { color: var(--green); }
+.vs-verdict.down { color: var(--flame); }
+
+.plan-item { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid var(--line); cursor: pointer; }
+.plan-item:first-child { border-top: 0; }
+.plan-check { width: 26px; height: 26px; flex: none; border-radius: 8px; border: 2px solid var(--line); display: grid; place-items: center; color: transparent; }
+.plan-item.done .plan-check { background: var(--green); border-color: var(--green); color: #fff; }
+.plan-item.done .item-title { color: var(--muted); text-decoration: line-through; }
+.plan-num { font-family: var(--font-mono); color: var(--faint); font-weight: 800; width: 14px; }
+
+.chain { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; margin: 10px 0 4px; }
+.chain span { aspect-ratio: 1; border-radius: 6px; background: var(--card-2); border: 1px solid var(--line); display: grid; place-items: center; font-size: 10px; color: var(--faint); font-family: var(--font-mono); }
+.chain span.ok { background: color-mix(in srgb, var(--green) 85%, transparent); border-color: var(--green); color: #fff; }
+.chain span.today { border: 2px solid var(--gold); color: var(--text); }
+.chain span.miss { background: color-mix(in srgb, var(--red) 25%, var(--card-2)); border-color: var(--red); color: var(--red); }
+
+.record { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.record:first-child { border-top: 0; }
+.record-val { font-family: var(--font-mono); font-weight: 800; font-size: 18px; text-align: right; }
+.record.new .record-val { color: var(--gold); }
+
+.insight { display: flex; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+.insight:first-child { border-top: 0; }
+.insight-dot { width: 8px; height: 8px; margin-top: 7px; border-radius: 50%; flex: none; background: var(--season); }
+.insight-dot.good { background: var(--green); }
+.insight-dot.warn { background: var(--flame); }
+
+.pace { font-size: 12px; margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: var(--card-2); border: 1px solid var(--line); }
+.pace b { font-family: var(--font-mono); }
+.pace.ahead, .pace.done { border-color: color-mix(in srgb, var(--green) 45%, var(--line)); }
+.pace.behind, .pace.overdue { border-color: color-mix(in srgb, var(--flame) 45%, var(--line)); }

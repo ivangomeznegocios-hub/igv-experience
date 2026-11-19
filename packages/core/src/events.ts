@@ -93,6 +93,22 @@ export const EVENT_SCHEMAS = {
       note: z.string().max(2000).optional(),
     })
     .refine((p) => p.weightKg !== undefined || !!p.workout?.trim() || !!p.note?.trim(), 'Registra peso, entrenamiento o nota'),
+  // --- Planear, retos y compromisos ---
+  /** Las (máx. 3) cosas que planeas para un día. La última versión para ese día gana. No da XP. */
+  'plan.set': z.object({
+    forDate: date,
+    items: z
+      .array(z.object({ missionId: id, title: z.string().min(1).max(300), size, attribute: attr, kind: z.enum(COMPLETION_KINDS) }))
+      .max(3),
+  }),
+  /** Empieza (o reinicia tras fallar) un reto de N días seguidos. */
+  'challenge.started': z.object({ challengeId: id }),
+  /** Marca un día del reto como cumplido. */
+  'challenge.checked': z.object({ challengeId: id }),
+  /** Compromiso: apuestas oro a que cumples algo antes de una fecha. */
+  'pledge.made': z.object({ pledgeId: id, title: z.string().min(1).max(300), stake: z.number().int().positive().max(100000), deadline: date }),
+  /** Resultado de un compromiso (cuenta el primero). */
+  'pledge.resolved': z.object({ pledgeId: id, kept: z.boolean() }),
   /** Movimiento a una meta de ahorro (positivo = aportar, negativo = retirar). Dinero real: no da XP. */
   'savings.moved': z.object({ goalId: id, amount: z.number().refine((n) => n !== 0 && Math.abs(n) < 1e12, 'Monto inválido') }),
 } as const;
@@ -126,6 +142,11 @@ export const EVENT_LABELS: Record<EventType, string> = {
   'library.finished': 'Libro o curso terminado',
   'body.logged': 'Registro de cuerpo',
   'savings.moved': 'Movimiento de ahorro',
+  'plan.set': 'Plan del día',
+  'challenge.started': 'Reto iniciado',
+  'challenge.checked': 'Día de reto cumplido',
+  'pledge.made': 'Compromiso hecho',
+  'pledge.resolved': 'Compromiso resuelto',
 };
 
 export const eventEnvelopeSchema = z.object({

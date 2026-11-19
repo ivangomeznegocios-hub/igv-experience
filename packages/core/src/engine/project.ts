@@ -19,6 +19,8 @@ import { reduceGold, type GoldState } from './modules/gold';
 import { reduceGoals, type GoalState } from './modules/goals';
 import { reduceVices, type ViceState } from './modules/vices';
 import { reduceLibrary, type LibraryState } from './modules/library';
+import { reduceChallenges, type ChallengeState } from './modules/challenges';
+import { reducePlans, type DayPlan } from './modules/plans';
 import { reduceBody, reduceDayClosures, reduceSavings, type BodyState, type DayClosure, type SavingsState } from './modules/life-logs';
 
 export interface ProjectInput {
@@ -60,6 +62,9 @@ export interface GameState {
   body: BodyState;
   savings: Record<string, SavingsState>;
   dayClosures: Record<string, DayClosure>;
+  /** Plan de cada día (forDate → plan). */
+  plans: Record<string, DayPlan>;
+  challenges: Record<string, ChallengeState>;
 }
 
 export const DEFAULT_SETTINGS: SettingsData = {
@@ -131,11 +136,13 @@ export function project(input: ProjectInput): GameState {
   const body = reduceBody(ctx);
   const savings = reduceSavings(ctx);
   const dayClosures = reduceDayClosures(ctx);
+  const plans = reducePlans(ctx, missions);
+  const challenges = reduceChallenges(ctx);
   const achievements = reduceAchievements(ctx, { missions, streak, lessons, bosses, money, map, seasons });
   const attributes = reduceAttributes(ctx, xp);
   // El oro se calcula al final: depende de toda la XP ganada.
   xp.sort((a, b) => compareDates(a.date, b.date));
-  const gold = reduceGold(ctx, xp);
+  const gold = reduceGold(ctx, xp, { activeDays: missions.activeDays, plans });
 
   const checkin = (byType.get('checkin.morning') ?? []).filter((e) => e.localDate === today).at(-1);
   const sleepHours = checkin ? (checkin.payload as { sleepHours: number }).sleepHours : null;
@@ -169,5 +176,7 @@ export function project(input: ProjectInput): GameState {
     body,
     savings,
     dayClosures,
+    plans,
+    challenges,
   };
 }

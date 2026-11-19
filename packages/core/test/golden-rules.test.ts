@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { addDays, levelInfo, GAME_CONFIG, validateEvent } from '../src';
-import { done, ev, run } from './helpers';
+import { done, ev, run, seed } from './helpers';
 
 /** Generador pseudoaleatorio determinista para pruebas de propiedades. */
 function rng(seed: number) {
@@ -8,7 +8,7 @@ function rng(seed: number) {
 }
 
 function randomEvent(r: () => number, date: string) {
-  const k = Math.floor(r() * 16);
+  const k = Math.floor(r() * 21);
   switch (k) {
     case 0: return done(date, ['daily-leer', 'daily-entrenar', 'daily-hijo'][Math.floor(r() * 3)], 'chica', 'fuerza');
     case 1: return ev('rest_day.marked', date);
@@ -25,6 +25,11 @@ function randomEvent(r: () => number, date: string) {
     case 13: return ev('vice.relapse', date, { viceId: 'v1' });
     case 14: return ev('day.closed', date, { note: 'ok' });
     case 15: return ev('body.logged', date, { weightKg: 80 });
+    case 16: return ev('challenge.started', date, { challengeId: 'ch-1' });
+    case 17: return ev('challenge.checked', date, { challengeId: 'ch-1' });
+    case 18: return ev('plan.set', date, { forDate: date, items: [{ missionId: 'daily-leer', title: 'Leer', size: 'chica', attribute: 'fuerza', kind: 'daily' }] });
+    case 19: return ev('pledge.made', date, { pledgeId: `p${Math.floor(r() * 3)}`, title: 'x', stake: Math.floor(r() * 20) + 1, deadline: addDays(date, 7) });
+    case 20: return ev('pledge.resolved', date, { pledgeId: `p${Math.floor(r() * 3)}`, kept: r() < 0.5 });
     default: return ev('boss.phase_completed', date, { bossId: 'boss-torre', phaseIndex: Math.floor(r() * 3) });
   }
 }
@@ -34,11 +39,13 @@ describe('reglas de oro', () => {
     for (let seedN = 1; seedN <= 15; seedN++) {
       const r = rng(seedN);
       const events: any[] = [];
-      let prev = run([], '2027-03-31');
+      const ents = [...seed, { id: 'ch-1', module: 'challenges', kind: 'challenge', data: { title: 'Reto', days: 3, attribute: 'fuerza', size: 'media' } }];
+      let prev = run([], '2027-03-31', { entities: ents });
       for (let i = 0; i < 60; i++) {
         const date = addDays('2026-11-23', Math.floor(r() * 120));
         events.push(randomEvent(r, date));
-        const s = run(events, '2027-03-31');
+        const s = run(events, '2027-03-31', { entities: ents });
+        expect(s.gold.balance).toBeGreaterThanOrEqual(0);
         expect(s.xp.total).toBeGreaterThanOrEqual(prev.xp.total);
         for (const a of Object.keys(s.attributes.values) as (keyof typeof s.attributes.values)[]) {
           expect(s.attributes.values[a].value).toBeGreaterThanOrEqual(prev.attributes.values[a].value);

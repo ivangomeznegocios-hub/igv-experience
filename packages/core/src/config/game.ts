@@ -111,6 +111,25 @@ export const GAME_CONFIG = {
     xpPerGold: 10,
   },
 
+  /** Bonos de oro (nunca XP). */
+  goldBonus: {
+    /** Cumplir las 3 cosas que planeaste la noche anterior. */
+    planCompleted: 5,
+    /** Bono sorpresa al cerrar un día con al menos una misión: se elige por fecha (no se puede "re-tirar"). */
+    dayCloseOptions: [2, 3, 3, 4, 5, 5, 6, 8, 10, 15, 25],
+  },
+
+  /** Compromisos: apuestas oro a que cumples algo. Si cumples recibes stake × multiplier; si no, lo pierdes. */
+  pledge: {
+    payoutMultiplier: 2,
+  },
+
+  /** Retos de N días seguidos: duración por defecto y tamaño de la recompensa al completarlo. */
+  challenge: {
+    defaultDays: 30,
+    defaultSize: 'grande',
+  },
+
   /** Misión sorpresa del día: bono sobre la XP normal de la misión si la completas ese mismo día. */
   bounty: {
     bonusPercent: 50,

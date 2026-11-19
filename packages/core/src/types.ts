@@ -71,6 +71,8 @@ export interface SettingsData {
   budgets?: Record<string, number>;
   /** Logros que el avatar muestra como insignias (máx. 3). */
   avatarBadges?: string[];
+  /** Compañero de cuentas: a quién le mandas tu resumen semanal (WhatsApp opcional, solo dígitos con lada). */
+  partner?: { name: string; phone?: string };
   /** Estilo de color de la app (`skin`). `aura` y `emblem` son de una versión anterior y ya no se usan. */
   equipped?: { aura?: string; emblem?: string; skin?: string };
 }
@@ -261,6 +263,18 @@ export interface SavingsData {
   target: number;
 }
 
+/** Reto de N días seguidos ("30 días leyendo"). Se inicia con `challenge.started` y se marca con `challenge.checked`. */
+export interface ChallengeData {
+  title: string;
+  /** Duración en días (por defecto 30). */
+  days: number;
+  attribute: AttributeId;
+  /** Tamaño de la recompensa al completarlo (misma XP que una misión). */
+  size: MissionSize;
+  /** Oculto de la lista (su XP se conserva). */
+  archived?: boolean;
+}
+
 export const BOOK_TYPES = ['libro', 'curso', 'audiolibro'] as const;
 export const BOOK_STATUSES = ['pendiente', 'leyendo'] as const;
 export type BookStatus = (typeof BOOK_STATUSES)[number];
@@ -302,6 +316,7 @@ export const ENTITY_KINDS: Record<string, readonly string[]> = {
   finance: ['savings'],
   library: ['book'],
   life: ['milestone'],
+  challenges: ['challenge'],
 };
 
 export function isValidEntityKind(module: string, kind: string): boolean {

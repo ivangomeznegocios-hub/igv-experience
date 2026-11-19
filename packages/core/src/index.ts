@@ -19,8 +19,12 @@ export type { SeasonsState, JournalEntry, SeasonReview } from './engine/modules/
 export type { MapState, PlaceState, NpcsState, NpcState, GeneratedMission } from './engine/modules/world';
 export type { MoneyState, MonthMoney } from './engine/modules/money';
 export type { BountyState, BountyInfo } from './engine/modules/bounty';
-export type { GoldState, Redemption } from './engine/modules/gold';
-export { goldFor } from './engine/modules/gold';
+export type { GoldState, Redemption, GoldBonus, Pledge } from './engine/modules/gold';
+export { goldFor, dayCloseBonus } from './engine/modules/gold';
+export type { ChallengeState, ChallengeAttempt } from './engine/modules/challenges';
+export { challengeDayNumber } from './engine/modules/challenges';
+export type { DayPlan, PlanItem } from './engine/modules/plans';
+export * from './engine/insights';
 export type { GoalState } from './engine/modules/goals';
 export type { ViceState } from './engine/modules/vices';
 export type { LibraryState } from './engine/modules/library';
