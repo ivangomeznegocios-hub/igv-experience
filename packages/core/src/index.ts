@@ -55,4 +55,6 @@ export * from './assistant/toolkit';
 // [[salud]]
 
 // [[habitos]]
+export * from './engine/habits';
+export * from './engine/day-review';
 

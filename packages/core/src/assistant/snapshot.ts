@@ -155,6 +155,38 @@ export interface AssistantSnapshot {
   // [[salud]]
 
   // [[habitos]]
+  /** Hábitos de la rutina, sugerencias "Hazlo hábito" y análisis de hábitos a dejar (engine/habits.ts). */
+  habits?: {
+    last7: number | null;
+    last30: number | null;
+    counts: { bien: number; medias: number; flojo: number; nuevo: number };
+    routine: {
+      id: string;
+      title: string;
+      verdict: import('../engine/habits').HabitVerdict;
+      rate7: number | null;
+      rate30: number | null;
+      streak: number;
+      best: number;
+      trend: import('../engine/habits').HabitTrend | null;
+      trendPoints: number | null;
+      weakDays: number[];
+      days: number[];
+      since: string;
+      dueToday: boolean;
+      doneToday: boolean;
+    }[];
+    suggestions: { title: string; times: number; windowDays: number; days: number[]; dailyId: string | null }[];
+    vices: {
+      id: string;
+      relapses30: number;
+      relapsesPrev30: number;
+      trend: import('../engine/habits').HabitTrend | null;
+      verdict: import('../engine/habits').HabitVerdict;
+      worstWeekday: number | null;
+      everyDays: number | null;
+    }[];
+  };
 
 }
 
@@ -419,6 +451,40 @@ export function buildSnapshot(
     // [[salud]]
 
     // [[habitos]]
+    habits: {
+      last7: state.habits.summary.last7.rate,
+      last30: state.habits.summary.last30.rate,
+      counts: { bien: state.habits.summary.bien, medias: state.habits.summary.medias, flojo: state.habits.summary.flojo, nuevo: state.habits.summary.nuevo },
+      routine: state.habits.routine.map((h) => ({
+        id: h.id,
+        title: h.title,
+        verdict: h.verdict,
+        rate7: h.last7.rate,
+        rate30: h.last30.rate,
+        streak: h.streak,
+        best: h.best,
+        trend: h.trend,
+        trendPoints: h.trendPoints,
+        weakDays: h.weakDays,
+        days: h.days,
+        since: h.since,
+        dueToday: h.dueToday,
+        doneToday: h.doneToday,
+      })),
+      suggestions: state.habits.suggestions.map((x) => ({ title: x.title, times: x.times, windowDays: x.windowDays, days: x.days, dailyId: x.dailyId })),
+      vices: list<ViceData>('habits', 'vice').map((v) => {
+        const st = state.vices[v.id];
+        return {
+          id: v.id,
+          relapses30: st?.relapses30 ?? 0,
+          relapsesPrev30: st?.relapsesPrev30 ?? 0,
+          trend: st?.trend ?? null,
+          verdict: st?.verdict ?? 'nuevo',
+          worstWeekday: st?.worstWeekday ?? null,
+          everyDays: st?.everyDays ?? null,
+        };
+      }),
+    },
 
   };
 }

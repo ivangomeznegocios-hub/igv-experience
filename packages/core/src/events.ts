@@ -142,6 +142,8 @@ export const EVENT_SCHEMAS = {
   // [[salud]]
 
   // [[habitos]]
+  /** "¿Cómo fue tu día?": no había nada que registrar en una revisión (p. ej., "No gasté nada"). No da XP. */
+  'day.check_skipped': z.object({ checkId: id, label: z.string().max(100).optional() }),
 
 } as const;
 
@@ -195,6 +197,7 @@ export const EVENT_LABELS: Record<EventType, string> = {
   // [[salud]]
 
   // [[habitos]]
+  'day.check_skipped': 'Nada que registrar',
 
 };
 

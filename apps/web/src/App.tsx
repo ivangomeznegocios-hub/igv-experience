@@ -56,6 +56,8 @@ const ConectarIA = lazy(() => import('./screens/ConectarIA'));
 // [[salud]]
 
 // [[habitos]]
+const Habitos = lazy(() => import('./screens/Habitos'));
+const Dia = lazy(() => import('./screens/Dia'));
 
 
 const PROGRESS = ['/progreso', '/jefes', '/logros', '/habilidades', '/temporadas', '/metas', '/estadisticas', '/reporte', '/anual', '/tienda', '/historial', '/retos', '/records'];
@@ -231,6 +233,8 @@ export default function App() {
                 {/* [[salud]] */}
 
                 {/* [[habitos]] */}
+                <Route path="/habitos" element={<Habitos />} />
+                <Route path="/dia" element={<Dia />} />
 
                 <Route path="*" element={<Hoy />} />
               </Routes>

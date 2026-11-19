@@ -39,6 +39,7 @@ import { reduceBody, reduceDayClosures, reduceSavings, type BodyState, type DayC
 // [[salud]]
 
 // [[habitos]]
+import { reduceHabits, type HabitsState } from './habits';
 
 
 export interface ProjectInput {
@@ -100,6 +101,8 @@ export interface GameState {
   // [[salud]]
 
   // [[habitos]]
+  /** Hábitos de la rutina (cumplimiento, rachas, tendencia) y sugerencias "Hazlo hábito". Solo análisis. */
+  habits: HabitsState;
 
 }
 
@@ -191,6 +194,7 @@ export function project(input: ProjectInput): GameState {
   // [[salud]]
 
   // [[habitos]]
+  const habits = reduceHabits(ctx, { missions, streak });
 
   const achievements = reduceAchievements(ctx, { missions, streak, lessons, bosses, money, map, seasons });
   const attributes = reduceAttributes(ctx, xp);
@@ -248,6 +252,7 @@ export function project(input: ProjectInput): GameState {
     // [[salud]]
 
     // [[habitos]]
+    habits,
 
   };
 }

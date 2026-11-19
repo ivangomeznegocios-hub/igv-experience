@@ -80,6 +80,7 @@ export const EVENT_TEXT: Record<string, string> = {
   // [[salud]]
 
   // [[habitos]]
+  'day.check_skipped': 'Nada que registrar',
 
 };
 
@@ -186,6 +187,9 @@ export function describeEvent(e: GameEvent, byId: Map<string, Entity>, currency 
     // [[salud]]
 
     // [[habitos]]
+    case 'day.check_skipped':
+      detail = String(p.label ?? p.checkId);
+      break;
 
   }
   return detail ? `${label}: ${detail}` : label;

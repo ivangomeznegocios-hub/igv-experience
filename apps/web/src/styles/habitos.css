@@ -1,0 +1,115 @@
+/* Hábitos y "¿Cómo fue tu día?" (screens/Habitos.tsx, screens/Dia.tsx, ui/HabitBits.tsx, ui/DayReview.tsx). */
+
+/* ---------- Anillo de % ---------- */
+.day-ring { position: relative; flex: none; display: grid; place-items: center; }
+.day-ring svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.day-ring .track { stroke: var(--card-2); }
+.day-ring .fill { stroke: var(--gold); transition: stroke-dashoffset 0.5s ease; }
+.day-ring.full .fill { stroke: var(--green); }
+.day-ring b { position: relative; font-family: var(--font-mono); font-weight: 800; letter-spacing: -0.03em; }
+.day-ring b small { font-size: 0.6em; opacity: 0.7; margin-left: 1px; }
+
+/* ---------- Fila compacta en Hoy ---------- */
+.day-row { display: flex; align-items: center; gap: 12px; text-decoration: none; color: inherit; padding: 12px 14px; }
+.day-row:active { transform: scale(0.99); }
+.day-row .grow b { font-size: 15px; }
+.hab-highlight { display: flex; align-items: center; gap: 10px; padding: 10px 14px; font-size: 13px; }
+.hab-highlight > svg:first-child { width: 20px; height: 20px; color: var(--gold); flex: none; }
+.hab-highlight a { color: inherit; text-decoration: none; }
+
+/* ---------- Tira de 30 días ---------- */
+.hab-strip { display: grid; grid-template-columns: repeat(30, minmax(0, 1fr)); gap: 2px; margin-top: 8px; }
+.hab-d { aspect-ratio: 1; min-width: 0; border-radius: 3px; background: var(--card-2); border: 1px solid transparent; }
+.hab-d.done { background: var(--green); }
+.hab-d.extra { background: color-mix(in srgb, var(--green) 35%, var(--card-2)); border-color: color-mix(in srgb, var(--green) 55%, transparent); }
+.hab-d.missed { background: color-mix(in srgb, var(--red) 55%, var(--card-2)); }
+.hab-d.rest { background: color-mix(in srgb, var(--season) 35%, var(--card-2)); }
+.hab-d.off { background: color-mix(in srgb, var(--line) 55%, transparent); }
+.hab-d.before { background: transparent; border: 1px dashed var(--line); opacity: 0.6; }
+.hab-d.pending { background: transparent; border: 1.5px solid var(--gold); }
+.hab-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; color: var(--muted); margin-top: 8px; }
+.hab-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.hab-legend .hab-d { width: 10px; height: 10px; aspect-ratio: auto; }
+
+/* ---------- Hábito (fila expandible) ---------- */
+.hab-row { border-top: 1px solid var(--line); padding: 12px 0; }
+.hab-row:first-child { border-top: 0; padding-top: 2px; }
+.hab-row-btn { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; }
+.hab-top { display: flex; align-items: flex-start; gap: 10px; }
+.hab-pct { font-family: var(--font-mono); font-weight: 800; font-size: 20px; letter-spacing: -0.03em; line-height: 1; text-align: right; }
+.hab-pct.bien { color: var(--green); }
+.hab-pct.medias { color: var(--gold); }
+.hab-pct.flojo { color: var(--red); }
+.hab-pct.nuevo { color: var(--muted); }
+.hab-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 3px; font-size: 12px; color: var(--muted); }
+.hab-trend { font-weight: 750; }
+.hab-trend.mejorando { color: var(--green); }
+.hab-trend.empeorando { color: var(--flame); }
+.hab-detail { margin-top: 10px; padding: 10px; border-radius: 12px; background: var(--card-2); border: 1px solid var(--line); }
+.hab-nums { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 10px; }
+.hab-nums div { display: flex; flex-direction: column; gap: 1px; }
+.hab-nums span { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 700; }
+.hab-nums b { font-family: var(--font-mono); font-size: 16px; }
+
+/* Cumplimiento por día de la semana */
+.hab-wd { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; align-items: end; }
+.hab-wd-col { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10px; color: var(--muted); }
+.hab-wd-bar { width: 100%; height: 34px; border-radius: 6px; background: var(--card); border: 1px solid var(--line); display: flex; align-items: flex-end; overflow: hidden; }
+.hab-wd-bar i { display: block; width: 100%; background: var(--green); border-radius: 0 0 5px 5px; }
+.hab-wd-col.weak .hab-wd-bar i { background: var(--flame); }
+.hab-wd-col.weak { color: var(--flame); font-weight: 750; }
+.hab-wd-col.na .hab-wd-bar { background: transparent; border-style: dashed; opacity: 0.6; }
+
+/* Resumen de veredictos */
+.hab-summary { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center; }
+.hab-counts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.hab-counts div { background: var(--card-2); border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; }
+.hab-counts b { display: block; font-family: var(--font-mono); font-size: 18px; }
+.hab-counts span { font-size: 11px; color: var(--muted); }
+.hab-counts .bien b { color: var(--green); }
+.hab-counts .medias b { color: var(--gold); }
+.hab-counts .flojo b { color: var(--red); }
+
+/* Sugerencias "Hazlo hábito" */
+.hab-sug { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+.hab-sug:first-child { border-top: 0; padding-top: 0; }
+
+/* Hábitos a dejar */
+.vice-months { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; align-items: end; margin-top: 10px; }
+.vice-months div { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10px; color: var(--muted); }
+.vice-months i { display: block; width: 100%; max-width: 34px; min-height: 3px; border-radius: 5px 5px 2px 2px; background: color-mix(in srgb, var(--red) 65%, var(--card-2)); }
+.vice-months i.zero { background: color-mix(in srgb, var(--green) 45%, var(--card-2)); }
+
+/* ---------- "¿Cómo fue tu día?" ---------- */
+.day-head { display: flex; align-items: center; gap: 14px; }
+.day-nums { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 12px; }
+.day-nums div { background: var(--card-2); border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; min-width: 0; }
+.day-nums span { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 700; }
+.day-nums b { display: block; font-family: var(--font-mono); font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.day-answers { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.day-answer { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 3px 9px; border-radius: 999px; background: color-mix(in srgb, var(--green) 10%, var(--card-2)); border: 1px solid color-mix(in srgb, var(--green) 40%, var(--line)); color: var(--text); }
+.day-answer svg { width: 13px; height: 13px; color: var(--green); }
+.day-answer.skipped { background: var(--card-2); border-color: var(--line); color: var(--muted); cursor: pointer; font: inherit; font-size: 12px; }
+.day-answer.skipped svg { color: var(--muted); }
+.day-answer em { font-style: normal; color: var(--muted); }
+
+.day-gap { padding: 12px 0; border-top: 1px solid var(--line); }
+.day-gap:first-child { border-top: 0; padding-top: 2px; }
+.day-gap-head { display: flex; align-items: flex-start; gap: 10px; }
+.day-gap-icon { flex: none; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--card-2); border: 1px solid var(--line); color: var(--gold); }
+.day-gap-icon svg { width: 18px; height: 18px; }
+.day-gap-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; padding-left: 44px; }
+.day-inline { margin-top: 8px; padding-left: 44px; }
+.day-inline .item { padding: 6px 0; }
+.day-inline .check { width: 32px; height: 32px; border-radius: 10px; }
+.day-inline .check svg { width: 18px; height: 18px; }
+
+.day-area { padding: 10px 0; border-top: 1px solid var(--line); }
+.day-area:first-child { border-top: 0; padding-top: 0; }
+.day-area-head { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 750; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+.day-area-head svg { width: 15px; height: 15px; color: var(--gold); }
+.day-item { display: flex; gap: 8px; font-size: 13px; padding: 3px 0; min-width: 0; }
+.day-item > span:first-child { color: var(--muted); flex: none; }
+.day-item > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+
+.day-nav { display: flex; gap: 4px; }
