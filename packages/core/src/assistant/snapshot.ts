@@ -176,6 +176,8 @@ export interface AssistantSnapshot {
   // [[voz]]
 
   // [[entreno]]
+  /** Entrenamiento: agregados por músculo y de la semana (el análisis sale de engine/training.ts). */
+  training: import('../engine/modules/training').TrainingSummary;
 
   // [[gente]]
 
@@ -568,6 +570,7 @@ export function buildSnapshot(
     // [[voz]]
 
     // [[entreno]]
+    training: state.training.summary,
 
     // [[gente]]
 

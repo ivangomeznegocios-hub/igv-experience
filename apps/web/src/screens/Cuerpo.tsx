@@ -1,12 +1,13 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { BODY_MEASURE_KEYS, BODY_MEASURE_LABELS, BODY_MEASURE_UNITS, addDays, describeMeasures, firstMeasures as firstOf } from '@igv/core';
+import { BODY_MEASURE_KEYS, BODY_MEASURE_LABELS, BODY_MEASURE_UNITS, addDays, describeMeasures, firstMeasures as firstOf, trainingAnalysis } from '@igv/core';
 import { useGame, voidEvent } from '../data/store';
 import { fmtDate } from '../lib/time';
 import { Empty, PageHeader, confirmAction } from '../ui/kit';
 import { BarChart, LineChart } from '../ui/charts';
 import { Icon } from '../ui/icons';
 import { openQuickAdd } from '../ui/QuickAdd';
+import { openWorkout } from '../lib/entreno';
 
 /** Cuerpo: peso, entrenamientos y sueño. Solo registro (la XP viene de las misiones). */
 export default function Cuerpo() {
@@ -22,7 +23,7 @@ export default function Cuerpo() {
     });
   }, [b.sleep, state.today]);
   const avgSleep = b.sleep.slice(-14).reduce((s, x) => s + x.hours, 0) / Math.max(1, b.sleep.slice(-14).length);
-  const workouts = [...b.entries].filter((e) => e.workout?.trim()).reverse();
+  const training = useMemo(() => trainingAnalysis(state.training.summary, new Date().toISOString()), [state.training.summary]);
   const diff = b.lastWeight && b.firstWeight ? b.lastWeight.kg - b.firstWeight.kg : null;
   const firstMeasures = firstOf(b.entries);
   const measured = BODY_MEASURE_KEYS.filter((k) => k !== 'weightKg' && b.latest[k] !== undefined);
@@ -46,7 +47,7 @@ export default function Cuerpo() {
         </div>
         <div className="card" style={{ marginBottom: 0 }}>
           <div className="eyebrow">Entrenos esta semana</div>
-          <div className="stat-big num teal">{b.workoutsThisWeek}</div>
+          <div className="stat-big num teal">{training.sessions}</div>
         </div>
         <div className="card" style={{ marginBottom: 0 }}>
           <div className="eyebrow">Sueño (14 días)</div>
@@ -110,22 +111,19 @@ export default function Cuerpo() {
         <div className="tiny muted">Viene de tu check-in de energía de cada mañana.</div>
       </div>
       <div className="card">
-        <h2>Entrenamientos</h2>
-        {workouts.length === 0 && <Empty>Registra tus entrenamientos con el botón +.</Empty>}
-        {workouts.slice(0, 30).map((w) => (
-          <div key={w.eventId} className="item" style={{ padding: '6px 0' }}>
-            <div className="grow small">
-              {w.workout}
-              <div className="tiny muted">
-                {fmtDate(w.date, true)}
-                {w.weightKg ? ` · ${w.weightKg} kg` : ''}
-              </div>
-            </div>
-            <button className="btn icon ghost danger" aria-label="Anular" onClick={() => confirmAction('¿Anular este registro?') && voidEvent(w.eventId)}>
-              <Icon name="trash" />
-            </button>
-          </div>
-        ))}
+        <div className="card-head">
+          <h2>Entrenamiento</h2>
+          <Link to="/entreno" className="btn sm ghost">
+            <Icon name="dumbbell" /> Ver todo
+          </Link>
+        </div>
+        <p className="small muted" style={{ marginTop: 0 }}>
+          {training.sessions} {training.sessions === 1 ? 'sesión' : 'sesiones'} y {Math.round(training.hardSets)} series esta semana.{' '}
+          {training.missing.length ? `Te falta: ${training.missing.slice(0, 4).map((m) => m.name.toLowerCase()).join(', ')}${training.missing.length > 4 ? '…' : ''}.` : 'Músculos principales cubiertos.'} Siguiente: {training.suggestion.title.toLowerCase()}.
+        </p>
+        <button className="btn primary block" onClick={() => openWorkout()}>
+          <Icon name="plus" /> Registrar entrenamiento
+        </button>
       </div>
     </>
   );

@@ -44,6 +44,8 @@ const ConectarIA = lazy(() => import('./screens/ConectarIA'));
 // [[voz]]
 
 // [[entreno]]
+const Entreno = lazy(() => import('./screens/Entreno'));
+const WorkoutSheetHost = lazy(() => import('./ui/WorkoutSheet'));
 
 // [[gente]]
 const Persona = lazy(() => import('./screens/Persona'));
@@ -231,6 +233,7 @@ export default function App() {
                 {/* [[voz]] */}
 
                 {/* [[entreno]] */}
+                <Route path="/entreno" element={<Entreno />} />
 
                 {/* [[gente]] */}
                 <Route path="/npcs/:id" element={<Persona />} />
@@ -269,6 +272,11 @@ export default function App() {
       {/* [[voz]] */}
 
       {/* [[entreno]] */}
+      {store.ready && (
+        <Suspense fallback={null}>
+          <WorkoutSheetHost />
+        </Suspense>
+      )}
 
       {/* [[gente]] */}
       {store.ready && <PeopleWatcher />}

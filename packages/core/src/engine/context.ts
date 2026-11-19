@@ -17,6 +17,7 @@ export type XpSource =
   // [[voz]]
 
   // [[entreno]]
+  | 'training_record'
 
   // [[gente]]
   /** Mi gente: alcanzar un nivel de cercanía con una persona (una vez por nivel). */

@@ -138,6 +138,48 @@ export const EVENT_SCHEMAS = {
   // [[voz]]
 
   // [[entreno]]
+  /**
+   * Entrenamiento: tipo, dónde, duración, esfuerzo y ejercicios con sus series. No da XP por sí solo (la XP viene
+   * de la misión de entrenar que la app registra junto; ver engine/modules/training.ts). Las listas de `kind` y
+   * `where` son las mismas que WORKOUT_KINDS y WORKOUT_PLACES de types.ts (hay prueba que lo verifica).
+   */
+  'workout.logged': z
+    .object({
+      kind: z.enum(['fuerza', 'cardio', 'movilidad', 'deporte', 'clase', 'caminata', 'otro']),
+      title: z.string().trim().max(120).optional(),
+      where: z.enum(['gym', 'casa', 'parque', 'calle', 'alberca', 'cancha', 'otro']).optional(),
+      placeId: id.nullish(),
+      minutes: z.number().int().min(1).max(1440).optional(),
+      rpe: z.number().int().min(1).max(10).optional(),
+      note: z.string().max(2000).optional(),
+      routineId: id.nullish(),
+      missionEventId: id.nullish(),
+      exercises: z
+        .array(
+          z.object({
+            exerciseId: id,
+            name: z.string().trim().min(1).max(120),
+            primary: z.array(z.string().min(1).max(40)).max(6).optional(),
+            secondary: z.array(z.string().min(1).max(40)).max(8).optional(),
+            sets: z
+              .array(
+                z
+                  .object({
+                    reps: z.number().int().min(0).max(1000).optional(),
+                    kg: z.number().min(0).max(1000).optional(),
+                    sec: z.number().int().min(0).max(36000).optional(),
+                    min: z.number().min(0).max(1440).optional(),
+                    km: z.number().min(0).max(1000).optional(),
+                  })
+                  .refine((s) => (s.reps ?? 0) > 0 || (s.sec ?? 0) > 0 || (s.min ?? 0) > 0 || (s.km ?? 0) > 0, 'Serie vacía'),
+              )
+              .max(60),
+          }),
+        )
+        .max(40)
+        .default([]),
+    })
+    .refine((p) => p.exercises.length > 0 || (p.minutes ?? 0) > 0, 'Agrega al menos un ejercicio o la duración'),
 
   // [[gente]]
 
@@ -277,6 +319,7 @@ export const EVENT_LABELS: Record<EventType, string> = {
   // [[voz]]
 
   // [[entreno]]
+  'workout.logged': 'Entrenamiento',
 
   // [[gente]]
 
