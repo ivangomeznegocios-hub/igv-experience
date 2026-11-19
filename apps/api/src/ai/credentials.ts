@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, lt } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNull, lt } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { aiCredentials, serverMeta, type AiCredentialRow } from '@igv/db';
 import { randomId, randomToken, sha256Hex } from './crypto';
@@ -97,14 +97,27 @@ export function redirectMatches(registered: string[], uri: string): boolean {
   });
 }
 
+/** Máximo de apps registradas en la última hora que aún no se conectan. El registro es público: esto lo acota. */
+const MAX_PENDING_CLIENTS = 30;
+
+export class TooManyClientsError extends Error {}
+
 export async function registerClient(db: Db, meta: ClientData): Promise<{ id: string; createdAt: number }> {
   const now = Date.now();
-  // Limpieza: clientes que nunca se conectaron en 24 h (el registro es abierto, así que no dejamos que crezca).
+  // Limpieza acotada: clientes que nunca se conectaron en 24 h.
   const stale = await db
     .select({ id: aiCredentials.id })
     .from(aiCredentials)
-    .where(and(eq(aiCredentials.kind, 'client'), isNull(aiCredentials.lastUsedAt), lt(aiCredentials.createdAt, now - 86_400_000)));
-  if (stale.length) await db.delete(aiCredentials).where(inArray(aiCredentials.id, stale.slice(0, 90).map((s) => s.id)));
+    .where(and(eq(aiCredentials.kind, 'client'), isNull(aiCredentials.lastUsedAt), lt(aiCredentials.createdAt, now - 86_400_000)))
+    .limit(90);
+  if (stale.length) await db.delete(aiCredentials).where(inArray(aiCredentials.id, stale.map((s) => s.id)));
+  // Tope: si hay demasiados registros sin usar, no se escribe nada (evita agotar la cuota diaria de D1).
+  const pending = await db
+    .select({ id: aiCredentials.id })
+    .from(aiCredentials)
+    .where(and(eq(aiCredentials.kind, 'client'), isNull(aiCredentials.lastUsedAt), gt(aiCredentials.createdAt, now - 3_600_000)))
+    .limit(MAX_PENDING_CLIENTS);
+  if (pending.length >= MAX_PENDING_CLIENTS) throw new TooManyClientsError('Demasiados registros pendientes');
   const id = `cli_${randomId().replace(/-/g, '')}`;
   await db.insert(aiCredentials).values({ id, kind: 'client', data: JSON.stringify(meta), createdAt: now });
   return { id, createdAt: now };
@@ -184,7 +197,16 @@ export async function createGrant(db: Db, clientId: string, data: GrantData): Pr
 
 export type RefreshResult = { ok: true; tokens: TokenPair } | { ok: false; error: 'invalid_grant' | 'invalid_client' };
 
-/** Rota el refresh token. Si alguien reusa uno ya rotado, se revoca toda la conexión (posible robo). */
+/**
+ * Margen para refrescos simultáneos o reintentos (los clientes refrescan en paralelo y en el celular la respuesta
+ * se puede perder): un refresh token rotado hace menos de esto todavía se acepta, sin revocar nada.
+ */
+export const REFRESH_GRACE_MS = 60_000;
+
+/**
+ * Rota el refresh token. Si alguien reusa uno rotado hace más de REFRESH_GRACE_MS, se revoca toda la conexión
+ * (posible robo). Los access tokens vigentes no se anulan al rotar: caducan solos en 1 h.
+ */
 export async function refreshGrant(db: Db, refreshToken: string, clientId: string | undefined): Promise<RefreshResult> {
   const now = Date.now();
   const hash = await sha256Hex(refreshToken);
@@ -194,27 +216,21 @@ export async function refreshGrant(db: Db, refreshToken: string, clientId: strin
     .where(and(eq(aiCredentials.tokenHash, hash), eq(aiCredentials.kind, 'refresh')));
   if (!row || !row.grantId) return { ok: false, error: 'invalid_grant' };
   if (clientId && row.clientId !== clientId) return { ok: false, error: 'invalid_grant' };
-  if (row.revokedAt) {
-    await revokeGrant(db, row.grantId);
-    return { ok: false, error: 'invalid_grant' };
-  }
   if ((row.expiresAt ?? 0) < now) return { ok: false, error: 'invalid_grant' };
   const [grant] = await db
     .select()
     .from(aiCredentials)
     .where(and(eq(aiCredentials.id, row.grantId), eq(aiCredentials.kind, 'grant')));
   if (!grant || grant.revokedAt) return { ok: false, error: 'invalid_grant' };
-  const res = await db
-    .update(aiCredentials)
-    .set({ revokedAt: now })
-    .where(and(eq(aiCredentials.id, row.id), isNull(aiCredentials.revokedAt)))
-    .returning({ id: aiCredentials.id });
-  if (!res.length) return { ok: false, error: 'invalid_grant' }; // carrera: otro uso ganó
-  // Los access tokens viejos de esta conexión dejan de servir.
-  await db
-    .update(aiCredentials)
-    .set({ revokedAt: now })
-    .where(and(eq(aiCredentials.grantId, row.grantId), eq(aiCredentials.kind, 'access'), isNull(aiCredentials.revokedAt)));
+  if (row.revokedAt) {
+    if (now - row.revokedAt > REFRESH_GRACE_MS) {
+      await revokeGrant(db, row.grantId);
+      return { ok: false, error: 'invalid_grant' };
+    }
+    // Dentro del margen: refresco concurrente o reintento legítimo.
+  } else {
+    await db.update(aiCredentials).set({ revokedAt: now }).where(and(eq(aiCredentials.id, row.id), isNull(aiCredentials.revokedAt)));
+  }
   return { ok: true, tokens: await issuePair(db, row.grantId, row.clientId!, parse<GrantData>(grant).scope) };
 }
 

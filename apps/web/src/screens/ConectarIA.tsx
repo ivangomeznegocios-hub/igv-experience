@@ -209,9 +209,9 @@ export default function ConectarIA() {
 
   const undo = async (item: AiActivityItem) => {
     try {
-      await api.aiUndo(item.id);
+      const r = await api.aiUndo(item.id);
       await sync();
-      toast('Deshecho');
+      toast(r.kept ? 'Deshecho (respeté lo que cambiaste después)' : 'Deshecho');
       reload();
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Error', 'error');

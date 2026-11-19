@@ -32,7 +32,20 @@ import { addDays, weekStart, weekday } from '../util/dates';
  * calcula el estado) o el servidor cuando la que tiene quedó vieja.
  * Si cambias su forma, sube SNAPSHOT_SCHEMA para que se descarten las fotos guardadas.
  */
-export const SNAPSHOT_SCHEMA = 1;
+export const SNAPSHOT_SCHEMA = 2;
+
+/**
+ * Huella de los números del juego (config/game.ts). Si se despliega otra configuración, las fotos viejas
+ * (o las que suba una PWA con el código anterior) dejan de valer y se recalculan.
+ */
+export const CONFIG_FINGERPRINT: string = (() => {
+  let h = 2166136261;
+  for (const ch of JSON.stringify(GAME_CONFIG)) {
+    h ^= ch.charCodeAt(0);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(36);
+})();
 
 export interface SnapshotMission {
   id: string;
@@ -44,6 +57,8 @@ export interface SnapshotMission {
 
 export interface AssistantSnapshot {
   schema: number;
+  /** CONFIG_FINGERPRINT con el que se calculó. */
+  config: string;
   /** Mayor `updated_at` (ms) de eventos y catálogo incluidos en el cálculo. */
   version: number;
   today: string;
@@ -97,12 +112,23 @@ export interface AssistantSnapshot {
     status: 'en curso' | 'sin iniciar' | 'completado' | 'fallido';
     dayNumber: number | null;
     checked: number;
+    /** Intento en curso: día de inicio y días marcados. */
+    startDate: string | null;
+    checkedDates: string[];
+    /** Día en que se cerró (completó o falló) el último intento. */
+    lastClosedOn: string | null;
     checkedToday: boolean;
     completions: number;
     archived: boolean;
   }[];
   vices: { id: string; name: string; current: number; best: number; lastRelapse: string | null }[];
-  people: { overdue: { id: string; npcId: string; name: string; daysSince: number | null }[]; keyPeople: number; total: number };
+  people: {
+    overdue: { id: string; npcId: string; name: string; daysSince: number | null }[];
+    keyPeople: number;
+    total: number;
+    /** Último contacto de cada persona (interacciones y misiones "Escribirle a X"). */
+    lastContact: Record<string, string | null>;
+  };
   achievements: { unlocked: number; total: number; recent: { name: string; date: string }[] };
   skills: { id: string; name: string; rank: number; rankName: string | null }[];
   pledges: { id: string; title: string; stake: number; deadline: string }[];
@@ -229,6 +255,9 @@ export function buildSnapshot(
       status: status as AssistantSnapshot['challenges'][number]['status'],
       dayNumber: cur ? challengeDayNumber(cur, today) : null,
       checked: cur?.checked.length ?? 0,
+      startDate: cur?.startDate ?? null,
+      checkedDates: cur ? [...cur.checked] : [],
+      lastClosedOn: [...(st?.attempts ?? [])].reverse().find((a) => a.closedOn)?.closedOn ?? null,
       checkedToday: !!st?.checkedToday,
       completions: st?.completions ?? 0,
       archived: !!c.data.archived,
@@ -259,6 +288,7 @@ export function buildSnapshot(
 
   return {
     schema: SNAPSHOT_SCHEMA,
+    config: CONFIG_FINGERPRINT,
     version: meta.version,
     today,
     computedAt: (meta.now ?? new Date()).toISOString(),
@@ -325,7 +355,12 @@ export function buildSnapshot(
     goals,
     challenges,
     vices,
-    people: { overdue, keyPeople: npcs.filter((n) => n.data.key).length, total: npcs.length },
+    people: {
+      overdue,
+      keyPeople: npcs.filter((n) => n.data.key).length,
+      total: npcs.length,
+      lastContact: Object.fromEntries(npcs.map((n) => [n.id, state.npcs.npcs[n.id]?.lastInteraction ?? null])),
+    },
     achievements: { unlocked: unlocked.length, total: achs.length, recent: unlocked.slice(0, 5) },
     skills: list<SkillData>('skills', 'skill').map((s) => {
       const rank = state.skills[s.id]?.rank ?? 0;

@@ -59,7 +59,7 @@ export interface CoachAction {
 }
 
 export class ApiError extends Error {
-  constructor(message: string, public status: number) {
+  constructor(message: string, public status: number, public body?: unknown) {
     super(message);
   }
 }
@@ -83,7 +83,7 @@ async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
     throw new ApiError(`Error ${res.status}`, res.status);
   }
   const body = await res.json();
-  if (!res.ok) throw new ApiError((body as { error?: string }).error ?? `Error ${res.status}`, res.status);
+  if (!res.ok) throw new ApiError((body as { error?: string }).error ?? `Error ${res.status}`, res.status, body);
   return body as T;
 }
 
@@ -113,6 +113,6 @@ export const api = {
   aiRevokeKey: (id: string) => req<{ ok: true }>(`/ai/keys/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   aiRevokeConnection: (id: string) => req<{ ok: true }>(`/ai/connections/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   aiActivity: () => req<{ items: AiActivityItem[] }>('/ai/activity'),
-  aiUndo: (id: string) => req<{ ok: true }>(`/ai/activity/${encodeURIComponent(id)}/undo`, { method: 'POST' }),
+  aiUndo: (id: string) => req<{ ok: true; kept: number }>(`/ai/activity/${encodeURIComponent(id)}/undo`, { method: 'POST' }),
   aiSnapshot: (snapshot: AssistantSnapshot) => req<{ ok: boolean; reason?: string }>('/ai/snapshot', { method: 'PUT', body: JSON.stringify(snapshot) }),
 };

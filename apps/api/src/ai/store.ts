@@ -2,6 +2,7 @@ import { and, desc, asc, eq, gte, inArray, isNull, lte, max, sql, type SQL } fro
 import { drizzle } from 'drizzle-orm/d1';
 import { aiActivity, entities, events, serverMeta } from '@igv/db';
 import {
+  CONFIG_FINGERPRINT,
   GAME_CONFIG,
   SNAPSHOT_SCHEMA,
   buildSnapshot,
@@ -105,7 +106,7 @@ export class D1AssistantStore implements AssistantStore {
 
   async snapshot(): Promise<AssistantSnapshot> {
     const [version, cached] = await Promise.all([dataVersion(this.d1), readSnapshot(this.d1)]);
-    if (cached && cached.today === this.today && cached.version >= version) return cached;
+    if (cached && cached.config === CONFIG_FINGERPRINT && cached.today === this.today && cached.version >= version) return cached;
     const [ev, en] = await Promise.all([this.db.select().from(events), this.db.select().from(entities)]);
     const list = en.map(rowToEntity);
     const state = project({ events: ev.map(rowToEvent), entities: list, today: this.today });
@@ -178,21 +179,50 @@ export async function listActivity(d1: D1Database, limit = 60) {
   });
 }
 
-/** Deshace una acción de la IA: anula sus registros, restaura lo que anuló y devuelve el catálogo a como estaba. */
-export async function undoActivity(d1: D1Database, id: string): Promise<{ ok: boolean; error?: string }> {
+/**
+ * Deshace una acción de la IA: anula sus registros, restaura lo que anuló y devuelve el catálogo a como estaba.
+ * Respeta lo que Iván haya hecho después: no revierte un elemento que se editó o borró luego, y una meta o un
+ * reto creados por la IA que ya tienen avances propios se ARCHIVAN en vez de borrarse (su XP depende de ellos).
+ */
+export async function undoActivity(d1: D1Database, id: string): Promise<{ ok: boolean; error?: string; kept?: number }> {
   const db = drizzle(d1);
   const [row] = await db.select().from(aiActivity).where(eq(aiActivity.id, id));
   if (!row) return { ok: false, error: 'No encontrado' };
   if (row.undoneAt) return { ok: false, error: 'Ya se había deshecho' };
   const refs = JSON.parse(row.refs) as ActivityRefs;
   const store = new D1AssistantStore(d1);
+  let kept = 0;
   for (const ev of refs.events) await store.voidEvent(ev);
   for (const ev of refs.voided ?? []) await store.restoreEvent(ev);
-  // El catálogo se restaura en orden inverso (si se editó dos veces lo mismo, queda la versión original).
+  const own = new Set(refs.events);
+  // En orden inverso: si se editó dos veces lo mismo, queda la versión original.
   for (const ent of [...refs.entities].reverse()) {
-    if (ent.prev) await store.putEntity(ent.prev);
-    else await store.deleteEntity(ent.id);
+    const [cur] = await db.select().from(entities).where(eq(entities.id, ent.id));
+    const current = cur ? rowToEntity(cur) : null;
+    if (ent.savedAt !== undefined) {
+      // La IA creó o editó: solo se revierte si sigue tal cual lo dejó.
+      if (!current || current.deletedAt || current.updatedAt !== ent.savedAt) {
+        kept++;
+        continue;
+      }
+    } else if (current && !current.deletedAt) {
+      // La IA lo borró y alguien ya lo recuperó.
+      kept++;
+      continue;
+    }
+    if (ent.prev) {
+      await store.putEntity(ent.prev);
+      continue;
+    }
+    const guard = current?.module === 'goals' ? { types: ['goal.progress'], key: 'goalId' } : current?.module === 'challenges' ? { types: ['challenge.started', 'challenge.checked'], key: 'challengeId' } : null;
+    const used = guard ? (await store.events({ types: guard.types, match: { [guard.key]: ent.id } })).some((e) => !own.has(e.id)) : false;
+    if (used && current) {
+      await store.putEntity({ ...current, data: { ...current.data, archived: true } });
+      kept++;
+    } else {
+      await store.deleteEntity(ent.id);
+    }
   }
   await db.update(aiActivity).set({ undoneAt: Date.now() }).where(eq(aiActivity.id, id));
-  return { ok: true };
+  return { ok: true, kept };
 }

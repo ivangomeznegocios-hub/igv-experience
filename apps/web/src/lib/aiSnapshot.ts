@@ -13,10 +13,13 @@ let lastKey = '';
 export async function uploadSnapshotNow(state: GameState, entities: Entity[]): Promise<boolean> {
   const info = getSyncInfo();
   if (info.pending > 0 || info.status !== 'idle' || !info.cursor) return false;
-  const key = `${info.cursor}|${state.today}`;
+  const snapshot = buildSnapshot(state, entities, { version: info.cursor, computedBy: 'app' });
+  // Se compara el contenido (y el cursor): así una fila que llegó por el traslape de la sincronización sí provoca
+  // otra subida, pero sincronizar sin cambios no.
+  const key = JSON.stringify({ ...snapshot, computedAt: '' });
   if (key === lastKey) return true;
   try {
-    const res = await api.aiSnapshot(buildSnapshot(state, entities, { version: info.cursor, computedBy: 'app' }));
+    const res = await api.aiSnapshot(snapshot);
     if (res.ok) lastKey = key;
     return res.ok;
   } catch {

@@ -106,7 +106,8 @@ const CORS_HEADERS = {
 function unauthorized(c: Context<McpEnv>, invalid: boolean) {
   const origin = new URL(c.req.url).origin;
   const params = [`resource_metadata="${origin}/.well-known/oauth-protected-resource"`];
-  if (invalid) params.push('error="invalid_token"', 'error_description="Token inválido, caducado o revocado"');
+  // Solo ASCII en este encabezado (RFC 6750): algunos clientes (rmcp, el de Codex) rechazan otros bytes.
+  if (invalid) params.push('error="invalid_token"', 'error_description="Invalid, expired or revoked token"');
   return c.json(
     { error: invalid ? 'invalid_token' : 'unauthorized', error_description: 'Conecta este asistente desde IGV EXPERIENCE (Más → Conectar IA).' },
     401,

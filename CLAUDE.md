@@ -114,28 +114,40 @@ Para usar la app desde Claude (web, escritorio, móvil, Claude Code), ChatGPT, C
 - **Protocolo** (`apps/api/src/ai/mcp.ts`): Streamable HTTP sin estado (POST /mcp → JSON; sin SSE ni
   sesiones; GET/DELETE → 405). Versiones 2025-11-25 … 2024-11-05. `instructions` = guía de la app.
 - **Autenticación** (`ai/credentials.ts`, `ai/oauth.ts`, tabla `ai_credentials`, tokens solo como SHA-256):
-  OAuth 2.1 con metadatos RFC 9728/8414, registro dinámico (RFC 7591, clientes públicos), PKCE S256
-  obligatorio, access 1 h, refresh 90 días que ROTA (reusar uno viejo revoca la conexión), revocación.
+  OAuth 2.1 con metadatos RFC 9728/8414, registro dinámico (RFC 7591, clientes públicos; tope de 30 apps sin
+  conectar por hora → 429, para no agotar la cuota de D1), PKCE S256 obligatorio, access 1 h, refresh 90 días
+  que ROTA (reusar uno rotado hace más de 60 s revoca la conexión; dentro de ese margen se acepta por
+  refrescos en paralelo o reintentos; rotar no anula los access vigentes), revocación.
   La pantalla "Permitir" vive en la app (`GET/POST /api/oauth/authorize`, detrás de Access + anclaje; CSRF
-  por `Origin`); loopback acepta cualquier puerto (Claude Code, Codex). Alternativa: **llaves** `igv_key_…`
-  creadas en la app (para Codex/Antigravity/Claude Code con encabezado). Revocar = inmediato.
+  por `Origin`; casilla obligatoria "Yo inicié esta conexión" contra doble clickjacking; muestra host y ruta de
+  regreso y avisa si una app dice ser Claude/ChatGPT y no regresa a su dominio exacto); loopback acepta
+  cualquier puerto (Claude Code, Codex). Alternativa: **llaves** `igv_key_…` creadas en la app (para
+  Codex/Antigravity/Claude Code con encabezado). Revocar = inmediato. `WWW-Authenticate` solo en ASCII.
 - **Herramientas** (`packages/core/src/assistant/tools.ts`): consultar (`ver_*`, `guia_de_la_app`),
   registrar (eventos) y organizar (catálogo). Validan con zod, nunca registran en el futuro (salvo planear
   y agendar) ni más de un año atrás, no duplican misiones que ya contaron, y no borran metas/retos con
-  avances (su XP depende de la entidad: se archivan). Los errores vuelven como `isError` (no excepciones).
+  avances (su XP depende de la entidad: se archivan), ni cambian días/tamaño de un reto completado u
+  objetivo/tamaño de una meta cumplida (le quitaría XP). `marcar_reto` solo marca días del intento en curso
+  y solo empieza hoy o ayer. Los errores vuelven como `isError` (no excepciones).
 - **Permisos**: `server_meta.ai_settings.allowWrites` (pantalla Conectar IA). En solo lectura, las
   herramientas que escriben ni se listan ni se ejecutan.
 - **Bitácora** (tabla `ai_activity`): cada acción que escribe guarda quién (nombre de la llave o de la app
   OAuth, o "Coach"), un resumen y sus referencias (eventos creados, eventos anulados, versión previa de cada
-  entidad) → "Deshacer" en la app (`POST /api/ai/activity/:id/undo`).
+  entidad y `savedAt` de la que dejó la IA) → "Deshacer" en la app (`POST /api/ai/activity/:id/undo`). Deshacer
+  no pisa lo que Iván cambió o borró después, y una meta o reto creados por la IA con avances propios se
+  archivan en vez de borrarse (responde `kept` = cuántos cambios se respetaron).
 - **Estado para la IA = foto en caché** (`server_meta.ai_snapshot`, `buildSnapshot`): la app la sube tras
   sincronizar (`lib/aiSnapshot.ts`, solo sin cambios pendientes; `version` = cursor de sync). El Worker la
-  usa si `version ≥ max(updated_at)` y es del mismo día; si no, recalcula con `project()` (CPU del plan
-  gratis: ~10–20 ms por año de datos, por eso se evita). Es caché derivada, nunca fuente de verdad: sube
-  `SNAPSHOT_SCHEMA` si cambias su forma.
+  usa si `version ≥ max(updated_at)`, es del mismo día y su `config` = `CONFIG_FINGERPRINT` (huella de
+  `config/game.ts`); si no, recalcula con `project()` (CPU del plan gratis: ~10–20 ms por año de datos, por
+  eso se evita). La app solo vuelve a subir si cambió el contenido. Es caché derivada, nunca fuente de verdad:
+  sube `SNAPSHOT_SCHEMA` si cambias su forma.
 - **Coach** (`/api/gm/ask`): bucle de herramientas con la API de Claude (mismas herramientas, máx. 8
-  rondas, fuente "Coach" en la bitácora). El cliente ya no manda contexto: el servidor arma el panorama
-  (`renderOverview`). `readOnly: true` (reporte semanal) quita las herramientas que escriben.
+  rondas y 12 herramientas, fuente "Coach" en la bitácora). Cuenta las consultas a D1 (`ai/budget.ts`; el
+  plan gratis permite 50 por invocación) y se detiene en 40. Un error en una herramienta vuelve como
+  `is_error`; si la conversación falla, la respuesta trae igual las `actions` ya hechas. El servidor arma el
+  panorama (`renderOverview`); con `readOnly: true` + `context` (reporte semanal) usa solo esos datos y sin
+  herramientas que escriben.
 - **Agregar una herramienta**: defínela en `tools.ts` con `tool({...})`, agrégala a `ASSISTANT_TOOLS`,
   devuelve `ok(texto, resumen, refs)` si escribe, y prueba en `packages/core/test/assistant.test.ts`.
   Aparece sola en el MCP, en el Coach y en la lista de la pantalla.

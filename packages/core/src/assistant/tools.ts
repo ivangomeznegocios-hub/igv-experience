@@ -73,8 +73,12 @@ export interface AssistantStore {
 export interface ActivityRefs {
   /** Registros creados (deshacer = anularlos). */
   events: string[];
-  /** Elementos del catálogo creados, editados o borrados, con su versión previa (null = no existía). */
-  entities: { id: string; prev: Entity | null }[];
+  /**
+   * Elementos del catálogo creados, editados o borrados, con su versión previa (null = no existía) y el
+   * `updatedAt` de la versión que dejó la IA (sin él = la IA lo borró). Deshacer solo revierte si nadie lo
+   * cambió después.
+   */
+  entities: { id: string; prev: Entity | null; savedAt?: number }[];
   /** Registros que la IA anuló (deshacer = restaurarlos). */
   voided?: string[];
 }
@@ -160,7 +164,7 @@ function newEntityId(store: AssistantStore, prefix: string) {
 async function upsert<D>(store: AssistantStore, existing: Entity | null, entity: Omit<Entity<D>, 'sort'> & { sort?: number }) {
   const now = store.now().getTime();
   const saved = await store.putEntity({ ...entity, sort: entity.sort ?? existing?.sort ?? now, createdAt: existing?.createdAt ?? now, updatedAt: now, deletedAt: null } as Entity);
-  return { saved, ref: { id: saved.id, prev: existing } };
+  return { saved, ref: { id: saved.id, prev: existing, savedAt: saved.updatedAt ?? now } };
 }
 
 const ok = (text: string, summary?: string, refs?: Partial<ActivityRefs>): ToolResult => ({
@@ -233,7 +237,8 @@ export function renderOverview(s: AssistantSnapshot): string {
     L.push('', '## Hábitos a dejar');
     for (const v of s.vices) L.push(`- ${v.name} [${v.id}]: ${v.current} ${v.current === 1 ? 'día' : 'días'} sin recaer (mejor ${v.best})`);
   }
-  if (s.people.overdue.length) L.push('', `Personas clave sin contacto (30+ días): ${s.people.overdue.map((p) => `${p.name} [${p.npcId}] ${p.daysSince ?? '?'} días`).join('; ')}.`);
+  if (s.people.overdue.length)
+    L.push('', `Personas clave sin contacto (30+ días; para registrar que le escribió usa completar_mision con el id de la misión): ${s.people.overdue.map((p) => `${p.name} ${p.daysSince ?? '?'} días [misión ${p.id}]`).join('; ')}.`);
   if (s.pledges.length) L.push(`Compromisos abiertos: ${s.pledges.map((p) => `${p.title} (${p.stake} de oro, vence ${p.deadline}) [${p.id}]`).join('; ')}.`);
   if (s.library.reading.length) L.push(`Leyendo: ${s.library.reading.map((b) => `${b.title} [${b.id}]`).join('; ')}.`);
   if (s.lastJournal) L.push(`Último diario semanal (${s.lastJournal.weekStart}): pasó "${s.lastJournal.happened}"; aprendió "${s.lastJournal.learned}"; sigue "${s.lastJournal.next}".`);
@@ -369,13 +374,10 @@ const verCatalogo = tool({
         break;
       }
       case 'personas': {
-        const inter = await store.events({ types: ['npc.interaction'], order: 'asc' });
-        const last = new Map<string, string>();
-        for (const e of inter) last.set(e.payload.npcId, e.localDate);
         const types: Record<string, string> = { party: 'cercano', aliado: 'aliado', mentor: 'mentor', cliente: 'cliente', rival: 'rival' };
         L.push('Personas ("Mi gente"):');
         for (const n of list<NpcData>(catalog, 'npcs', 'npc')) {
-          const lc = [last.get(n.id), n.data.lastContact ?? undefined].filter(Boolean).sort().at(-1);
+          const lc = s.people.lastContact[n.id] ?? n.data.lastContact ?? null;
           L.push(`- [${n.id}] ${n.data.name} (${types[n.data.npcType] ?? n.data.npcType}${n.data.key ? ', persona clave' : ''}) · último contacto: ${lc ?? 'sin registro'}${n.data.notes ? ` · ${n.data.notes.slice(0, 80)}` : ''}`);
         }
         break;
@@ -618,11 +620,13 @@ async function resolveMission(
       return { missionId: ent.id, title: d.title, size: d.size, attribute: d.attribute, kind: 'todo' };
     }
     if (ent && ent.module === 'missions' && ent.kind === 'main') throw new ToolError('Una misión principal no se completa directamente: completa sus capítulos o misiones.');
-    if (id.startsWith('npc-')) {
-      const npc = catalog.find((e) => e.id === id.slice(4) && e.module === 'npcs');
+    // Una persona (o su misión "npc-<id>") → la misión "Escribirle a X", que cuenta como contacto.
+    const npcId = ent && ent.module === 'npcs' && ent.kind === 'npc' ? ent.id : id.startsWith('npc-') ? id.slice(4) : null;
+    if (npcId) {
+      const npc = catalog.find((e) => e.id === npcId && e.module === 'npcs' && e.kind === 'npc');
       if (npc) {
         return {
-          missionId: id,
+          missionId: `npc-${npc.id}`,
           title: `Escribirle a ${(npc.data as NpcData).name}`,
           size: GAME_CONFIG.npc.contactMissionSize as MissionSize,
           attribute: GAME_CONFIG.defaultAttributes.npcContact as AttributeId,
@@ -902,25 +906,36 @@ const marcarReto = tool({
     const date = pastDate(store, fecha);
     const ch = find<ChallengeData>(await store.catalog(), reto_id, 'challenges', ['challenge'], 'el reto');
     const st = (await store.snapshot()).challenges.find((c) => c.id === ch.id);
-    const running = st?.status === 'en curso';
+    const days = ch.data.days;
     const evs: GameEvent[] = [];
-    if (accion === 'iniciar') {
-      if (running) return { text: `"${ch.data.title}" ya está en curso (día ${st?.dayNumber} de ${ch.data.days}).` };
-      evs.push(makeEvent(store, 'challenge.started', { challengeId: ch.id }, date));
-    } else {
-      if (running && date === store.today && st?.checkedToday) return { text: `"${ch.data.title}" ya estaba marcado hoy.` };
-      if (!running) evs.push(makeEvent(store, 'challenge.started', { challengeId: ch.id }, date));
+    let n = 0;
+    let started = false;
+    if (st?.status === 'en curso' && st.startDate) {
+      // Intento en curso: todos los días desde su inicio hasta ayer ya están marcados (si no, habría fallado).
+      if (accion === 'iniciar') return { text: `"${ch.data.title}" ya está en curso (día ${st.dayNumber} de ${days}).` };
+      if (date < st.startDate) throw new ToolError(`El intento actual de "${ch.data.title}" empezó el ${st.startDate}; no se puede marcar un día anterior.`);
+      if (st.checkedDates.includes(date)) return { text: `"${ch.data.title}" ya estaba marcado el ${date === store.today ? 'día de hoy' : date}.` };
       evs.push(makeEvent(store, 'challenge.checked', { challengeId: ch.id }, date));
+      n = st.checkedDates.length + 1;
+    } else {
+      // Empieza un intento nuevo en `date`: debe ser después del último intento y no dejar días pasados sin marcar.
+      if (st?.lastClosedOn && date <= st.lastClosedOn) throw new ToolError(`El intento anterior de "${ch.data.title}" terminó el ${st.lastClosedOn}. El nuevo debe empezar después (hoy).`);
+      if (date < addDays(store.today, -1)) throw new ToolError('Un reto solo puede empezar hoy o ayer: si empieza antes, los días sin marcar lo harían fallar.');
+      evs.push(makeEvent(store, 'challenge.started', { challengeId: ch.id }, date));
+      started = true;
+      if (accion !== 'iniciar') {
+        evs.push(makeEvent(store, 'challenge.checked', { challengeId: ch.id }, date));
+        n = 1;
+      }
     }
     const ids = await addEvents(store, evs);
-    const n = accion === 'iniciar' ? 0 : (running ? st!.checked : 0) + 1;
-    const left = ch.data.days - n;
+    const left = days - n;
     const msg =
       accion === 'iniciar'
-        ? `Empieza "${ch.data.title}" (${ch.data.days} días).`
+        ? `Empieza "${ch.data.title}" (${days} días)${date === store.today ? '' : ` desde el ${date}`}.`
         : left <= 0
           ? `¡Reto "${ch.data.title}" completado! +${GAME_CONFIG.missionXp[ch.data.size]} XP.`
-          : `"${ch.data.title}": día ${n} de ${ch.data.days}${running ? '' : ' (lo inicié)'}. Faltan ${left}.`;
+          : `"${ch.data.title}": día ${n} de ${days}${started ? ' (lo inicié)' : ''}. Faltan ${left}.${date < store.today ? ' Hoy también toca marcarlo.' : ''}`;
     return ok(`${msg} Registros [${ids.join(', ')}].`, msg, { events: ids });
   },
 });
@@ -1178,6 +1193,12 @@ const guardarMeta = tool({
     const catalog = await store.catalog();
     const prev = existingOf(catalog, i.id, 'goals', ['goal'], 'la meta') as Entity<GoalData> | null;
     const p: Partial<GoalData> = prev?.data ?? {};
+    const st = prev ? (await store.snapshot()).goals.find((g) => g.id === prev.id) : null;
+    // La XP de una meta cumplida se recalcula con su objetivo y su tamaño actuales: no se permite quitarla.
+    if (st?.completedOn) {
+      if (i.tamano !== undefined && i.tamano !== p.size) throw new ToolError(`"${p.title}" ya se cumplió: cambiar su tamaño cambiaría la XP ganada. Crea una meta nueva si quieres otra recompensa.`);
+      if (i.objetivo !== undefined && i.objetivo > st.current) throw new ToolError(`"${p.title}" ya se cumplió (${fmtNum(st.current)} ${p.unit}): subir el objetivo a ${fmtNum(i.objetivo)} la descumpliría y quitaría su XP. Crea una meta nueva para el siguiente nivel.`);
+    }
     const title = i.titulo ?? p.title;
     const target = i.objetivo ?? p.target;
     if (!title || !target) throw new ToolError('Al crear una meta, manda "titulo" y "objetivo".');
@@ -1220,6 +1241,11 @@ const guardarReto = tool({
     const catalog = await store.catalog();
     const prev = existingOf(catalog, i.id, 'challenges', ['challenge'], 'el reto') as Entity<ChallengeData> | null;
     const p: Partial<ChallengeData> = prev?.data ?? {};
+    const st = prev ? (await store.snapshot()).challenges.find((c) => c.id === prev.id) : null;
+    // La XP de un reto completado se recalcula con sus días y su tamaño actuales: cambiarlos la quitaría.
+    if (st && st.completions > 0 && ((i.dias !== undefined && i.dias !== p.days) || (i.tamano !== undefined && i.tamano !== p.size))) {
+      throw new ToolError(`"${p.title}" ya se completó ${st.completions} vez(ces): cambiar sus días o su tamaño cambiaría la XP ya ganada. Crea un reto nuevo (y archiva este si quieres).`);
+    }
     const title = i.titulo ?? p.title;
     if (!title) throw new ToolError('Falta "titulo".');
     const data: ChallengeData = {
@@ -1232,16 +1258,19 @@ const guardarReto = tool({
     };
     const { saved, ref } = await upsert(store, prev, { id: prev?.id ?? newEntityId(store, 'ch'), module: 'challenges', kind: 'challenge', data });
     const events: string[] = [];
+    let note = '';
     if (i.iniciar) {
-      const st = prev ? (await store.snapshot()).challenges.find((c) => c.id === saved.id) : null;
-      if (st?.status !== 'en curso') {
+      if (st?.status === 'en curso') note = ' · ya estaba en curso';
+      else if (st?.lastClosedOn && st.lastClosedOn >= store.today) note = ' · el intento anterior terminó hoy: empiézalo mañana';
+      else {
         const ev = makeEvent(store, 'challenge.started', { challengeId: saved.id }, store.today);
         await store.addEvents([ev]);
         events.push(ev.id);
+        note = ' · empieza hoy';
       }
     }
     return ok(
-      `${prev ? 'Reto actualizado' : 'Reto creado'}: "${data.title}" (${data.days} días, ${sizeAttr(data.size, data.attribute)})${events.length ? ' · empieza hoy' : ''}. Id [${saved.id}].`,
+      `${prev ? 'Reto actualizado' : 'Reto creado'}: "${data.title}" (${data.days} días, ${sizeAttr(data.size, data.attribute)})${note}. Id [${saved.id}].`,
       `${prev ? 'Editó' : 'Creó'} el reto "${data.title}"${events.length ? ' y lo inició' : ''}`,
       { entities: [ref], events },
     );

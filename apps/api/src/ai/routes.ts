@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { drizzle } from 'drizzle-orm/d1';
-import { SNAPSHOT_SCHEMA, type AssistantSnapshot } from '@igv/core';
+import { CONFIG_FINGERPRINT, SNAPSHOT_SCHEMA, type AssistantSnapshot } from '@igv/core';
 import type { AppEnv } from '../env';
 import { createKey, getAiSettings, listAccess, revokeGrant, revokeKey, setAiSettings } from './credentials';
 import { dataVersion, listActivity, readSnapshot, todayCdmx, undoActivity, writeSnapshot } from './store';
@@ -47,7 +47,7 @@ aiRoute.get('/activity', async (c) => c.json({ items: await listActivity(c.env.D
 
 aiRoute.post('/activity/:id/undo', async (c) => {
   const r = await undoActivity(c.env.DB, c.req.param('id'));
-  return r.ok ? c.json({ ok: true }) : c.json({ error: r.error }, 400);
+  return r.ok ? c.json({ ok: true, kept: r.kept ?? 0 }) : c.json({ error: r.error }, 400);
 });
 
 /**
@@ -66,6 +66,8 @@ aiRoute.put('/snapshot', async (c) => {
   if (s?.schema !== SNAPSHOT_SCHEMA || typeof s.version !== 'number' || typeof s.today !== 'string' || !s.level || !s.day) {
     return c.json({ ok: false, reason: 'schema' });
   }
+  // Una PWA con el código anterior calcula con otros números del juego: no se acepta.
+  if (s.config !== CONFIG_FINGERPRINT) return c.json({ ok: false, reason: 'config' });
   if (s.today !== todayCdmx()) return c.json({ ok: false, reason: 'day' });
   const [current, version] = await Promise.all([readSnapshot(c.env.DB), dataVersion(c.env.DB)]);
   if (s.version < version) return c.json({ ok: false, reason: 'stale' });

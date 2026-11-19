@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import app from '../src/index';
 import { mcpApp } from '../src/ai/mcp';
 import { fakeD1 } from './fake-d1';
@@ -29,6 +29,8 @@ describe('servidor MCP con llave personal', () => {
     const bad = await mcp('/mcp', json({ jsonrpc: '2.0', id: 1, method: 'ping' }, { authorization: 'Bearer igv_key_noexisteeeeeeeeeeeeeeeeeeeeeee' }));
     expect(bad.status).toBe(401);
     expect(bad.headers.get('www-authenticate')).toContain('invalid_token');
+    // Solo ASCII (RFC 6750): el cliente de Codex rechaza otros bytes en este encabezado.
+    expect(/^[\x20-\x7e]*$/.test(bad.headers.get('www-authenticate')!)).toBe(true);
   });
 
   it('la app crea una llave (se muestra una sola vez) y con ella se inicia sesión MCP', async () => {
@@ -133,10 +135,18 @@ describe('OAuth para Claude, ChatGPT y demás', () => {
     const csrf = await main('/api/oauth/authorize', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ ...Object.fromEntries(q), decision: 'allow' }).toString() });
     expect(csrf.status).toBe(403);
 
-    const approve = await main('/api/oauth/authorize', {
+    // Sin marcar la casilla (p. ej. un doble clic engañado) no se aprueba.
+    const noConfirm = await main('/api/oauth/authorize', {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded', origin: 'http://localhost' },
       body: new URLSearchParams({ ...Object.fromEntries(q), decision: 'allow' }).toString(),
+    });
+    expect(noConfirm.status).toBe(400);
+
+    const approve = await main('/api/oauth/authorize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded', origin: 'http://localhost' },
+      body: new URLSearchParams({ ...Object.fromEntries(q), decision: 'allow', confirm: '1' }).toString(),
     });
     expect(approve.status).toBe(302);
     const loc = new URL(approve.headers.get('location')!);
@@ -151,7 +161,7 @@ describe('OAuth para Claude, ChatGPT y demás', () => {
     const again = await main('/api/oauth/authorize', {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded', origin: 'http://localhost' },
-      body: new URLSearchParams({ ...Object.fromEntries(q), decision: 'allow' }).toString(),
+      body: new URLSearchParams({ ...Object.fromEntries(q), decision: 'allow', confirm: '1' }).toString(),
     });
     const code2 = new URL(again.headers.get('location')!).searchParams.get('code')!;
     const tokRes = await mcp('/oauth/token', form({ grant_type: 'authorization_code', code: code2, redirect_uri: redirect, client_id: clientId, code_verifier: verifier }));
@@ -170,14 +180,25 @@ describe('OAuth para Claude, ChatGPT y demás', () => {
     const ref = await mcp('/oauth/token', form({ grant_type: 'refresh_token', refresh_token: tok.refresh_token, client_id: clientId }));
     expect(ref.status).toBe(200);
     const tok2 = (await ref.json()) as any;
-    expect((await rpc(tok.access_token, 'ping')).status).toBe(401); // el access viejo ya no sirve
     expect((await rpc(tok2.access_token, 'ping')).status).toBe(200);
+    // Los access tokens vigentes no se anulan al rotar (refrescos en paralelo): caducan solos en 1 h.
+    expect((await rpc(tok.access_token, 'ping')).status).toBe(200);
 
-    // Reusar un refresh ya rotado revoca la conexión completa.
-    const reuse = await mcp('/oauth/token', form({ grant_type: 'refresh_token', refresh_token: tok.refresh_token, client_id: clientId }));
-    expect(reuse.status).toBe(400);
-    expect(((await reuse.json()) as any).error).toBe('invalid_grant');
-    expect((await rpc(tok2.access_token, 'ping')).status).toBe(401);
+    // Reintento o refresco simultáneo dentro del margen: se acepta sin revocar nada.
+    const retry = await mcp('/oauth/token', form({ grant_type: 'refresh_token', refresh_token: tok.refresh_token, client_id: clientId }));
+    expect(retry.status).toBe(200);
+
+    // Reusar un refresh rotado fuera del margen revoca la conexión completa (posible robo).
+    const realNow = Date.now;
+    vi.spyOn(Date, 'now').mockImplementation(() => realNow() + 61_000);
+    try {
+      const reuse = await mcp('/oauth/token', form({ grant_type: 'refresh_token', refresh_token: tok.refresh_token, client_id: clientId }));
+      expect(reuse.status).toBe(400);
+      expect(((await reuse.json()) as any).error).toBe('invalid_grant');
+      expect((await rpc(tok2.access_token, 'ping')).status).toBe(401);
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 
   it('cancelar regresa access_denied', async () => {
@@ -196,5 +217,58 @@ describe('OAuth para Claude, ChatGPT y demás', () => {
     expect((await main(`/api/oauth/authorize?${q}`)).status).toBe(200);
     const bad = new URLSearchParams({ ...Object.fromEntries(q), redirect_uri: 'http://localhost:51234/otra' });
     expect((await main(`/api/oauth/authorize?${bad}`)).status).toBe(400);
+  });
+});
+
+describe('pantalla Permitir y registro abierto', () => {
+  const challenge = 'x'.repeat(43);
+  it('avisa si una app dice ser Claude pero regresa a otro dominio', async () => {
+    const reg = (await (await mcp('/oauth/register', json({ client_name: 'Claude', redirect_uris: ['https://script.google.com/macros/s/abc/exec'] }))).json()) as any;
+    const q = new URLSearchParams({ response_type: 'code', client_id: reg.client_id, redirect_uri: 'https://script.google.com/macros/s/abc/exec', code_challenge: challenge, code_challenge_method: 'S256' });
+    const html = await (await main(`/api/oauth/authorize?${q}`)).text();
+    expect(html).toContain('Cuidado');
+    expect(html).toContain('script.google.com/macros/s/abc/exec');
+    expect(html).toContain('name="confirm"');
+  });
+
+  it('el registro dinámico tiene tope de apps sin conectar', async () => {
+    const fresh = { DB: fakeD1(), DEV_BYPASS_AUTH: 'true' } as any;
+    const reg = () => mcpApp.request('/oauth/register', json({ client_name: 'x', redirect_uris: ['https://claude.ai/api/mcp/auth_callback'] }), fresh);
+    for (let i = 0; i < 30; i++) expect((await reg()).status).toBe(201);
+    expect((await reg()).status).toBe(429);
+  });
+});
+
+describe('deshacer respeta lo que pasó después', () => {
+  it('no pisa una edición posterior y archiva (no borra) una meta con avances propios', async () => {
+    const e = { DB: fakeD1(), DEV_BYPASS_AUTH: 'true' } as any;
+    const m = (path: string, init?: RequestInit) => app.request(path, init, e);
+    const key = ((await (await m('/api/ai/keys', json({ name: 'k' }))).json()) as any).token;
+    const call2 = async (name: string, args: unknown) => {
+      const res = await mcpApp.request('/mcp', json({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, { authorization: `Bearer ${key}` }), e);
+      return ((await res.json()) as any).result;
+    };
+    // La IA crea una meta; Iván registra avance desde la app.
+    const created = await call2('guardar_meta', { titulo: 'Leer 2 libros', objetivo: 2, unidad: 'libros' });
+    const goalId = /Id \[([^\]]+)\]/.exec(created.content[0].text)![1];
+    await m('/api/events', json({ id: 'evt-app-0001', type: 'goal.progress', occurredAt: new Date().toISOString(), localDate: '2026-11-19', payload: { goalId, amount: 2 } }));
+    // La IA crea una diaria e Iván la edita después.
+    const daily = await call2('guardar_mision', { tipo: 'diaria', titulo: 'Meditar', tamano: 'chica', atributo: 'disciplina' });
+    const dailyId = /Id \[([^\]]+)\]/.exec(daily.content[0].text)![1];
+    await m(`/api/entities/${dailyId}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ module: 'missions', kind: 'daily', data: { title: 'Meditar 15 min', size: 'chica', attribute: 'disciplina' } }) });
+
+    const items = ((await (await m('/api/ai/activity')).json()) as any).items as { id: string; tool: string }[];
+    for (const it of items) {
+      const r = (await (await m(`/api/ai/activity/${it.id}/undo`, { method: 'POST' })).json()) as any;
+      expect(r.ok).toBe(true);
+      expect(r.kept).toBe(1);
+    }
+    const sync = (await (await m('/api/sync?since=0')).json()) as { entities: { id: string; data: any; deletedAt: number | null }[] };
+    const goal = sync.entities.find((x) => x.id === goalId)!;
+    expect(goal.deletedAt).toBeNull();
+    expect(goal.data.archived).toBe(true);
+    const d = sync.entities.find((x) => x.id === dailyId)!;
+    expect(d.deletedAt).toBeNull();
+    expect(d.data.title).toBe('Meditar 15 min');
   });
 });

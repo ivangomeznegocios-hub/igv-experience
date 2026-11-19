@@ -13,6 +13,7 @@ import {
   refreshGrant,
   registerClient,
   revokeToken,
+  TooManyClientsError,
   type ClientData,
 } from './credentials';
 import { appOrigin } from './urls';
@@ -70,7 +71,7 @@ oauthServerRoutes.post('/oauth/register', async (c) => {
     return c.json({ error: 'invalid_client_metadata', error_description: 'JSON inválido' }, 400);
   }
   const uris = Array.isArray(body.redirect_uris) ? body.redirect_uris.filter((u): u is string => typeof u === 'string') : [];
-  if (!uris.length || uris.length > 10 || !uris.every((u) => u.length <= 500 && isAllowedRedirect(u))) {
+  if (!uris.length || uris.length > 5 || !uris.every((u) => u.length <= 300 && isAllowedRedirect(u))) {
     return c.json({ error: 'invalid_redirect_uri', error_description: 'redirect_uris debe tener URLs https, de loopback (http://localhost) o de una app nativa.' }, 400);
   }
   const str = (v: unknown, max: number) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined);
@@ -81,7 +82,14 @@ oauthServerRoutes.post('/oauth/register', async (c) => {
     logo_uri: str(body.logo_uri, 300),
     scope: str(body.scope, 200),
   };
-  const { id, createdAt } = await registerClient(drizzle(c.env.DB), meta);
+  let registered: { id: string; createdAt: number };
+  try {
+    registered = await registerClient(drizzle(c.env.DB), meta);
+  } catch (err) {
+    if (err instanceof TooManyClientsError) return c.json({ error: 'temporarily_unavailable', error_description: 'Demasiados registros recientes. Intenta más tarde.' }, 429);
+    throw err;
+  }
+  const { id, createdAt } = registered;
   return c.json(
     {
       client_id: id,
@@ -160,8 +168,15 @@ oauthServerRoutes.post('/oauth/revoke', async (c) => {
 
 export const consentRoute = new Hono<AppEnv>();
 
-/** Dominios de asistentes conocidos (solo para avisar si la dirección de regreso es otra). */
-const KNOWN_HOSTS = ['claude.ai', 'claude.com', 'anthropic.com', 'chatgpt.com', 'openai.com', 'cursor.com', 'google.com'];
+/**
+ * Hosts EXACTOS de regreso de asistentes conocidos (solo para avisar si la dirección es otra). Sin sufijos: dominios
+ * como google.com alojan páginas de terceros. Si una app dice ser uno de estos asistentes, debe regresar a su host.
+ */
+const KNOWN_ASSISTANTS: { name: RegExp; hosts: string[] }[] = [
+  { name: /claude|anthropic/i, hosts: ['claude.ai', 'claude.com'] },
+  { name: /chatgpt|openai/i, hosts: ['chatgpt.com', 'chat.openai.com'] },
+];
+const KNOWN_HOSTS = KNOWN_ASSISTANTS.flatMap((a) => a.hosts);
 
 const AUTH_PARAMS = ['response_type', 'client_id', 'redirect_uri', 'code_challenge', 'code_challenge_method', 'state', 'scope', 'resource'] as const;
 type AuthParams = Partial<Record<(typeof AUTH_PARAMS)[number], string>>;
@@ -185,6 +200,7 @@ h1{font-size:22px;margin:6px 0 4px;letter-spacing:-.01em}p{margin:8px 0;color:va
 ul{margin:14px 0;padding-left:18px}li{margin:6px 0}b{color:var(--text)}
 .row{display:flex;gap:10px;margin-top:18px}button{flex:1;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:transparent;color:var(--text);font:600 15px system-ui;cursor:pointer}
 button.primary{background:var(--gold);border-color:var(--gold);color:#111}.small{font-size:13px}.warn{color:var(--red)}
+.confirm{display:flex;gap:10px;align-items:flex-start;margin:16px 0 4px;font-size:14px;color:var(--text);cursor:pointer}.confirm input{width:20px;height:20px;margin:1px 0 0;accent-color:var(--gold);flex:none}
 code{font-size:13px;background:rgba(127,127,127,.15);padding:1px 5px;border-radius:6px;word-break:break-all}
 </style></head><body><main class="card"><div class="eyebrow">IGV EXPERIENCE · Conectar IA</div>${body}</main></body></html>`;
   return new Response(html, {
@@ -219,16 +235,25 @@ consentRoute.get('/authorize', async (c) => {
   const r = await check(c.env, p);
   if (!r.ok) return r.response;
   const { allowWrites } = await getAiSettings(drizzle(c.env.DB));
-  const host = (() => {
+  const target = (() => {
     try {
       const u = new URL(r.redirectUri);
-      return u.protocol === 'http:' || u.protocol === 'https:' ? u.host : `${u.protocol}//`;
+      return u.protocol === 'http:' || u.protocol === 'https:' ? { host: u.host, hostname: u.hostname, show: `${u.host}${u.pathname}` } : { host: '', hostname: '', show: `${u.protocol}//` };
     } catch {
-      return r.redirectUri;
+      return { host: '', hostname: '', show: r.redirectUri };
     }
   })();
-  const loopback = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(host);
-  const known = KNOWN_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
+  const loopback = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(target.hostname);
+  const known = KNOWN_HOSTS.includes(target.hostname);
+  const claims = KNOWN_ASSISTANTS.find((a) => a.name.test(r.client.client_name));
+  const impostor = !!claims && !loopback && !claims.hosts.includes(target.hostname);
+  const warning = impostor
+    ? `<p class="small warn"><b>Cuidado:</b> dice ser «${esc(r.client.client_name)}» pero no regresa a ${claims!.hosts.join(' ni ')}. Si no lo esperabas, cancela.</p>`
+    : loopback
+      ? '<p class="small warn">Es una app en tu computadora: acepta solo si tú iniciaste la conexión.</p>'
+      : known
+        ? ''
+        : '<p class="small warn">No es la dirección de un asistente conocido (Claude, ChatGPT…): acepta solo si tú iniciaste la conexión.</p>';
   const hidden = AUTH_PARAMS.map((k) => (k === 'redirect_uri' ? `<input type="hidden" name="${k}" value="${esc(r.redirectUri)}">` : p[k] ? `<input type="hidden" name="${k}" value="${esc(p[k]!)}">` : '')).join('');
   return page(
     'Permitir acceso',
@@ -238,15 +263,11 @@ consentRoute.get('/authorize', async (c) => {
 <li>Ver tu progreso, tu día, tu catálogo y tus registros.</li>
 ${allowWrites ? '<li>Registrar y organizar cosas por ti (misiones, dinero, metas, agenda…). Todo queda en <b>Más → Conectar IA → Actividad</b> y se puede deshacer.</li>' : '<li>Solo lectura: tienes desactivados los cambios por IA.</li>'}
 </ul>
-<p class="small">Al aceptar volverás a <code>${esc(host)}</code>.${
-      loopback
-        ? ' <span class="warn">Es una app en tu computadora: acepta solo si tú iniciaste la conexión.</span>'
-        : known
-          ? ''
-          : ' <span class="warn">No es la dirección de un asistente conocido (Claude, ChatGPT…): acepta solo si tú iniciaste la conexión.</span>'
-    } Puedes desconectarla cuando quieras en la app.</p>
+<p class="small">Al aceptar volverás a <code>${esc(target.show)}</code>. Puedes desconectarla cuando quieras en la app.</p>
+${warning}
 <form method="post" action="/api/oauth/authorize">${hidden}
-<div class="row"><button type="submit" name="decision" value="deny">Cancelar</button><button class="primary" type="submit" name="decision" value="allow">Permitir</button></div>
+<label class="confirm"><input type="checkbox" name="confirm" value="1" required> Yo inicié esta conexión desde mi asistente</label>
+<div class="row"><button type="submit" name="decision" value="deny" formnovalidate>Cancelar</button><button class="primary" type="submit" name="decision" value="allow">Permitir</button></div>
 </form>`,
   );
 });
@@ -261,6 +282,8 @@ consentRoute.post('/authorize', async (c) => {
   const p = Object.fromEntries(AUTH_PARAMS.map((k) => [k, typeof form[k] === 'string' ? form[k] : undefined])) as AuthParams;
   const r = await check(c.env, p);
   if (!r.ok) return r.response;
+  // La casilla obligatoria evita aprobar con un doble clic engañado (double-clickjacking).
+  if (form.decision === 'allow' && form.confirm !== '1') return page('Falta confirmar', '<h1>Falta confirmar</h1><p>Marca «Yo inicié esta conexión desde mi asistente» y vuelve a intentar desde tu asistente.</p>', 400);
   const back = new URL(r.redirectUri);
   if (form.decision !== 'allow') {
     back.searchParams.set('error', 'access_denied');

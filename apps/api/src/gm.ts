@@ -6,6 +6,7 @@ import { APP_GUIDE, ASSISTANT_TOOLS, renderOverview, runAssistantTool, toolInput
 import type { AppEnv } from './env';
 import { getAiSettings } from './ai/credentials';
 import { D1AssistantStore, recordActivity } from './ai/store';
+import { countingD1, type QueryCounter } from './ai/budget';
 
 /**
  * Fase 4 (opcional): Coach IA (rutas /api/gm/*; el nombre de la ruta se conserva).
@@ -72,15 +73,26 @@ export interface CoachAction {
   activityId: string;
 }
 
+/** El plan gratis permite 50 consultas a D1 por invocación: se deja margen para registrar la bitácora. */
+const QUERY_BUDGET = 40;
+const MAX_TOOL_CALLS = 12;
+
 gmRoute.post('/ask', async (c) => {
   if (!c.env.ANTHROPIC_API_KEY) return c.json({ error: 'El Coach no está activado: falta el secreto ANTHROPIC_API_KEY.' }, 503);
   const parsed = askSchema.safeParse(await c.req.json());
   if (!parsed.success) return c.json({ error: 'Solicitud inválida' }, 400);
   const { question, history, context, readOnly } = parsed.data;
 
-  const allowWrites = !readOnly && (await getAiSettings(drizzle(c.env.DB))).allowWrites;
-  const store = new D1AssistantStore(c.env.DB);
-  const overview = renderOverview(await store.snapshot());
+  const queries: QueryCounter = { count: 0 };
+  const DB = countingD1(c.env.DB, queries);
+  const allowWrites = !readOnly && (await getAiSettings(drizzle(DB))).allowWrites;
+  const store = new D1AssistantStore(DB);
+  // Si la pantalla manda sus propios datos para una consulta de solo lectura (p. ej. el reporte de una semana),
+  // se usan solos: el panorama de hoy mezclaría dos periodos.
+  const intro =
+    readOnly && context
+      ? `Estos son los datos de la pantalla donde estoy:\n\n${context}\n\n(Solo consulta: no registres ni cambies nada.)`
+      : `Este es mi estado actual en la app:\n\n${renderOverview(await store.snapshot())}${context ? `\n\nDatos de la pantalla donde estoy:\n${context}` : ''}${allowWrites ? '' : '\n\n(En esta conversación solo puedes consultar; no registres ni cambies nada.)'}`;
   const tools: Anthropic.Beta.BetaTool[] = ASSISTANT_TOOLS.filter((t) => allowWrites || !t.writes).map((t) => ({
     name: t.name,
     description: t.description,
@@ -89,15 +101,31 @@ gmRoute.post('/ask', async (c) => {
 
   const client = new Anthropic({ apiKey: c.env.ANTHROPIC_API_KEY });
   const messages: Anthropic.Beta.BetaMessageParam[] = [
-    {
-      role: 'user',
-      content: `Este es mi estado actual en la app:\n\n${overview}${context ? `\n\nDatos de la pantalla donde estoy:\n${context}` : ''}${allowWrites ? '' : '\n\n(En esta conversación solo puedes consultar; no registres ni cambies nada.)'}`,
-    },
+    { role: 'user', content: intro },
     { role: 'assistant', content: 'Entendido. Tengo tu estado a la vista. ¿Qué necesitas?' },
     ...history.map((m) => ({ role: m.role, content: m.content })),
     { role: 'user', content: question },
   ];
   const actions: CoachAction[] = [];
+  let toolCalls = 0;
+
+  /** Ejecuta una herramienta sin dejar que un error inesperado tumbe la conversación. */
+  const runTool = async (use: Anthropic.Beta.BetaToolUseBlock): Promise<Anthropic.Beta.BetaToolResultBlockParam> => {
+    if (++toolCalls > MAX_TOOL_CALLS || queries.count >= QUERY_BUDGET) {
+      return { type: 'tool_result', tool_use_id: use.id, is_error: true, content: 'Llegaste al límite de acciones por mensaje. Dile a Iván qué quedó hecho y que te pida el resto en otro mensaje.' };
+    }
+    try {
+      const r = await runAssistantTool(use.name, use.input, store, { allowWrites });
+      if (!r.isError && r.summary && r.refs) {
+        const activityId = await recordActivity(DB, { source: 'Coach', tool: use.name, summary: r.summary, refs: r.refs });
+        actions.push({ tool: use.name, summary: r.summary, activityId });
+      }
+      return { type: 'tool_result', tool_use_id: use.id, content: r.text, is_error: !!r.isError };
+    } catch (err) {
+      console.error('coach tool', use.name, err);
+      return { type: 'tool_result', tool_use_id: use.id, is_error: true, content: 'Error interno al ejecutar la herramienta. No se registró nada con ella.' };
+    }
+  };
 
   try {
     let answer = '';
@@ -128,24 +156,18 @@ gmRoute.post('/ask', async (c) => {
       // Se devuelve el contenido completo (incluye bloques de razonamiento) y luego todos los resultados juntos.
       messages.push({ role: 'assistant', content: response.content as Anthropic.Beta.BetaContentBlockParam[] });
       const results: Anthropic.Beta.BetaToolResultBlockParam[] = [];
-      for (const use of uses) {
-        const r = await runAssistantTool(use.name, use.input, store, { allowWrites });
-        if (!r.isError && r.summary && r.refs) {
-          const activityId = await recordActivity(c.env.DB, { source: 'Coach', tool: use.name, summary: r.summary, refs: r.refs });
-          actions.push({ tool: use.name, summary: r.summary, activityId });
-        }
-        results.push({ type: 'tool_result', tool_use_id: use.id, content: r.text, is_error: !!r.isError });
-      }
+      for (const use of uses) results.push(await runTool(use));
       messages.push({ role: 'user', content: results });
     }
     return c.json({ answer: answer || (actions.length ? 'Listo.' : 'Sin respuesta.'), actions });
   } catch (err) {
-    // Si algo ya se registró, se informa aunque la conversación falle.
+    // Lo que ya se registró se informa siempre (con su "Deshacer"), aunque la conversación falle.
     const done = actions.length ? ` (Alcancé a hacer: ${actions.map((a) => a.summary).join('; ')}.)` : '';
     if (err instanceof Anthropic.AuthenticationError) return c.json({ error: 'La clave de la API de Claude no es válida.' + done, actions }, 502);
     if (err instanceof Anthropic.RateLimitError) return c.json({ error: 'Límite de uso alcanzado. Intenta en un momento.' + done, actions }, 429);
     if (err instanceof Anthropic.APIError) return c.json({ error: `Error de la API de Claude (${err.status ?? '?'})` + done, actions }, 502);
-    throw err;
+    console.error('coach', err);
+    return c.json({ error: 'Error interno del Coach.' + done, actions }, 500);
   }
 });
 

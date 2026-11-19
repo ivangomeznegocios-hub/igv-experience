@@ -17,7 +17,7 @@ import {
   type TodoData,
   type ViceData,
 } from '@igv/core';
-import { api, type CoachAction, type GmParseResult, type GmProposal } from '../data/api';
+import { api, ApiError, type CoachAction, type GmParseResult, type GmProposal } from '../data/api';
 import { addEvent, sync, useGame } from '../data/store';
 import { uploadSnapshotNow } from '../lib/aiSnapshot';
 import { completeMission, completeQuick, saveTodo, writeLesson } from '../lib/actions';
@@ -297,6 +297,13 @@ function Chat() {
       setMsgs((m) => [...m, { role: 'assistant', content: res.answer, actions: res.actions }]);
       if (res.actions?.length) await sync();
     } catch (e) {
+      // Si el Coach alcanzó a registrar algo antes de fallar, se muestra con su "Deshacer".
+      const done = e instanceof ApiError ? (e.body as { actions?: CoachAction[] } | undefined)?.actions : undefined;
+      if (done?.length) {
+        setMsgs((m) => [...m, { role: 'assistant', content: e instanceof Error ? e.message : 'Error', actions: done }]);
+        await sync();
+        return;
+      }
       setErr(e instanceof Error ? e.message : 'Error');
     } finally {
       setBusy(false);
@@ -305,10 +312,10 @@ function Chat() {
 
   const undoAction = async (msgIndex: number, action: CoachAction) => {
     try {
-      await api.aiUndo(action.activityId);
+      const r = await api.aiUndo(action.activityId);
       await sync();
       setMsgs((m) => m.map((x, i) => (i === msgIndex ? { ...x, actions: x.actions?.map((a) => (a.activityId === action.activityId ? { ...a, undone: true } : a)) } : x)));
-      toast('Deshecho');
+      toast(r.kept ? 'Deshecho (respeté lo que cambiaste después)' : 'Deshecho');
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Error', 'error');
     }

@@ -201,3 +201,57 @@ describe('foto del estado', () => {
     expect(text).toContain('Rutina');
   });
 });
+
+describe('herramientas de IA: protegen la XP ganada y las fechas', () => {
+  const reto: Entity = { id: 'ch-2', module: 'challenges', kind: 'challenge', sort: 1, data: { title: 'Leer diario', days: 2, attribute: 'inteligencia', size: 'grande' } };
+
+  it('marcar_reto no marca días anteriores al intento ni empieza antes de ayer', async () => {
+    const store = mk([], [...seed, reto]);
+    expect((await run(store, 'marcar_reto', { reto_id: 'ch-2', fecha: '2026-11-16' })).isError).toBe(true);
+    const ayer = await run(store, 'marcar_reto', { reto_id: 'ch-2', fecha: '2026-11-18' });
+    expect(ayer.isError).toBeFalsy();
+    expect(ayer.text).toContain('día 1 de 2');
+    expect((await run(store, 'marcar_reto', { reto_id: 'ch-2', fecha: '2026-11-17' })).isError).toBe(true);
+    expect((await run(store, 'marcar_reto', { reto_id: 'ch-2', fecha: '2026-11-18' })).text).toContain('ya estaba marcado');
+    const hoy = await run(store, 'marcar_reto', { reto_id: 'ch-2' });
+    expect(hoy.text).toContain('completado');
+    const state = project({ events: store.allEvents(), entities: [...seed, reto], today: TODAY });
+    expect(state.challenges['ch-2'].completions).toBe(1);
+  });
+
+  it('no deja cambiar días o tamaño de un reto ya completado (le quitaría XP)', async () => {
+    const store = mk([ev('challenge.started', '2026-11-18', { challengeId: 'ch-2' }), ev('challenge.checked', '2026-11-18', { challengeId: 'ch-2' }), ev('challenge.checked', TODAY, { challengeId: 'ch-2' })], [...seed, reto]);
+    const before = project({ events: store.allEvents(), entities: await store.catalog(), today: TODAY }).xp.total;
+    expect((await run(store, 'guardar_reto', { id: 'ch-2', dias: 5 })).isError).toBe(true);
+    expect((await run(store, 'guardar_reto', { id: 'ch-2', tamano: 'chica' })).isError).toBe(true);
+    expect((await run(store, 'guardar_reto', { id: 'ch-2', titulo: 'Leer todos los días' })).isError).toBeFalsy();
+    expect(project({ events: store.allEvents(), entities: await store.catalog(), today: TODAY }).xp.total).toBe(before);
+  });
+
+  it('no deja descumplir una meta cumplida ni bajarle el tamaño', async () => {
+    const goal: Entity = { id: 'goal-1', module: 'goals', kind: 'goal', sort: 1, data: { title: 'Leer 2 libros', target: 2, unit: 'libros', attribute: 'inteligencia', size: 'grande' } };
+    const store = mk([ev('goal.progress', TODAY, { goalId: 'goal-1', amount: 2 })], [...seed, goal]);
+    expect((await run(store, 'guardar_meta', { id: 'goal-1', objetivo: 4 })).isError).toBe(true);
+    expect((await run(store, 'guardar_meta', { id: 'goal-1', tamano: 'chica' })).isError).toBe(true);
+    expect((await run(store, 'guardar_meta', { id: 'goal-1', archivar: true })).isError).toBeFalsy();
+  });
+
+  it('persona clave olvidada: el panorama da el id de su misión y el id de la persona también sirve', async () => {
+    const npc: Entity = { id: 'npc-ana', module: 'npcs', kind: 'npc', sort: 1, createdAt: Date.UTC(2026, 0, 1), data: { name: 'Ana', npcType: 'party', relation: 4, key: true, lastContact: '2026-09-01' } };
+    const store = mk([], [...seed, npc]);
+    const resumen = (await run(store, 'ver_resumen')).text;
+    expect(resumen).toContain('[misión npc-npc-ana]');
+    const r = await run(store, 'completar_mision', { mision_id: 'npc-ana' });
+    expect(r.isError).toBeFalsy();
+    expect(store.allEvents()[0].payload).toMatchObject({ missionId: 'npc-npc-ana', kind: 'npc', npcId: 'npc-ana' });
+    expect((await run(store, 'ver_catalogo', { tipo: 'personas' })).text).toContain(`último contacto: ${TODAY}`);
+  });
+
+  it('las referencias para deshacer guardan la versión que dejó la IA', async () => {
+    const store = mk();
+    const r = await run(store, 'guardar_premio', { nombre: 'Cena', costo: 40 });
+    const ref = r.refs!.entities[0];
+    const saved = (await store.catalog()).find((e) => e.id === ref.id)!;
+    expect(ref.savedAt).toBe(saved.updatedAt);
+  });
+});
