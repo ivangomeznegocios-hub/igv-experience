@@ -1,0 +1,25 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  // Segundo Worker: el servidor MCP para conectar Claude, ChatGPT, Codex, Antigravity… a la app.
+  // Es público a propósito (los asistentes no pueden pasar por Cloudflare Access): se protege con OAuth
+  // (las conexiones se aprueban en la app, que sí está detrás de Access) o con llaves creadas en la app.
+  // URL: https://igv-experience-mcp.<subdominio>.workers.dev/mcp
+  "name": "igv-experience-mcp",
+  "main": "src/mcp-worker.ts",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "igv-experience",
+      // El despliegue automático reemplaza este valor con el ID real (la misma base que la app).
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "../../packages/db/migrations"
+    }
+  ],
+  // APP_URL y MCP_URL solo hacen falta con dominio propio; se configuran en el panel y se conservan.
+  "keep_vars": true,
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": { "enabled": true }
+}

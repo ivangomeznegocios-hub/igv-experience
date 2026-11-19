@@ -65,7 +65,8 @@ export function Mas() {
         <Tile to="/biblioteca" icon="book" title="Biblioteca" sub={books ? `${books} en curso` : 'Libros y cursos'} />
         <Tile to="/cuerpo" icon="heart" title="Cuerpo" sub="Peso, entrenos y sueño" />
         <Tile to="/enemigos" icon="shield" title="Hábitos a dejar" sub={vices.length ? `${vices.length} bajo control` : 'Lo que quieres dejar'} />
-        <Tile to="/game-master" icon="sparkles" title="Coach" sub="Misiones y registro por texto" />
+        <Tile to="/game-master" icon="sparkles" title="Coach" sub="Conversa y registra por ti" />
+        <Tile to="/conectar-ia" icon="link" title="Conectar IA" sub="Claude, ChatGPT, Codex, Antigravity" />
         <Tile to="/ajustes" icon="settings" title="Ajustes" sub="Perfil, notificaciones, respaldo" />
       </div>
     </>

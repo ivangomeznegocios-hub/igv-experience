@@ -27,6 +27,40 @@ export interface ChallengeState {
 }
 
 /**
+ * Intentos de un reto a partir de sus días de inicio y de los días marcados (función pura: la usan el motor,
+ * las herramientas de IA y "deshacer"). Un inicio abre un intento solo si no hay otro ocupando ese día.
+ */
+export function challengeAttempts(startDates: string[], checked: Set<string>, days: number, today: string): ChallengeAttempt[] {
+  const attempts: ChallengeAttempt[] = [];
+  let busyUntil: string | null = null; // último día ocupado por un intento
+  for (const start of [...startDates].sort()) {
+    if (busyUntil && start <= busyUntil) continue; // ya había un intento en curso ese día
+    const endDate = addDays(start, days - 1);
+    const done: string[] = [];
+    let status: ChallengeAttempt['status'] = 'active';
+    let closedOn: string | null = null;
+    for (let i = 0; i < days; i++) {
+      const d = addDays(start, i);
+      if (d > today) break;
+      if (checked.has(d)) {
+        done.push(d);
+        if (i === days - 1) {
+          status = 'completed';
+          closedOn = d;
+        }
+      } else if (d < today) {
+        status = 'failed';
+        closedOn = d;
+        break;
+      } else break; // hoy sin marcar: sigue vivo
+    }
+    attempts.push({ startDate: start, endDate, checked: done, status, closedOn });
+    busyUntil = status === 'active' ? '9999-12-31' : closedOn;
+  }
+  return attempts;
+}
+
+/**
  * Retos de N días seguidos. Cada `challenge.started` abre un intento (si no hay otro en curso).
  * Un intento falla si un día ya terminado no se marcó; hoy nunca lo hace fallar.
  * Completarlo da la XP de una misión de su tamaño (una vez por intento completado).
@@ -47,31 +81,8 @@ export function reduceChallenges(ctx: Ctx): Record<string, ChallengeState> {
   for (const c of entitiesOf<ChallengeData>(ctx, 'challenges', 'challenge')) {
     const days = Math.max(1, Math.min(365, Math.round(c.data.days || ctx.cfg.challenge.defaultDays)));
     const checked = checks.get(c.id) ?? new Set<string>();
-    const attempts: ChallengeAttempt[] = [];
-    let busyUntil: string | null = null; // último día ocupado por un intento
-    for (const start of [...(starts.get(c.id) ?? [])].sort()) {
-      if (busyUntil && start <= busyUntil) continue; // ya había un intento en curso ese día
-      const endDate = addDays(start, days - 1);
-      const done: string[] = [];
-      let status: ChallengeAttempt['status'] = 'active';
-      let closedOn: string | null = null;
-      for (let i = 0; i < days; i++) {
-        const d = addDays(start, i);
-        if (d > ctx.today) break;
-        if (checked.has(d)) {
-          done.push(d);
-          if (i === days - 1) {
-            status = 'completed';
-            closedOn = d;
-          }
-        } else if (d < ctx.today) {
-          status = 'failed';
-          closedOn = d;
-          break;
-        } else break; // hoy sin marcar: sigue vivo
-      }
-      attempts.push({ startDate: start, endDate, checked: done, status, closedOn });
-      busyUntil = status === 'active' ? '9999-12-31' : closedOn;
+    const attempts = challengeAttempts(starts.get(c.id) ?? [], checked, days, ctx.today);
+    for (const { status, closedOn } of attempts) {
       if (status === 'completed') {
         ctx.addXp({
           date: closedOn!,

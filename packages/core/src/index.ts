@@ -22,7 +22,7 @@ export type { BountyState, BountyInfo } from './engine/modules/bounty';
 export type { GoldState, Redemption, GoldBonus, Pledge } from './engine/modules/gold';
 export { goldFor, dayCloseBonus } from './engine/modules/gold';
 export type { ChallengeState, ChallengeAttempt } from './engine/modules/challenges';
-export { challengeDayNumber } from './engine/modules/challenges';
+export { challengeAttempts, challengeDayNumber } from './engine/modules/challenges';
 export type { DayPlan, PlanItem } from './engine/modules/plans';
 export * from './engine/insights';
 export * from './engine/physique';
@@ -33,3 +33,7 @@ export type { BodyState, BodyEntry, SavingsState, DayClosure } from './engine/mo
 export { REPEATABLE_KINDS } from './engine/modules/missions';
 export * from './seed/index';
 export * from './backup';
+export * from './assistant/snapshot';
+export * from './assistant/tools';
+export * from './assistant/format';
+export * from './assistant/memory';

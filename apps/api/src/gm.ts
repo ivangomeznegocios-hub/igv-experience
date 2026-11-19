@@ -1,20 +1,27 @@
 import { Hono } from 'hono';
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
+import { drizzle } from 'drizzle-orm/d1';
+import { APP_GUIDE, ASSISTANT_TOOLS, renderOverview, runAssistantTool, toolInputSchema } from '@igv/core';
 import type { AppEnv } from './env';
+import { getAiSettings } from './ai/credentials';
+import { D1AssistantStore, recordActivity } from './ai/store';
+import { countingD1, type QueryCounter } from './ai/budget';
 
 /**
  * Fase 4 (opcional): Coach IA (rutas /api/gm/*; el nombre de la ruta se conserva).
- * Lee un resumen de tu progreso (lo arma el cliente con el motor del juego) y propone misiones.
+ * Conversa contigo con tu estado a la vista y puede ACTUAR por ti con las mismas herramientas del servidor
+ * MCP (registrar misiones, dinero, metas, agenda…). Cada acción queda en la bitácora con "Deshacer".
  * Usa tu propia clave de la API de Claude, guardada como secreto ANTHROPIC_API_KEY del Worker.
  */
 export const gmRoute = new Hono<AppEnv>();
 
 const DEFAULT_MODEL = 'claude-opus-5-5';
+const MAX_TOOL_ROUNDS = 8;
 
 const SYSTEM = `Eres el Coach de "IGV EXPERIENCE", la app con la que Iván mide y mejora su vida real: misiones, XP, niveles, racha, oro y premios.
 Eres un coach de rendimiento personal: directo, cálido y práctico, como un buen entrenador que lo conoce y le habla de tú.
-Tu trabajo: leer su progreso y proponerle misiones concretas, accionables y medibles para los próximos días.
+Tu trabajo: leer su progreso, proponerle misiones concretas, accionables y medibles, y HACER cosas por él en la app cuando te lo pida.
 
 Reglas del sistema que nunca rompes:
 - La XP nunca se resta. Descansar no quita XP. Un día de descanso marcado no rompe la racha.
@@ -25,19 +32,33 @@ Reglas del sistema que nunca rompes:
 - Atributos: Fuerza física, Inteligencia, Carisma, Finanzas, Disciplina, Relaciones, Creatividad.
 - Con energía de 50 o menos, propón solo misiones chicas y de recuperación.
 
+Herramientas:
+- Tienes herramientas para consultar (ver_*) y para registrar u organizar en su app. Úsalas cuando él te pida hacer algo
+  ("registra que fui al gym", "agéndame llamar al contador el viernes", "crea una meta…") o cuando necesites datos que no tienes.
+- Registra solo lo que él dijo; no inventes montos, fechas ni personas. Si falta un dato importante, pregunta antes.
+- Antes de borrar algo o canjear un premio, confirma con él. Si te equivocas, usa anular_registro.
+- Después de actuar, confirma en una línea qué quedó (y cuánta XP dio). No repitas el texto de las herramientas.
+- Si solo te pide ideas o un plan, propón sin registrar nada.
+
 Cómo respondes:
 - En español de México, casual y directo, cálido y sin sermones. Nada infantil.
 - Habla de la vida real, no de fantasía: nada de jefes, batallas, NPCs, reinos, héroes ni lenguaje medieval o de RPG.
   En la app los "jefes" se llaman "grandes retos" y los NPCs son "personas" / "mi gente".
-- Cuando propongas misiones, usa una lista. Cada misión en una línea con este formato:
+- Cuando propongas misiones (sin registrarlas), usa una lista. Cada misión en una línea con este formato:
   • [Tamaño · Atributo] Nombre de la misión: por qué importa ahora (una frase)
 - Prioriza la misión principal en foco de la temporada, los grandes retos cerca de completarse y los atributos más bajos.
 - Si algo va mal (racha rota, reto estancado, persona clave olvidada), dilo con claridad y propone el siguiente paso más pequeño.
-- Sé breve: máximo ~250 palabras salvo que te pidan más.`;
+- Sé breve: máximo ~250 palabras salvo que te pidan más.
+
+Cómo funciona la app:
+${APP_GUIDE}`;
 
 const askSchema = z.object({
   question: z.string().min(1).max(4000),
-  context: z.string().max(30000),
+  /** Datos extra que manda una pantalla (p. ej. el reporte de una semana). El estado general se lee en el servidor. */
+  context: z.string().max(30000).optional(),
+  /** Solo consultar (p. ej. para escribir un resumen): no se le dan herramientas que escriben. */
+  readOnly: z.boolean().optional(),
   history: z
     .array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().max(8000) }))
     .max(20)
@@ -46,45 +67,119 @@ const askSchema = z.object({
 
 gmRoute.get('/status', (c) => c.json({ enabled: !!c.env.ANTHROPIC_API_KEY, model: c.env.ANTHROPIC_MODEL || DEFAULT_MODEL }));
 
+export interface CoachAction {
+  tool: string;
+  summary: string;
+  activityId: string;
+}
+
+/** El plan gratis permite 50 consultas a D1 por invocación: se deja margen para registrar la bitácora. */
+const QUERY_BUDGET = 40;
+const MAX_TOOL_CALLS = 12;
+
 gmRoute.post('/ask', async (c) => {
   if (!c.env.ANTHROPIC_API_KEY) return c.json({ error: 'El Coach no está activado: falta el secreto ANTHROPIC_API_KEY.' }, 503);
   const parsed = askSchema.safeParse(await c.req.json());
   if (!parsed.success) return c.json({ error: 'Solicitud inválida' }, 400);
-  const { question, context, history } = parsed.data;
+  const { question, history, context, readOnly } = parsed.data;
+
+  const queries: QueryCounter = { count: 0 };
+  const DB = countingD1(c.env.DB, queries);
+  const allowWrites = !readOnly && (await getAiSettings(drizzle(DB))).allowWrites;
+  const store = new D1AssistantStore(DB);
+  // Si la pantalla manda sus propios datos para una consulta de solo lectura (p. ej. el reporte de una semana),
+  // se usan solos: el panorama de hoy mezclaría dos periodos.
+  const intro =
+    readOnly && context
+      ? `Estos son los datos de la pantalla donde estoy:\n\n${context}\n\n(Solo consulta: no registres ni cambies nada.)`
+      : `Este es mi estado actual en la app:\n\n${renderOverview(await store.snapshot())}${context ? `\n\nDatos de la pantalla donde estoy:\n${context}` : ''}${allowWrites ? '' : '\n\n(En esta conversación solo puedes consultar; no registres ni cambies nada.)'}`;
+  const tools: Anthropic.Beta.BetaTool[] = ASSISTANT_TOOLS.filter((t) => allowWrites || !t.writes).map((t) => ({
+    name: t.name,
+    description: t.description,
+    input_schema: toolInputSchema(t) as Anthropic.Beta.BetaTool['input_schema'],
+  }));
 
   const client = new Anthropic({ apiKey: c.env.ANTHROPIC_API_KEY });
   const messages: Anthropic.Beta.BetaMessageParam[] = [
-    { role: 'user', content: `Este es mi estado actual en la app:\n\n${context}` },
+    { role: 'user', content: intro },
     { role: 'assistant', content: 'Entendido. Tengo tu estado a la vista. ¿Qué necesitas?' },
     ...history.map((m) => ({ role: m.role, content: m.content })),
     { role: 'user', content: question },
   ];
+  const actions: CoachAction[] = [];
+  let toolCalls = 0;
+
+  /** Ejecuta una herramienta sin dejar que un error inesperado tumbe la conversación. */
+  const runTool = async (use: Anthropic.Beta.BetaToolUseBlock): Promise<Anthropic.Beta.BetaToolResultBlockParam> => {
+    if (++toolCalls > MAX_TOOL_CALLS || queries.count >= QUERY_BUDGET) {
+      return { type: 'tool_result', tool_use_id: use.id, is_error: true, content: 'Llegaste al límite de acciones por mensaje. Dile a Iván qué quedó hecho y que te pida el resto en otro mensaje.' };
+    }
+    let r: Awaited<ReturnType<typeof runAssistantTool>>;
+    try {
+      r = await runAssistantTool(use.name, use.input, store, { allowWrites });
+    } catch (err) {
+      console.error('coach tool', use.name, err);
+      return {
+        type: 'tool_result',
+        tool_use_id: use.id,
+        is_error: true,
+        content: 'Error interno a mitad de la herramienta: pudo haberse guardado en parte. Revisa con ver_dia o ver_historial antes de reintentar y dile a Iván qué pasó.',
+      };
+    }
+    if (!r.isError && r.summary && r.refs) {
+      try {
+        const activityId = await recordActivity(DB, { source: 'Coach', tool: use.name, summary: r.summary, refs: r.refs });
+        actions.push({ tool: use.name, summary: r.summary, activityId });
+      } catch (err) {
+        // Lo hecho se queda; solo no quedó en la bitácora (sin "Deshacer" desde ahí; se corrige en la app).
+        console.error('coach activity', use.name, err);
+        return { type: 'tool_result', tool_use_id: use.id, content: `${r.text} (Nota: no quedó en la bitácora de la app.)` };
+      }
+    }
+    return { type: 'tool_result', tool_use_id: use.id, content: r.text, is_error: !!r.isError };
+  };
 
   try {
-    const response = await client.beta.messages.create({
-      model: c.env.ANTHROPIC_MODEL || DEFAULT_MODEL,
-      max_tokens: 16000,
-      system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
-      output_config: { effort: 'medium' },
-      // Si un filtro de seguridad rechaza la solicitud, la API reintenta con un modelo de respaldo.
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
-      messages,
-    });
-    if (response.stop_reason === 'refusal') {
-      return c.json({ answer: 'No pude responder a eso. Intenta reformular la pregunta.' });
+    let answer = '';
+    for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
+      const response = await client.beta.messages.create({
+        model: c.env.ANTHROPIC_MODEL || DEFAULT_MODEL,
+        max_tokens: 16000,
+        system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
+        tools,
+        output_config: { effort: 'medium' },
+        // Si un filtro de seguridad rechaza la solicitud, la API reintenta con un modelo de respaldo.
+        betas: ['server-side-fallback-2026-07-01'],
+        fallbacks: 'default',
+        messages,
+      });
+      if (response.stop_reason === 'refusal') {
+        answer = 'No pude responder a eso. Intenta reformular la pregunta.';
+        break;
+      }
+      answer = response.content
+        .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text')
+        .map((b) => b.text)
+        .join('\n')
+        .trim();
+      const uses = response.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use');
+      if (response.stop_reason !== 'tool_use' || !uses.length || round === MAX_TOOL_ROUNDS) break;
+
+      // Se devuelve el contenido completo (incluye bloques de razonamiento) y luego todos los resultados juntos.
+      messages.push({ role: 'assistant', content: response.content as Anthropic.Beta.BetaContentBlockParam[] });
+      const results: Anthropic.Beta.BetaToolResultBlockParam[] = [];
+      for (const use of uses) results.push(await runTool(use));
+      messages.push({ role: 'user', content: results });
     }
-    const answer = response.content
-      .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text')
-      .map((b) => b.text)
-      .join('\n')
-      .trim();
-    return c.json({ answer: answer || 'Sin respuesta.' });
+    return c.json({ answer: answer || (actions.length ? 'Listo.' : 'Sin respuesta.'), actions });
   } catch (err) {
-    if (err instanceof Anthropic.AuthenticationError) return c.json({ error: 'La clave de la API de Claude no es válida.' }, 502);
-    if (err instanceof Anthropic.RateLimitError) return c.json({ error: 'Límite de uso alcanzado. Intenta en un momento.' }, 429);
-    if (err instanceof Anthropic.APIError) return c.json({ error: `Error de la API de Claude (${err.status ?? '?'})` }, 502);
-    throw err;
+    // Lo que ya se registró se informa siempre (con su "Deshacer"), aunque la conversación falle.
+    const done = actions.length ? ` (Alcancé a hacer: ${actions.map((a) => a.summary).join('; ')}.)` : '';
+    if (err instanceof Anthropic.AuthenticationError) return c.json({ error: 'La clave de la API de Claude no es válida.' + done, actions }, 502);
+    if (err instanceof Anthropic.RateLimitError) return c.json({ error: 'Límite de uso alcanzado. Intenta en un momento.' + done, actions }, 429);
+    if (err instanceof Anthropic.APIError) return c.json({ error: `Error de la API de Claude (${err.status ?? '?'})` + done, actions }, 502);
+    console.error('coach', err);
+    return c.json({ error: 'Error interno del Coach.' + done, actions }, 500);
   }
 });
 

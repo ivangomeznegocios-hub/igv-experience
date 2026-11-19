@@ -8,6 +8,7 @@ import { PlanSheet } from './ui/DayPlan';
 import { RecordWatcher } from './ui/RecordWatcher';
 import { SyncPill } from './ui/SyncPill';
 import { schedulePlanUpload } from './lib/notifications';
+import { scheduleSnapshotUpload } from './lib/aiSnapshot';
 import { Toasts, toast } from './ui/kit';
 import { Icon } from './ui/icons';
 import Hoy from './screens/Hoy';
@@ -37,9 +38,10 @@ const Buscar = lazy(() => import('./screens/Buscar'));
 const Anual = lazy(() => import('./screens/Anual'));
 const Retos = lazy(() => import('./screens/Retos'));
 const Records = lazy(() => import('./screens/Records'));
+const ConectarIA = lazy(() => import('./screens/ConectarIA'));
 
 const PROGRESS = ['/progreso', '/jefes', '/logros', '/habilidades', '/temporadas', '/metas', '/estadisticas', '/reporte', '/anual', '/tienda', '/historial', '/retos', '/records'];
-const WORLD = ['/mas', '/inventario', '/npcs', '/mapa', '/vida', '/ajustes', '/game-master', '/enemigos', '/biblioteca', '/cuerpo', '/buscar'];
+const WORLD = ['/mas', '/inventario', '/npcs', '/mapa', '/vida', '/ajustes', '/game-master', '/conectar-ia', '/enemigos', '/biblioteca', '/cuerpo', '/buscar'];
 
 function Nav() {
   const { pathname } = useLocation();
@@ -105,6 +107,15 @@ function NotificationsSync() {
   useEffect(() => {
     if (store.ready) schedulePlanUpload(state, entities);
   }, [state, entities, store.ready]);
+  return null;
+}
+
+/** Mantiene en el servidor la foto del estado para el MCP y el Coach (ver lib/aiSnapshot.ts). */
+function AiSnapshotSync() {
+  const { state, entities, store } = useGame();
+  useEffect(() => {
+    if (store.ready && store.status === 'idle' && store.pendingCount === 0) scheduleSnapshotUpload(state, entities);
+  }, [state, entities, store.ready, store.status, store.pendingCount, store.lastSync]);
   return null;
 }
 
@@ -186,6 +197,7 @@ export default function App() {
                 <Route path="/anual" element={<Anual />} />
                 <Route path="/retos" element={<Retos />} />
                 <Route path="/records" element={<Records />} />
+                <Route path="/conectar-ia" element={<ConectarIA />} />
                 <Route path="*" element={<Hoy />} />
               </Routes>
             </Suspense>
@@ -201,6 +213,7 @@ export default function App() {
       {store.ready && <RecordWatcher />}
       {store.ready && <NotificationsSync />}
       {store.ready && <SkinSync />}
+      {store.ready && <AiSnapshotSync />}
     </BrowserRouter>
   );
 }

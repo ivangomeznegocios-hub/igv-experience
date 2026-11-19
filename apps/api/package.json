@@ -5,11 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "deploy": "wrangler deploy && wrangler deploy -c wrangler.mcp.jsonc",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "dev:mcp": "wrangler dev -c wrangler.mcp.jsonc --port 8788"
   },
   "dependencies": {
     "@igv/core": "workspace:*",

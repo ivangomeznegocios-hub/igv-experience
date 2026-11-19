@@ -30,6 +30,7 @@ código los nombres internos se conservan (módulos, tipos de evento, ids, rutas
 | `lib/narrator.ts` (briefing, buffs, encuentro) | Resumen del día, A tu favor / en contra, Reto del día |
 | `QuestMode` | Modo enfoque (ambiente: Fuego / Lluvia) |
 | `day.closed` / `CampfireCard` | Cierre del día |
+| `/conectar-ia`, `ai/*`, `mcp-worker.ts` | Conectar IA (servidor MCP, llaves, apps conectadas, actividad) |
 
 ## Arquitectura
 
@@ -46,11 +47,16 @@ packages/core   Reglas del juego en TypeScript puro (sin red ni DOM). Probadas c
   src/engine/physique.ts Complexión del personaje 3D: medidas reales → contornos, grasa y músculo (puro, con pruebas).
   src/engine/reports.ts  Funciones puras para reportes: XP por día, reporte semanal, año en review,
                        favoritos, id de misión rápida, elección determinista por fecha.
+  src/assistant/       Herramientas para IA (las usan el servidor MCP y el Coach): `snapshot.ts` (foto
+                       compacta del estado), `tools.ts` (32 herramientas con zod → JSON Schema y un
+                       `AssistantStore` inyectable), `memory.ts` (almacén en memoria para pruebas).
   src/seed/            Datos iniciales (IDs fijos) y guía de atributos (30/70).
 packages/db     Esquema Drizzle (events, entities, server_meta) y migraciones SQL de D1.
-apps/api        Worker de Cloudflare con Hono: /api/* (sync, eventos, catálogo, respaldo, Coach IA en /api/gm, push).
-                Notificaciones push APAGADAS (sin cron); ver "Notificaciones push".
+apps/api        Worker de Cloudflare con Hono: /api/* (sync, eventos, catálogo, respaldo, Coach IA en /api/gm, push,
+                Conectar IA en /api/ai y /api/oauth). Notificaciones push APAGADAS (sin cron); ver "Notificaciones push".
                 El mismo Worker sirve el frontend (Workers Static Assets, SPA).
+                Segundo Worker `igv-experience-mcp` (wrangler.mcp.jsonc, src/mcp-worker.ts): servidor MCP público
+                con OAuth; misma base D1. Ver "Conectar IA (MCP)".
 apps/web        React + Vite + PWA. Calcula el estado en el dispositivo con @igv/core.
   src/character/       Personaje 3D (three.js, se descarga solo al abrir Perfil): geom.ts (tubos por
                        secciones), figure.ts (cuerpo, rostro, cabello, ropa), stage.ts (cámara, luces, giro),
@@ -102,6 +108,61 @@ envía los que ya tocan (máx. 2 h tarde, cada id una sola vez). Web Push sin de
 (`apps/api/src/webpush.ts`: VAPID ES256 + cifrado aes128gcm con WebCrypto). Llaves VAPID, suscripciones,
 plan y enviados viven en `server_meta` (`push_*`, nunca se sincronizan). El service worker de Workbox
 importa `apps/web/public/push-sw.js`. Pruebas: `apps/api/test/push.test.ts` (descifra como el navegador).
+
+### Conectar IA (MCP)
+
+Para usar la app desde Claude (web, escritorio, móvil, Claude Code), ChatGPT, Codex, Antigravity, Cursor…
+- **Dos Workers**: la app (`igv-experience`, detrás de Cloudflare Access) y el MCP (`igv-experience-mcp`,
+  SIN Access, porque los asistentes no pueden pasar por su login). Así no hay que configurar excepciones de
+  Access. URLs: `https://igv-experience-mcp.<sub>.workers.dev/mcp` (se deducen del host; con dominio propio,
+  variables `MCP_URL` en la app y `APP_URL` en el MCP, ver `apps/api/src/ai/urls.ts`). NO actives Access en
+  el Worker del MCP.
+- **Protocolo** (`apps/api/src/ai/mcp.ts`): Streamable HTTP sin estado (POST /mcp → JSON; sin SSE ni
+  sesiones; GET/DELETE → 405). Versiones 2025-11-25 … 2024-11-05. `instructions` = guía de la app.
+- **Autenticación** (`ai/credentials.ts`, `ai/oauth.ts`, tabla `ai_credentials`, tokens solo como SHA-256):
+  OAuth 2.1 con metadatos RFC 9728/8414, registro dinámico SIN ESTADO (RFC 7591, clientes públicos: el
+  `client_id` = `cli1.<metadatos en base64url>.<HMAC>` firmado con el secreto `server_meta.ai_secret`; registrar
+  no toca D1, así que el registro público no se puede abusar), PKCE S256 obligatorio, access 1 h, refresh 90 días
+  que ROTA (reusar uno rotado hace más de 60 s revoca la conexión; dentro de ese margen se acepta por
+  refrescos en paralelo o reintentos; rotar no anula los access vigentes), revocación.
+  La pantalla "Permitir" vive en la app (`GET/POST /api/oauth/authorize`, detrás de Access + anclaje; CSRF
+  por `Origin`; casilla obligatoria "Yo inicié esta conexión" contra doble clickjacking; muestra host y ruta de
+  regreso y avisa si una app dice ser Claude/ChatGPT y no regresa a su dominio exacto); loopback acepta
+  cualquier puerto (Claude Code, Codex). Alternativa: **llaves** `igv_key_…` creadas en la app (para
+  Codex/Antigravity/Claude Code con encabezado). Revocar = inmediato. `WWW-Authenticate` solo en ASCII.
+- **Herramientas** (`packages/core/src/assistant/tools.ts`): consultar (`ver_*`, `guia_de_la_app`),
+  registrar (eventos) y organizar (catálogo). Validan con zod, nunca registran en el futuro (salvo planear
+  y agendar) ni más de un año atrás, no duplican misiones que ya contaron, y no borran metas/retos con
+  avances (su XP depende de la entidad: se archivan), ni cambian días/tamaño de un reto completado u
+  objetivo/tamaño de una meta cumplida (le quitaría XP). `marcar_reto` solo marca días del intento en curso
+  y solo empieza hoy o ayer (`iniciar` solo hoy); si un intento falló por un día sin marcar, marcar ese día lo
+  rescata. Los errores vuelven como `isError` (no excepciones).
+- **Permisos**: `server_meta.ai_settings.allowWrites` (pantalla Conectar IA). En solo lectura, las
+  herramientas que escriben ni se listan ni se ejecutan.
+- **Bitácora** (tabla `ai_activity`): cada acción que escribe guarda quién (nombre de la llave o de la app
+  OAuth, o "Coach"), un resumen y sus referencias (eventos creados, eventos anulados, versión previa de cada
+  entidad y `savedAt` de la que dejó la IA) → "Deshacer" en la app (`POST /api/ai/activity/:id/undo`). Deshacer
+  no pisa lo que Iván cambió o borró después, y una meta o reto creados por la IA con avances propios se
+  archivan en vez de borrarse; tampoco anula el inicio de un reto en el que Iván ya marcó días (responde `kept` =
+  cuántos cambios se respetaron). Al restaurar una versión, las acciones anteriores sobre el mismo elemento se
+  re-apuntan a ella, así que deshacer en orden (lo más reciente primero) regresa al estado original.
+- **Estado para la IA = foto en caché** (`server_meta.ai_snapshot`, `buildSnapshot`): la app la sube tras
+  sincronizar (`lib/aiSnapshot.ts`, solo sin cambios pendientes; `version` = cursor de sync). El Worker la
+  usa si `version ≥ max(updated_at)`, es del mismo día y su `config` = `CONFIG_FINGERPRINT` (huella de
+  `config/game.ts`); si no, recalcula con `project()` (CPU del plan gratis: ~10–20 ms por año de datos, por
+  eso se evita). La app solo vuelve a subir si cambió el contenido. Es caché derivada, nunca fuente de verdad:
+  sube `SNAPSHOT_SCHEMA` si cambias su forma.
+- **Coach** (`/api/gm/ask`): bucle de herramientas con la API de Claude (mismas herramientas, máx. 8
+  rondas y 12 herramientas, fuente "Coach" en la bitácora). Cuenta las consultas a D1 (`ai/budget.ts`; el
+  plan gratis permite 50 por invocación) y se detiene en 40. Un error en una herramienta vuelve como
+  `is_error`; si la conversación falla, la respuesta trae igual las `actions` ya hechas. El servidor arma el
+  panorama (`renderOverview`); con `readOnly: true` + `context` (reporte semanal) usa solo esos datos y sin
+  herramientas que escriben.
+- **Agregar una herramienta**: defínela en `tools.ts` con `tool({...})`, agrégala a `ASSISTANT_TOOLS`,
+  devuelve `ok(texto, resumen, refs)` si escribe, y prueba en `packages/core/test/assistant.test.ts`.
+  Aparece sola en el MCP, en el Coach y en la lista de la pantalla.
+- Pruebas: `packages/core/test/assistant.test.ts`, `apps/api/test/mcp.test.ts` (llaves, OAuth completo con
+  PKCE y rotación, solo lectura, bitácora y deshacer) y `apps/api/test/coach.test.ts` (API de Claude simulada).
 
 ## Reglas de oro (nunca se rompen; hay pruebas en `packages/core/test/golden-rules.test.ts`)
 
@@ -208,6 +269,7 @@ pnpm typecheck
 pnpm --filter @igv/web build
 cd apps/api && cp .dev.vars.example .dev.vars && pnpm db:migrate:local && pnpm dev   # API + web en :8787
 pnpm --filter @igv/web dev  # Vite en :5173 con proxy de /api a :8787
+cd apps/api && pnpm dev:mcp   # servidor MCP en :8788 (misma D1 local)
 ```
 
 ## Decisiones técnicas
@@ -254,14 +316,16 @@ pnpm --filter @igv/web dev  # Vite en :5173 con proxy de /api a :8787
   - **Dictado por voz** (`lib/voice.ts`): Web Speech API (`es-MX`) en QuickAdd y Coach, con tarjetas de oferta de misión aceptables con 1 toque.
 - Registro rápido: `ui/QuickAdd.tsx` (botón + global; `openQuickAdd({ mode, date })` desde cualquier pantalla; `/?accion=gasto` lo abre desde los accesos directos del manifest). Hoja de un día: `ui/DaySheet.tsx`.
 - Preferencias del dispositivo (sonido, vibración, notificaciones) en `localStorage` (`lib/prefs.ts`), no en D1.
-- Coach IA (fase 4; antes "Game Master", las rutas conservan `gm`): `POST /api/gm/ask` (conversar) y `POST /api/gm/parse` (texto libre → propuestas de
+- Coach IA (fase 4; antes "Game Master", las rutas conservan `gm`): `POST /api/gm/ask` (conversar y ACTUAR con las herramientas de
+  `packages/core/src/assistant`, ver "Conectar IA (MCP)") y `POST /api/gm/parse` (texto libre → propuestas de
   registro con salida estructurada `output_config.format`; el cliente las muestra y el usuario confirma). Ambos usan el SDK oficial `@anthropic-ai/sdk`, modelo
   `claude-opus-5-5` (cambiable con la variable `ANTHROPIC_MODEL`), respaldo automático ante rechazos
   (`fallbacks: "default"`). El cliente arma un resumen del estado; la clave es el secreto
   `ANTHROPIC_API_KEY` del Worker. El prompt (`apps/api/src/gm.ts`) es de un coach de rendimiento personal,
-  directo y cálido, en español de México, sin lenguaje de fantasía. El Coach solo propone; no registra nada por sí mismo.
+  directo y cálido, en español de México, sin lenguaje de fantasía. En "Conversar" el Coach puede registrar por ti (cada acción
+  queda en la bitácora con "Deshacer"); en "Registrar mi día" solo propone y tú confirmas.
 - Despliegue: GitHub Actions (`.github/workflows/deploy.yml`) → pruebas → crea la base D1 si no existe
-  (por nombre `igv-experience`) → migraciones D1 → `wrangler deploy`. Secreto: `CLOUDFLARE_API_TOKEN` (`CLOUDFLARE_ACCOUNT_ID` opcional).
+  (por nombre `igv-experience`) → migraciones D1 → `wrangler deploy` (app) → `wrangler deploy -c wrangler.mcp.jsonc` (MCP). Secreto: `CLOUDFLARE_API_TOKEN` (`CLOUDFLARE_ACCOUNT_ID` opcional).
   `keep_vars: true` conserva las variables configuradas en el panel de Cloudflare.
 
 ## Convenciones

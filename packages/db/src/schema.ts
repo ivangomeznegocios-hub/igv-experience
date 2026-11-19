@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, index } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 /**
  * Tabla de eventos: hechos con fecha. Nunca se borran ni se editan; solo se anulan (voided_at).
@@ -50,3 +50,46 @@ export const serverMeta = sqliteTable('server_meta', {
   value: text('value').notNull(),
   updatedAt: integer('updated_at').notNull(),
 });
+
+/**
+ * Credenciales para asistentes de IA (servidor MCP). Nunca se sincronizan al cliente.
+ * kind: 'client' (app registrada por OAuth), 'code' (código de autorización), 'access' / 'refresh'
+ * (tokens OAuth) o 'key' (llave personal creada en la app). Los tokens se guardan solo como SHA-256.
+ */
+export const aiCredentials = sqliteTable(
+  'ai_credentials',
+  {
+    id: text('id').primaryKey(),
+    kind: text('kind').notNull(),
+    tokenHash: text('token_hash'),
+    clientId: text('client_id'),
+    /** Para tokens: id del permiso (grant) que los une; revocar el grant revoca toda la familia. */
+    grantId: text('grant_id'),
+    data: text('data').notNull(), // JSON
+    createdAt: integer('created_at').notNull(),
+    expiresAt: integer('expires_at'),
+    lastUsedAt: integer('last_used_at'),
+    revokedAt: integer('revoked_at'),
+  },
+  (t) => [uniqueIndex('ai_credentials_hash_idx').on(t.tokenHash), index('ai_credentials_kind_idx').on(t.kind), index('ai_credentials_grant_idx').on(t.grantId)],
+);
+
+/** Bitácora de lo que hicieron los asistentes de IA (para verlo y deshacerlo desde la app). */
+export const aiActivity = sqliteTable(
+  'ai_activity',
+  {
+    id: text('id').primaryKey(),
+    at: integer('at').notNull(),
+    /** Quién: "Claude", "Codex", "Coach"… */
+    source: text('source').notNull(),
+    tool: text('tool').notNull(),
+    summary: text('summary').notNull(),
+    /** JSON: { events: string[], entities: { id, prev }[] } */
+    refs: text('refs').notNull(),
+    undoneAt: integer('undone_at'),
+  },
+  (t) => [index('ai_activity_at_idx').on(t.at)],
+);
+
+export type AiCredentialRow = typeof aiCredentials.$inferSelect;
+export type AiActivityRow = typeof aiActivity.$inferSelect;

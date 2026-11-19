@@ -51,6 +51,7 @@ export default function Reporte() {
         question:
           'Escribe el resumen de esta semana como un coach que me conoce (segunda persona, directo y cálido, máximo 180 palabras, con un título corto). Qué salió bien, qué faltó y un patrón que notes. Usa solo hechos reales del resumen. Cierra con una línea "Siguiente semana:" con la misión más importante para la semana que viene.',
         context: ctx,
+        readOnly: true,
         history: [],
       });
       setStory(res.answer);
