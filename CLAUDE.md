@@ -166,10 +166,14 @@ pnpm --filter @igv/web dev  # Vite en :5173 con proxy de /api a :8787
 - Un solo Worker con Static Assets (no Pages + Worker): una URL, una política de Access, sin CORS.
 - Estado de la app con un store propio (`useSyncExternalStore` + IndexedDB) en lugar de TanStack Query:
   hace falta cola sin conexión y proyección local; es más simple así.
-- Sin librería de UI ni de íconos: CSS propio con tokens (`apps/web/src/styles.css`) e íconos SVG en
-  `ui/icons.tsx`. Tema claro/oscuro/automático (`lib/theme.ts`). Gráficas SVG propias (`ui/charts.tsx`).
-- Registro rápido: `ui/QuickAdd.tsx` (botón + global; `openQuickAdd({ mode, date })` desde cualquier pantalla;
-  `/?accion=gasto` lo abre desde los accesos directos del manifest). Hoja de un día: `ui/DaySheet.tsx`.
+- Sin librería de UI ni de íconos: CSS propio con tokens (`apps/web/src/styles.css`, paleta obsidiana y oro forjado + atmósferas desbloqueables `[data-skin]`, tipografía `Cinzel` + `Plus Jakarta Sans` + `JetBrains Mono`) e íconos SVG en `ui/icons.tsx`. Tema claro/oscuro/automático (`lib/theme.ts`). Gráficas SVG propias (`ui/charts.tsx`), retrato RPG evolutivo (`ui/Avatar.tsx`), ilustraciones de jefes y barra de HP segmentada (`ui/BossArt.tsx`), mapa mundial SVG con niebla de guerra (`screens/Mapa.tsx`) y árbol visual de habilidades (`screens/Habilidades.tsx`).
+- Experiencia de juego en vivo (fase 6, sin migraciones D1):
+  - **Modo Misión Activa** (`ui/QuestMode.tsx`): pantalla de enfoque/combate con cronómetro o cuenta regresiva persistente en `localStorage`, sub-pasos de sesión, barra del jefe vinculado y audio ambiental sintético (`lib/sound.ts`: hoguera / lluvia con WebAudio).
+  - **Narrador local y encuentros diarios** (`lib/narrator.ts`): parte diario, buffs activos, encuentro diario y vínculo jefe↔misión calculados 100 % en el cliente desde `GameState` (sin IA ni costo).
+  - **Armería RPG** (`lib/armory.ts`, pestaña en `screens/Tienda.tsx`): auras, emblemas y atmósferas visuales (`obsidian`, `emerald`, `crimson`, `royal`) comprables con oro usando el evento estándar `reward.redeemed` y equipados en `settings.equipped`.
+  - **Celebraciones y feedback** (`ui/fx.tsx`, `lib/sound.ts`): banners de logro desbloqueado, golpe al jefe, rango de habilidad, día perfecto, combo, y overlays de victoria de jefe y subida de nivel con retrato.
+  - **Dictado por voz** (`lib/voice.ts`): Web Speech API (`es-MX`) en QuickAdd y Game Master, con tarjetas de oferta de misión aceptables con 1 toque.
+- Registro rápido: `ui/QuickAdd.tsx` (botón + global; `openQuickAdd({ mode, date })` desde cualquier pantalla; `/?accion=gasto` lo abre desde los accesos directos del manifest). Hoja de un día: `ui/DaySheet.tsx`.
 - Preferencias del dispositivo (sonido, vibración, notificaciones) en `localStorage` (`lib/prefs.ts`), no en D1.
 - Game Master (fase 4): `POST /api/gm/ask` (conversar) y `POST /api/gm/parse` (texto libre → propuestas de
   registro con salida estructurada `output_config.format`; el cliente las muestra y el usuario confirma). Ambos usan el SDK oficial `@anthropic-ai/sdk`, modelo

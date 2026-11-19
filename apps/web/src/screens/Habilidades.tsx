@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { GAME_CONFIG, SKILL_RANK_NAMES, type Entity, type SkillData } from '@igv/core';
 import { addEvent, deleteEntity, saveEntity, useGame } from '../data/store';
 import { fmtDate, newId } from '../lib/time';
-import { AttrBadge, AttrSelect, Empty, Field, PageHeader, Sheet, confirmAction } from '../ui/kit';
 import { Icon } from '../ui/icons';
+import { AttrBadge, AttrSelect, Empty, Field, PageHeader, Sheet, confirmAction } from '../ui/kit';
 
 export default function Habilidades() {
   const { list, state } = useGame();
@@ -24,7 +24,7 @@ export default function Habilidades() {
   return (
     <>
       <PageHeader
-        title="Habilidades"
+        title="Árbol de Habilidades"
         eyebrow="Ordenadas por prioridad"
         right={
           <button className="btn sm primary" onClick={() => setCreating(true)}>
@@ -43,10 +43,11 @@ export default function Habilidades() {
                 <div className="row" style={{ gap: 6 }}>
                   <span className="badge gold">#{i + 1}</span>
                   <AttrBadge attr={s.data.attribute} />
+                  {rank === 3 && <span className="badge green">Maestro</span>}
                 </div>
                 <h2 style={{ marginTop: 6 }}>{s.data.name}</h2>
-                <div className="small" style={{ color: rank ? 'var(--violet-2)' : 'var(--muted)', fontWeight: 650 }}>
-                  {rank ? SKILL_RANK_NAMES[rank - 1] : 'Sin rango'}
+                <div className="small" style={{ color: rank ? 'var(--gold)' : 'var(--muted)', fontWeight: 650 }}>
+                  {rank ? SKILL_RANK_NAMES[rank - 1] : 'Sin rango aún'}
                 </div>
               </div>
               <div className="row" style={{ gap: 2 }}>
@@ -61,11 +62,30 @@ export default function Habilidades() {
                 </button>
               </div>
             </div>
-            <div className="pips" style={{ marginBottom: 10 }}>
-              {[1, 2, 3].map((r) => (
-                <div key={r} className={`pip ${r === 3 ? 'gold' : ''} ${rank >= r ? 'on' : ''}`} />
-              ))}
+
+            {/* Camino visual de 3 nodos conectados */}
+            <div className="skill-tree" aria-label={`Progreso de ${s.data.name}`}>
+              {[1, 2, 3].map((r) => {
+                const done = rank >= r;
+                const next = rank + 1 === r;
+                return (
+                  <div key={r} className="skill-node-wrap">
+                    {r > 1 && <div className={`skill-rail ${done ? 'on' : ''}`} />}
+                    <button
+                      type="button"
+                      className={`skill-node ${done ? 'done' : next ? 'next' : ''}`}
+                      disabled={!next}
+                      onClick={() => next && setUnlock(s)}
+                      title={SKILL_RANK_NAMES[r - 1]}
+                    >
+                      {done ? <Icon name={r === 3 ? 'crown' : 'check'} width={15} height={15} /> : <span>{r}</span>}
+                    </button>
+                    <div className="skill-node-lbl">{SKILL_RANK_NAMES[r - 1]}</div>
+                  </div>
+                );
+              })}
             </div>
+
             {s.data.ranks.map((req, r) => {
               const u = st?.unlocks.find((x) => x.rank === r + 1);
               return (

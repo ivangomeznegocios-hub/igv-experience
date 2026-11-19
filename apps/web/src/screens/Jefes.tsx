@@ -1,9 +1,13 @@
 import { useState } from 'react';
 import { GAME_CONFIG, type BossData, type BossPhase, type Entity, type MainQuestData, type MissionData, type PhaseMetric, type RecurringBossData } from '@igv/core';
 import { addEvent, deleteEntity, saveEntity, useGame } from '../data/store';
+import { bossHpPercent } from '../lib/narrator';
 import { fmtDate, fmtMoney, newId } from '../lib/time';
-import { AttrSelect, Badge, Bar, Empty, Field, PageHeader, Sheet, Tabs, confirmAction } from '../ui/kit';
+import { BossArt, BossHpBar } from '../ui/BossArt';
 import { Icon } from '../ui/icons';
+import { AttrSelect, Badge, Bar, Empty, Field, PageHeader, Sheet, Tabs, confirmAction } from '../ui/kit';
+import { startMissionQuest } from '../ui/QuestMode';
+import { openQuickAdd } from '../ui/QuickAdd';
 
 export default function Jefes() {
   const [tab, setTab] = useState<'boss' | 'recurring'>('boss');
@@ -12,7 +16,7 @@ export default function Jefes() {
     <>
       <PageHeader
         title="Jefes"
-        eyebrow="Progresión"
+        eyebrow="Arena de Progresión"
         right={
           <button className="btn sm primary" onClick={() => setCreating(true)}>
             <Icon name="plus" /> Nuevo
@@ -57,28 +61,58 @@ function BossList() {
         const st = state.bosses.bosses[b.id];
         const quest = b.data.mainQuestId ? (byId.get(b.data.mainQuestId) as Entity<MainQuestData> | undefined) : undefined;
         const lockName = b.data.lockedUntilBossId ? (byId.get(b.data.lockedUntilBossId)?.data as BossData | undefined)?.name : null;
+        const { totalHpPct, nextPhaseIndex } = bossHpPercent(b, state);
+        const nextMetric = nextPhaseIndex < b.data.phases.length ? b.data.phases[nextPhaseIndex]?.metric : null;
+        const linkedMission =
+          nextMetric?.type === 'weekly_streak' && nextMetric.missionIds[0]
+            ? (byId.get(nextMetric.missionIds[0]) as Entity<MissionData> | undefined)
+            : undefined;
+        const isIncomeBoss = nextMetric?.type === 'month_income' || nextMetric?.type === 'consecutive_months_income';
+
         return (
-          <div key={b.id} className="card" style={st?.locked ? { opacity: 0.6 } : undefined}>
-            <div className="card-head" style={{ alignItems: 'flex-start' }}>
-              <div className="grow">
+          <div key={b.id} className={`card ${st?.defeated ? 'perfect-card' : 'boss-encounter'}`} style={st?.locked ? { opacity: 0.6 } : undefined}>
+            <div className="row" style={{ alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
+              <BossArt bossId={b.id} size={64} defeated={st?.defeated} locked={st?.locked} />
+              <div className="grow" style={{ minWidth: 0 }}>
                 <div className="row wrap" style={{ gap: 6 }}>
                   {quest && <Badge tone="gold">{quest.data.code}</Badge>}
-                  {st?.defeated && <Badge tone="green">Vencido {fmtDate(st.defeatedOn, true)}</Badge>}
+                  {st?.defeated && <Badge tone="green">Derrotado {fmtDate(st.defeatedOn, true)}</Badge>}
                   {st?.locked && (
                     <Badge tone="red">
                       <Icon name="lock" width={11} /> Bloqueado hasta vencer a {lockName}
                     </Badge>
                   )}
                 </div>
-                <h2 style={{ marginTop: 6 }}>{b.data.name}</h2>
+                <h2 style={{ margin: '5px 0 3px' }}>{b.data.name}</h2>
                 <div className="small muted">{b.data.description}</div>
               </div>
               <button className="btn icon ghost" aria-label="Editar" onClick={() => setEdit(b)}>
                 <Icon name="edit" />
               </button>
             </div>
-            <Bar value={st?.phasesDone ?? 0} max={b.data.phases.length || 1} tone="red" label={<span>{st?.phasesDone ?? 0} de {b.data.phases.length} fases</span>} />
-            <div style={{ marginTop: 8 }}>
+
+            <BossHpBar
+              hpPct={st?.defeated ? 0 : totalHpPct}
+              label={`HP total · ${st?.phasesDone ?? 0}/${b.data.phases.length} fases vencidas`}
+              right={st?.defeated ? '0% HP' : `${totalHpPct}% HP`}
+            />
+
+            {!st?.locked && !st?.defeated && (linkedMission || isIncomeBoss) && (
+              <div style={{ marginTop: 10 }}>
+                {linkedMission && (
+                  <button className="btn sm primary" onClick={() => startMissionQuest(linkedMission)}>
+                    <Icon name="play" /> Atacar ({linkedMission.data.title})
+                  </button>
+                )}
+                {isIncomeBoss && (
+                  <button className="btn sm primary" onClick={() => openQuickAdd({ mode: 'income' })}>
+                    <Icon name="sword" /> Atacar (Registrar ingreso)
+                  </button>
+                )}
+              </div>
+            )}
+
+            <div style={{ marginTop: 10 }}>
               {b.data.phases.map((ph, i) => {
                 const ps = st?.phases[i];
                 const isNext = !ps?.done && (i === 0 || st?.phases[i - 1]?.done) && !st?.locked;
@@ -97,6 +131,7 @@ function BossList() {
                           <Bar
                             value={ps.progress.current}
                             max={ps.progress.target}
+                            tone="flame"
                             size="sm"
                             label={
                               <span className="num">
@@ -277,9 +312,10 @@ function RecurringList() {
         const r = state.bosses.recurring[b.id];
         return (
           <div key={b.id} className="card">
-            <div className="card-head" style={{ alignItems: 'flex-start' }}>
+            <div className="row" style={{ alignItems: 'flex-start', gap: 12, marginBottom: 10 }}>
+              <BossArt bossId={b.id} size={56} />
               <div className="grow">
-                <h2>{b.data.name}</h2>
+                <h2 style={{ margin: '0 0 3px' }}>{b.data.name}</h2>
                 <div className="small muted">{b.data.description}</div>
                 <div className="small" style={{ marginTop: 6 }}>
                   <b>Se vence con:</b> {b.data.defeatCondition}
@@ -301,7 +337,7 @@ function RecurringList() {
                   setDefeat(b);
                 }}
               >
-                Lo vencí (+{GAME_CONFIG.rewards.recurringBoss})
+                <Icon name="sword" /> Lo vencí (+{GAME_CONFIG.rewards.recurringBoss})
               </button>
             </div>
           </div>

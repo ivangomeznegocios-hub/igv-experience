@@ -16,8 +16,10 @@ import {
 import { addEvent, saveEntity, useGame } from '../data/store';
 import { completeMission, completeQuick, saveTodo, writeLesson } from '../lib/actions';
 import { fmtDate, fmtMoney, newId } from '../lib/time';
+import { useVoiceInput } from '../lib/voice';
 import { AttrChips, Chips, DateChips, Field, Sheet, SizeChips, toast, useAutoFocus } from './kit';
 import { Icon } from './icons';
+import { startMissionQuest, startQuest } from './QuestMode';
 
 export type QuickMode = 'menu' | 'did' | 'income' | 'expense' | 'lesson' | 'npc' | 'todo' | 'goal' | 'body' | 'rest';
 type Opts = { mode?: QuickMode; date?: string };
@@ -187,6 +189,7 @@ function DidForm({ date, setDate, today, onDone }: DateProps & { onDone: () => v
   const [attr, setAttr] = useState<AttributeId>('disciplina');
   const [saveDaily, setSaveDaily] = useState(false);
   const ref = useAutoFocus<HTMLInputElement>();
+  const voice = useVoiceInput((text) => setTitle((prev) => (prev ? `${prev} ${text}` : text)));
   const catalog = list<MissionData>('missions').filter((m) => ['daily', 'side', 'event'].includes(m.kind));
   const t = title.trim();
   const match = catalog.find((m) => m.data.title.toLowerCase() === t.toLowerCase());
@@ -216,10 +219,23 @@ function DidForm({ date, setDate, today, onDone }: DateProps & { onDone: () => v
     }
     onDone();
   };
+  const playNow = () => {
+    if (!t) return;
+    if (match) startMissionQuest(match);
+    else startQuest({ kind: 'quick', title: t, size, attribute: attr });
+    onDone();
+  };
   return (
     <>
-      <Field label="¿Qué hiciste?">
-        <input ref={ref} className="input" value={title} placeholder="Fui al gym, cerré una venta…" onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && save()} />
+      <Field label="¿Qué hiciste o vas a hacer?">
+        <div className="row" style={{ gap: 6 }}>
+          <input ref={ref} className="input grow" value={title} placeholder="Fui al gym, cerré una venta…" onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && save()} />
+          {voice.supported && (
+            <button type="button" className={`btn icon ${voice.listening ? 'danger' : ''}`} onClick={voice.toggle} aria-label="Dictar por voz" title="Dictar por voz">
+              <Icon name="mic" />
+            </button>
+          )}
+        </div>
       </Field>
       {suggestions.length > 0 && (
         <div className="fav-row" style={{ marginTop: -6, marginBottom: 10 }}>
@@ -261,9 +277,16 @@ function DidForm({ date, setDate, today, onDone }: DateProps & { onDone: () => v
       <Field label="¿Cuándo?">
         <DateChips value={date} onChange={setDate} today={today} />
       </Field>
-      <button className="btn primary block" disabled={!t} onClick={save}>
-        Registrar · +{GAME_CONFIG.missionXp[effSize]} XP
-      </button>
+      <div className="row" style={{ gap: 8 }}>
+        {date === today && (
+          <button className="btn" disabled={!t} onClick={playNow} title="Iniciar en Modo Misión con temporizador">
+            <Icon name="play" /> Jugar
+          </button>
+        )}
+        <button className="btn primary grow" disabled={!t} onClick={save}>
+          Registrar · +{GAME_CONFIG.missionXp[effSize]} XP
+        </button>
+      </div>
     </>
   );
 }

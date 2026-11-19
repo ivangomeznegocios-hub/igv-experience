@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { onStoreError, sync, useGame, useStore } from './data/store';
 import { Fx } from './ui/fx';
+import { QuestMode } from './ui/QuestMode';
 import { QuickAdd } from './ui/QuickAdd';
 import { SyncPill } from './ui/SyncPill';
 import { schedulePlanUpload } from './lib/notifications';
@@ -103,6 +104,18 @@ function NotificationsSync() {
   return null;
 }
 
+/** Aplica la atmósfera visual equipada en la Armería al documento raíz. */
+function SkinSync() {
+  const { state, store } = useGame();
+  const skin = state.settings.equipped?.skin ?? 'obsidian';
+  useEffect(() => {
+    if (!store.ready) return;
+    if (skin && skin !== 'obsidian') document.documentElement.setAttribute('data-skin', skin);
+    else document.documentElement.removeAttribute('data-skin');
+  }, [skin, store.ready]);
+  return null;
+}
+
 function ScrollTop() {
   const { pathname } = useLocation();
   useEffect(() => {
@@ -176,8 +189,10 @@ export default function App() {
       <Fx />
       <Toasts />
       <SyncPill />
+      {store.ready && <QuestMode />}
       {store.ready && <QuickAdd />}
       {store.ready && <NotificationsSync />}
+      {store.ready && <SkinSync />}
     </BrowserRouter>
   );
 }

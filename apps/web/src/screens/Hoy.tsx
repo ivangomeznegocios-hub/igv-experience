@@ -10,6 +10,7 @@ import {
   weekStart,
   weekday,
   type AttributeId,
+  type BossData,
   type Entity,
   type MissionData,
   type MissionSize,
@@ -17,29 +18,33 @@ import {
   type TodoData,
   type ViceData,
 } from '@igv/core';
-import { addEvent, useGame, voidEvent } from '../data/store';
+import { addEvent, useGame } from '../data/store';
 import { completeGenerated, completeMission, completeQuick, completeTodo, isDone, saveTodo, uncomplete, updateSettings } from '../lib/actions';
-import { TZ, fmtDate, fmtMoney, fmtWeekday } from '../lib/time';
+import { bossHpPercent, buildDailyBriefing, localHour, pickDailyEncounter } from '../lib/narrator';
+import { fmtDate, fmtMoney, fmtWeekday } from '../lib/time';
+import { BossArt, BossHpBar } from '../ui/BossArt';
 import { Hero } from '../ui/Hero';
-import { Badge, Bar, Chips, Empty, Field, Sheet, SizeBadge, AttrBadge, SwipeRow, confirmAction, toast, undoToast, useAutoFocus } from '../ui/kit';
 import { Icon } from '../ui/icons';
+import { AttrBadge, Badge, Bar, Chips, Collapse, Empty, Field, Sheet, SizeBadge, SwipeRow, confirmAction, toast, undoToast, useAutoFocus } from '../ui/kit';
 import { LessonForm } from '../ui/MissionForm';
+import { startMissionQuest, startQuest, startTodoQuest } from '../ui/QuestMode';
 import { openQuickAdd } from '../ui/QuickAdd';
 import { SyncPill } from '../ui/SyncPill';
 
 export default function Hoy() {
   const { state } = useGame();
   const [lesson, setLesson] = useState(false);
-  const [recurring, setRecurring] = useState(false);
+  const [recurring, setRecurring] = useState<{ open: boolean; bossId?: string }>({ open: false });
+
   return (
     <>
       <div className="topbar">
         <div>
           <div className="eyebrow">
             {fmtWeekday(state.today)} {fmtDate(state.today, true)}
-            {state.seasons.current && ` · T${state.seasons.current.data.number} semana ${state.seasons.currentWeek}`}
+            {state.seasons.current && ` · T${state.seasons.current.data.number} sem. ${state.seasons.currentWeek}`}
           </div>
-          <h1>Hoy</h1>
+          <h1>Campaña · Hoy</h1>
         </div>
         <div className="row" style={{ gap: 4 }}>
           <SyncPill inline />
@@ -48,41 +53,46 @@ export default function Hoy() {
           </Link>
         </div>
       </div>
+
       <BirthDatePrompt />
       {!state.attributes.rated && (
         <div className="banner">
           <Icon name="user" width={20} />
           <span>Califica tus 7 atributos iniciales (una sola vez).</span>
-          <Link to="/personaje" className="btn sm violet">
+          <Link to="/personaje" className="btn sm primary">
             Calificar
           </Link>
         </div>
       )}
+
       <Hero />
-      <div className="grid2" style={{ marginBottom: 12 }}>
-        <EnergyCard />
-        <StreakCard />
-      </div>
+      <MorningRitualCard />
+      <NarratorBriefing />
       <WeekReportCard />
       <BountyCard />
       <RoutineCard />
       <AgendaCard />
-      <FavoritesCard />
+      <ActiveBossCard />
+      <DailyEncounterCard onDefeatRecurring={(bossId) => setRecurring({ open: true, bossId })} />
       <NpcMissions />
       <WeeklyCard />
-      <DragonCard />
-      <VicesMini />
-      <CloseDayCard />
-      <div className="grid2">
-        <button className="btn block" onClick={() => setLesson(true)}>
-          <Icon name="feather" /> Escribir lección
-        </button>
-        <button className="btn block" onClick={() => setRecurring(true)}>
-          <Icon name="skull" /> Vencí a un jefe
-        </button>
-      </div>
+      <CampfireCard />
+
+      <Collapse title="Más en tu jornada">
+        <FavoritesSection />
+        <VicesMini />
+        <div className="grid2" style={{ marginTop: 10 }}>
+          <button className="btn block" onClick={() => setLesson(true)}>
+            <Icon name="feather" /> Escribir lección
+          </button>
+          <button className="btn block" onClick={() => setRecurring({ open: true })}>
+            <Icon name="skull" /> Vencí a un jefe
+          </button>
+        </div>
+      </Collapse>
+
       {lesson && <LessonForm open onClose={() => setLesson(false)} />}
-      {recurring && <RecurringDefeatSheet onClose={() => setRecurring(false)} />}
+      {recurring.open && <RecurringDefeatSheet initialBossId={recurring.bossId} onClose={() => setRecurring({ open: false })} />}
     </>
   );
 }
@@ -120,78 +130,81 @@ function BirthDatePrompt() {
   );
 }
 
-function EnergyCard() {
+/** Ritual de inicio de jornada: solo aparece si aún no registras sueño hoy. */
+function MorningRitualCard() {
   const { state } = useGame();
   const [custom, setCustom] = useState('');
-  const e = state.energy;
-  if (e.value === null) {
-    const log = (h: number) => addEvent('checkin.morning', { sleepHours: h });
-    return (
-      <div className="card" style={{ marginBottom: 0 }}>
-        <div className="eyebrow">Energía · check-in</div>
-        <div className="small" style={{ margin: '6px 0 8px' }}>
-          ¿Cuánto dormiste?
-        </div>
-        <div className="row wrap" style={{ gap: 6 }}>
-          <button className="btn sm" onClick={() => log(5)}>
-            ≤5 h
-          </button>
-          <button className="btn sm" onClick={() => log(6)}>
-            6 h
-          </button>
-          <button className="btn sm" onClick={() => log(7)}>
-            7 h+
-          </button>
-        </div>
-        <div className="row" style={{ marginTop: 6, gap: 6 }}>
-          <input className="input" style={{ minHeight: 32, padding: '4px 8px' }} type="number" step="0.5" min="0" max="24" placeholder="Horas" value={custom} onChange={(ev) => setCustom(ev.target.value)} />
-          <button className="btn sm" disabled={custom === ''} onClick={() => log(Number(custom))}>
-            OK
-          </button>
-        </div>
-      </div>
-    );
-  }
+  if (state.energy.value !== null) return null;
+  const log = (h: number) => {
+    addEvent('checkin.morning', { sleepHours: h });
+    toast(h >= 7 ? '⚡ Buff Descansado activado (100 energía)' : h >= 6 ? 'Energía en 75 · listo para la campaña' : 'Modo Supervivencia (50 energía) · hoy prioriza misiones chicas');
+  };
   return (
-    <div className="card" style={{ marginBottom: 0 }}>
-      <div className="eyebrow">Energía</div>
-      <div className="stat-big num teal" style={{ margin: '4px 0 6px' }}>
-        {e.value}
-      </div>
-      <Bar value={e.value} max={100} tone={e.low ? 'red' : 'teal'} size="sm" />
-      <div className="tiny muted" style={{ marginTop: 6 }}>
-        Dormiste {e.sleepHours} h{e.low ? ' · solo misiones chicas y de recuperación' : ''}
+    <div className="card ritual-card">
+      <div className="row" style={{ gap: 12, alignItems: 'flex-start' }}>
+        <div className="ritual-orb">
+          <Icon name="sun" />
+        </div>
+        <div className="grow">
+          <div className="eyebrow" style={{ color: 'var(--gold)' }}>
+            Ritual de la mañana · Energía
+          </div>
+          <div className="small" style={{ margin: '4px 0 10px' }}>
+            ¿Cuántas horas dormiste para activar tu estado de hoy?
+          </div>
+          <div className="row wrap" style={{ gap: 6 }}>
+            <button className="btn sm" onClick={() => log(5)}>
+              ≤5 h (50)
+            </button>
+            <button className="btn sm" onClick={() => log(6)}>
+              6 h (75)
+            </button>
+            <button className="btn sm primary" onClick={() => log(7.5)}>
+              7 h+ (100 ⚡)
+            </button>
+            <div className="row" style={{ gap: 4 }}>
+              <input
+                className="input"
+                style={{ width: 70, minHeight: 32, padding: '4px 8px' }}
+                type="number"
+                step="0.5"
+                min="0"
+                max="24"
+                placeholder="Hrs"
+                value={custom}
+                onChange={(ev) => setCustom(ev.target.value)}
+              />
+              {custom !== '' && (
+                <button className="btn sm" onClick={() => log(Number(custom))}>
+                  OK
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-function StreakCard() {
-  const { state } = useGame();
-  const s = state.streak;
-  const canRest = !s.todayActive && !s.todayRest && s.restDaysLeftThisWeek > 0;
+/** Briefing vivo del Narrador local (sin API) con acceso rápido al Game Master. */
+function NarratorBriefing() {
+  const { state, entities } = useGame();
+  const brief = useMemo(() => buildDailyBriefing(state, entities), [state, entities]);
   return (
-    <div className="card" style={{ marginBottom: 0 }}>
-      <div className="eyebrow">Racha</div>
-      <div className="row" style={{ gap: 6, margin: '4px 0 2px' }}>
-        <Icon name="flame" className="flame" width={26} height={26} />
-        <span className="stat-big num">{s.current}</span>
-        <span className="muted small">días</span>
+    <div className="card narrator-card">
+      <div className="row" style={{ alignItems: 'flex-start', gap: 10 }}>
+        <div className="narrator-sigil">
+          <Icon name="sparkles" />
+        </div>
+        <div className="grow">
+          <div className="narrator-head">{brief.headline}</div>
+          <div className="small muted">{brief.body}</div>
+        </div>
+        <Link to="/game-master" className="btn sm ghost" aria-label="Hablar con el Game Master">
+          GM
+        </Link>
       </div>
-      <div className="tiny muted">
-        Mejor: {s.best} · {s.todayActive ? `hoy +${s.bonusToday} XP` : s.todayRest ? 'hoy: descanso' : `completa una misión: +${s.bonusToday} XP`}
-      </div>
-      <button
-        className="btn sm block"
-        style={{ marginTop: 8 }}
-        disabled={!canRest}
-        onClick={() => {
-          const ev = addEvent('rest_day.marked', {});
-          undoToast('Día de descanso marcado. Tu racha está a salvo.', () => voidEvent(ev.id));
-        }}
-      >
-        <Icon name="moon" /> {s.todayRest ? 'Descansando' : `Día de descanso (${s.restDaysLeftThisWeek})`}
-      </button>
     </div>
   );
 }
@@ -206,9 +219,11 @@ function RoutineCard() {
   const suitable = (m: Entity<MissionData>) => !low || m.data.size === 'chica' || !!m.data.recovery;
   const ordered = [...routine].sort((a, b) => Number(doneToday.has(a.id)) - Number(doneToday.has(b.id)) || Number(suitable(b)) - Number(suitable(a)));
   const doneCount = routine.filter((m) => doneToday.has(m.id)).length;
+  const perfect = routine.length > 0 && doneCount === routine.length;
   const others = dailies.filter((m) => !routine.includes(m));
   const [showOthers, setShowOthers] = useState(false);
   const toggle = (m: Entity<MissionData>) => (doneToday.has(m.id) ? uncomplete(m.id, state.today, m.data.title) : completeMission(m));
+
   const row = (m: Entity<MissionData>) => {
     const done = doneToday.has(m.id);
     const isBounty = state.bounty.today?.missionId === m.id;
@@ -227,27 +242,33 @@ function RoutineCard() {
               {m.data.recovery && low && <Badge tone="teal">Recuperación</Badge>}
             </div>
           </div>
+          {!done && (
+            <button className="btn icon sm play-btn" aria-label={`Jugar ${m.data.title}`} title="Iniciar en Modo Misión" onClick={() => startMissionQuest(m)}>
+              <Icon name="play" />
+            </button>
+          )}
         </div>
       </SwipeRow>
     );
   };
+
   return (
-    <div className="card">
+    <div className={`card ${perfect ? 'perfect-card' : ''}`}>
       <div className="card-head">
         <div>
           <h2>Rutina de hoy</h2>
           <div className="tiny muted">
-            {doneCount}/{routine.length} hechas · toca o desliza → para marcar
+            {perfect ? `¡Día Perfecto! ${doneCount}/${routine.length} hechas` : `${doneCount}/${routine.length} hechas · toca ✓, desliza → o pulsa ▶ para jugar`}
           </div>
         </div>
         <Link to="/misiones?tab=daily" className="btn sm ghost">
           Editar
         </Link>
       </div>
-      {routine.length > 0 && <Bar value={doneCount} max={routine.length} tone="green" size="sm" />}
+      {routine.length > 0 && <Bar value={doneCount} max={routine.length} tone={perfect ? 'gold' : 'green'} size="sm" />}
       {low && (
         <div className="banner warn" style={{ margin: '10px 0 4px' }}>
-          <Icon name="bolt" width={18} /> Energía baja: hoy prioriza misiones chicas y de recuperación.
+          <Icon name="bolt" width={18} /> Modo Supervivencia: hoy prioriza misiones chicas y de recuperación.
         </div>
       )}
       <div style={{ marginTop: 6 }}>
@@ -266,7 +287,7 @@ function RoutineCard() {
   );
 }
 
-function FavoritesCard() {
+function FavoritesSection() {
   const { state, events, list } = useGame();
   const routineIds = new Set(list<MissionData>('missions', 'daily').filter((m) => isInRoutine(m.data, weekday(state.today))).map((m) => m.id));
   const favs = useMemo(() => frequentMissions(events, state.today, 60, 12).filter((f) => !routineIds.has(f.missionId)), [events, state.today, routineIds]);
@@ -274,10 +295,9 @@ function FavoritesCard() {
   const doneToday = new Set(state.missions.completedToday);
   const dailies = list<MissionData>('missions', 'daily');
   return (
-    <div className="card">
-      <div className="card-head">
-        <h2>Un toque</h2>
-        <span className="tiny muted">Lo que más registras</span>
+    <div style={{ marginBottom: 12 }}>
+      <div className="eyebrow" style={{ marginBottom: 6 }}>
+        Un toque · lo que más registras
       </div>
       <div className="fav-row">
         {favs.map((f) => {
@@ -346,6 +366,9 @@ function AgendaCard() {
                 {t.data.date < state.today && <Badge tone="red">Desde {fmtDate(t.data.date)}</Badge>}
               </div>
             </div>
+            <button className="btn icon sm play-btn" aria-label={`Jugar ${t.data.title}`} title="Iniciar en Modo Misión" onClick={() => startTodoQuest(t)}>
+              <Icon name="play" />
+            </button>
             <button className="btn sm ghost" onClick={() => postpone(t)} aria-label="Pasar a mañana">
               Mañana
             </button>
@@ -378,7 +401,7 @@ function BountyCard() {
     const side = list<MissionData>('missions', 'side').filter((m) => !isDone(state.missions.completions, m.id) && fits(m) && m.data.size !== 'epica');
     return [...daily, ...side];
   }, [list, state.energy.low, state.missions.completions, wd]);
-  // Se sortea una vez al día (y se guarda como evento para que el historial no cambie).
+
   useEffect(() => {
     if (b || drawing.current || !candidates.length) return;
     const pick = pickForDate(candidates, state.today, 'bounty');
@@ -386,6 +409,7 @@ function BountyCard() {
     drawing.current = true;
     addEvent('bounty.drawn', { missionId: pick.id, title: pick.data.title, size: pick.data.size, attribute: pick.data.attribute });
   }, [b, candidates, state.today]);
+
   if (!b) return null;
   const m = list<MissionData>('missions').find((x) => x.id === b.missionId);
   return (
@@ -395,16 +419,180 @@ function BountyCard() {
           <Icon name={b.completed ? 'trophy' : 'target'} />
         </div>
         <div className="grow">
-          <div className="eyebrow">Misión sorpresa del día</div>
+          <div className="eyebrow">Misión sorpresa del día · +{b.bonus} XP bono</div>
           <div className="item-title">{b.title}</div>
           <div className="tiny muted">
-            {b.completed ? `¡Cumplida! Ganaste +${b.bonus} XP de bono.` : `Hazla hoy: XP normal + ${b.bonus} XP de bono (${GAME_CONFIG.bounty.bonusPercent}%).`}
+            {b.completed ? `¡Cumplida! Ganaste +${b.bonus} XP extra.` : `Complétala hoy para cobrar ${GAME_CONFIG.bounty.bonusPercent}% extra de XP y oro.`}
           </div>
         </div>
         {!b.completed && m && (
-          <button className="btn sm primary" onClick={() => completeMission(m)}>
-            Hecha
-          </button>
+          <div className="row" style={{ gap: 6 }}>
+            <button className="btn icon sm play-btn" aria-label={`Jugar ${b.title}`} onClick={() => startMissionQuest(m)}>
+              <Icon name="play" />
+            </button>
+            <button className="btn sm primary" onClick={() => completeMission(m)}>
+              Hecha
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Jefe activo en combate con arte ilustrado, barra de HP y ataque directo. */
+function ActiveBossCard() {
+  const { state, list, byId } = useGame();
+  const [income, setIncome] = useState(false);
+  const [editGoal, setEditGoal] = useState(false);
+  const allBosses = list<BossData>('bosses', 'boss').filter((b) => {
+    const st = state.bosses.bosses[b.id];
+    return st && !st.locked && !st.defeated;
+  });
+  const focusQuestId = state.seasons.current?.data.focusMainQuestId;
+  const defaultIdx = Math.max(
+    0,
+    allBosses.findIndex((b) => b.data.mainQuestId === focusQuestId || b.id === 'boss-dragon'),
+  );
+  const [idx, setIdx] = useState(defaultIdx);
+  const boss = allBosses[idx % Math.max(allBosses.length, 1)];
+  if (!boss) return null;
+
+  const st = state.bosses.bosses[boss.id];
+  const nextIdx = st.phases.findIndex((p) => !p.done);
+  const nextPhase = nextIdx >= 0 ? st.phases[nextIdx] : null;
+  const nextMetric = nextIdx >= 0 ? boss.data.phases[nextIdx]?.metric : null;
+  const { phaseHpPct } = bossHpPercent(boss, state);
+  const isDragon = boss.id === 'boss-dragon' || nextMetric?.type === 'month_income' || nextMetric?.type === 'consecutive_months_income';
+  const cur = state.settings.currency;
+
+  const linkedMission =
+    nextMetric?.type === 'weekly_streak' && nextMetric.missionIds[0]
+      ? (byId.get(nextMetric.missionIds[0]) as Entity<MissionData> | undefined)
+      : undefined;
+
+  const hpRight =
+    nextPhase?.progress && nextPhase.progress.target > 0
+      ? nextPhase.progress.unit === 'MXN'
+        ? `${fmtMoney(Math.max(0, nextPhase.progress.target - nextPhase.progress.current), cur)} HP rest.`
+        : `${nextPhase.progress.current}/${nextPhase.progress.target} ${nextPhase.progress.unit}`
+      : `${phaseHpPct}% HP`;
+
+  return (
+    <div className="card boss-encounter">
+      <div className="row" style={{ alignItems: 'flex-start', gap: 12 }}>
+        <BossArt bossId={boss.id} size={62} />
+        <div className="grow" style={{ minWidth: 0 }}>
+          <div className="row between" style={{ gap: 6 }}>
+            <div className="eyebrow" style={{ color: 'var(--red)' }}>
+              Jefe en combate · Fase {st.phasesDone + 1}/{boss.data.phases.length}
+            </div>
+            {allBosses.length > 1 && (
+              <button className="btn sm ghost" style={{ minHeight: 24, padding: '2px 8px', fontSize: 11 }} onClick={() => setIdx((i) => (i + 1) % allBosses.length)}>
+                Otro jefe →
+              </button>
+            )}
+          </div>
+          <h2 style={{ margin: '2px 0 4px' }}>{boss.data.name}</h2>
+          <div className="tiny muted ellipsis">{nextPhase ? nextPhase.title : boss.data.description}</div>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        <BossHpBar hpPct={phaseHpPct} label={isDragon ? `Mes: ${fmtMoney(state.money.monthIncome, cur)} / ${fmtMoney(state.money.goal, cur)}` : `Vida de fase`} right={hpRight} />
+      </div>
+
+      <div className="row between" style={{ marginTop: 10, gap: 8 }}>
+        <div className="row" style={{ gap: 6 }}>
+          {isDragon && (
+            <>
+              <button className="btn sm primary" onClick={() => setIncome(true)}>
+                <Icon name="sword" /> Atacar (+Ingreso)
+              </button>
+              <button className="btn sm ghost" onClick={() => setEditGoal(true)}>
+                Meta
+              </button>
+            </>
+          )}
+          {!isDragon && linkedMission && (
+            <button className="btn sm primary" onClick={() => startMissionQuest(linkedMission)}>
+              <Icon name="play" /> Atacar ({linkedMission.data.title})
+            </button>
+          )}
+          {!isDragon && !linkedMission && nextMetric?.type === 'manual' && (
+            <button
+              className="btn sm primary"
+              onClick={() =>
+                confirmAction(`¿Venciste "${nextPhase?.title}"? (+${GAME_CONFIG.rewards.bossPhase} XP)`) &&
+                addEvent('boss.phase_completed', { bossId: boss.id, phaseIndex: nextIdx })
+              }
+            >
+              <Icon name="sword" /> Vencer fase
+            </button>
+          )}
+        </div>
+        <Link to="/jefes" className="btn sm ghost">
+          Ver jefes
+        </Link>
+      </div>
+
+      {income && <MoneySheet kind="income" onClose={() => setIncome(false)} />}
+      {editGoal && <GoalSheet onClose={() => setEditGoal(false)} />}
+    </div>
+  );
+}
+
+/** Encuentro aleatorio del día: emboscada de jefe recurrente o prueba relámpago de tu atributo más bajo. */
+function DailyEncounterCard({ onDefeatRecurring }: { onDefeatRecurring: (bossId?: string) => void }) {
+  const { state, entities } = useGame();
+  const enc = useMemo(() => pickDailyEncounter(state, entities), [state, entities]);
+  if (!enc) return null;
+  return (
+    <div className={`card encounter-card ${enc.completed ? 'won' : ''}`}>
+      <div className="row" style={{ gap: 12 }}>
+        {enc.bossId ? (
+          <BossArt bossId={enc.bossId} size={48} defeated={enc.completed} />
+        ) : (
+          <div className="bounty-icon">
+            <Icon name="bolt" />
+          </div>
+        )}
+        <div className="grow">
+          <div className="eyebrow" style={{ color: enc.completed ? 'var(--green)' : 'var(--gold)' }}>
+            {enc.completed ? 'Encuentro superado' : 'Encuentro aleatorio del día'}
+          </div>
+          <div className="item-title">{enc.title}</div>
+          <div className="tiny muted">{enc.subtitle}</div>
+        </div>
+        {!enc.completed && (
+          <div className="row" style={{ gap: 6 }}>
+            {enc.kind === 'recurring_boss' ? (
+              <button className="btn sm primary" onClick={() => onDefeatRecurring(enc.bossId)}>
+                Vencer
+              </button>
+            ) : (
+              <>
+                <button
+                  className="btn icon sm play-btn"
+                  aria-label="Jugar encuentro"
+                  onClick={() =>
+                    startQuest({
+                      kind: 'quick',
+                      title: enc.title,
+                      size: enc.size,
+                      attribute: enc.attribute,
+                      minutes: 10,
+                    })
+                  }
+                >
+                  <Icon name="play" />
+                </button>
+                <button className="btn sm primary" onClick={() => completeQuick(enc.title, enc.size, enc.attribute)}>
+                  Hecho
+                </button>
+              </>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -416,18 +604,20 @@ function VicesMini() {
   const vices = list<ViceData>('habits', 'vice');
   if (!vices.length) return null;
   return (
-    <Link to="/enemigos" className="card vices-mini" style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}>
-      <div className="card-head" style={{ marginBottom: 6 }}>
-        <h2>Enemigos a raya</h2>
-        <Icon name="right" width={18} className="muted" />
+    <Link to="/enemigos" className="row between" style={{ textDecoration: 'none', color: 'inherit', padding: '8px 0' }}>
+      <div className="grow">
+        <div className="eyebrow" style={{ marginBottom: 6 }}>
+          Enemigos a raya
+        </div>
+        <div className="row wrap" style={{ gap: 6 }}>
+          {vices.map((v) => (
+            <span key={v.id} className="badge">
+              {v.data.name}: <b className="num" style={{ color: 'var(--text)' }}>{state.vices[v.id]?.current ?? 0}</b>d
+            </span>
+          ))}
+        </div>
       </div>
-      <div className="row wrap" style={{ gap: 8 }}>
-        {vices.map((v) => (
-          <span key={v.id} className="badge">
-            {v.data.name}: <b className="num" style={{ color: 'var(--text)' }}>{state.vices[v.id]?.current ?? 0}</b> días
-          </span>
-        ))}
-      </div>
+      <Icon name="right" width={18} className="muted" />
     </Link>
   );
 }
@@ -435,7 +625,6 @@ function VicesMini() {
 function WeekReportCard() {
   const { state } = useGame();
   const wd = weekday(state.today);
-  // Domingo y lunes: invitar a ver el reporte de la semana (el lunes, el de la semana pasada).
   if (wd !== 6 && wd !== 0) return null;
   const target = wd === 0 ? addDays(state.today, -7) : state.today;
   return (
@@ -449,11 +638,8 @@ function WeekReportCard() {
   );
 }
 
-function localHour(): number {
-  return Number(new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', hourCycle: 'h23' }).format(new Date()));
-}
-
-function CloseDayCard() {
+/** La Hoguera: ritual nocturno para cerrar el día con crónica y resumen de batalla. */
+function CampfireCard() {
   const { state } = useGame();
   const [open, setOpen] = useState(false);
   const closed = state.dayClosures[state.today];
@@ -461,11 +647,16 @@ function CloseDayCard() {
   if (!evening && !closed && state.xp.today === 0) return null;
   return (
     <>
-      <button className={`card close-day ${evening && !closed ? 'glow' : ''}`} onClick={() => setOpen(true)}>
-        <Icon name={closed ? 'moon' : 'sun'} width={22} />
+      <button className={`card close-day campfire-card ${evening && !closed ? 'glow' : ''}`} onClick={() => setOpen(true)}>
+        <div className="campfire-icon">
+          <Icon name="campfire" width={24} height={24} />
+        </div>
         <div className="grow" style={{ textAlign: 'left' }}>
-          <b>{closed ? 'Día cerrado' : 'Cerrar el día'}</b>
-          <div className="tiny muted">{closed ? closed.note || 'Ver resumen' : `Hoy: +${state.xp.today} XP · racha ${state.streak.current}`}</div>
+          <div className="eyebrow" style={{ color: 'var(--flame)' }}>
+            La Hoguera · ritual nocturno
+          </div>
+          <b>{closed ? 'Crónica de hoy sellada' : 'Descansar en la hoguera y cerrar el día'}</b>
+          <div className="tiny muted">{closed ? closed.note || 'Toca para ver tu resumen' : `Hoy: +${state.xp.today} XP · +${state.gold.earnedToday} oro · racha ${state.streak.current}d`}</div>
         </div>
         <Icon name="right" width={18} />
       </button>
@@ -489,20 +680,26 @@ function CloseDaySheet({ onClose }: { onClose: () => void }) {
     <Sheet
       open
       onClose={onClose}
-      title="Cierre del día"
+      title="La Hoguera · Cierre del día"
       actions={
         <button
           className="btn primary"
           onClick={() => {
             addEvent('day.closed', { note: note.trim(), mood: mood ?? undefined });
-            toast('Día cerrado. Descansa, mañana seguimos.');
+            toast('🔥 Crónica sellada. Descansa, mañana continúa la campaña.');
             onClose();
           }}
         >
-          {prev ? 'Actualizar' : 'Cerrar el día'}
+          {prev ? 'Actualizar crónica' : 'Sellar el día'}
         </button>
       }
     >
+      <div className="campfire-hero">
+        <div className="campfire-glow" aria-hidden="true">
+          <Icon name="campfire" width={36} height={36} />
+        </div>
+        <div className="small muted">Resumen de batalla · {fmtDate(state.today, true)}</div>
+      </div>
       <div className="grid2" style={{ gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
         <div className="stat-tile">
           <span>XP hoy</span>
@@ -520,7 +717,7 @@ function CloseDaySheet({ onClose }: { onClose: () => void }) {
       {byAttr.size > 0 && (
         <div className="row wrap" style={{ gap: 6, marginBottom: 12 }}>
           {[...byAttr.entries()].map(([a, x]) => (
-            <Badge key={a} tone="violet">
+            <Badge key={a} tone="gold">
               {ATTRIBUTE_NAMES[a as AttributeId]} +{x}
             </Badge>
           ))}
@@ -528,16 +725,17 @@ function CloseDaySheet({ onClose }: { onClose: () => void }) {
         </div>
       )}
       {entries.length === 0 && <p className="small muted">Hoy no registraste XP. Si fue día de descanso, márcalo desde el botón +.</p>}
-      <Field label="¿Cómo te sentiste?">
+      <Field label="¿Cómo cerraste el día?">
         <Chips value={mood} onChange={setMood} size="lg" options={MOODS.map((m, i) => ({ value: i + 1, label: m }))} />
       </Field>
-      <Field label="Una línea sobre hoy">
-        <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Lo mejor del día, lo que aprendí…" />
+      <Field label="Una línea para tu crónica">
+        <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="La victoria de hoy, lo que aprendí…" />
       </Field>
-      <p className="tiny muted">El cierre del día no da XP: es para ti. Aparece en tu historial y en Mi vida en semanas.</p>
+      <p className="tiny muted">Tu crónica aparece en el Historial y en Mi vida en semanas.</p>
     </Sheet>
   );
 }
+
 function NpcMissions() {
   const { state } = useGame();
   const gen = state.npcs.generatedMissions;
@@ -604,6 +802,11 @@ function WeeklyCard() {
               <AttrBadge attr={m.data.attribute} />
             </div>
           </div>
+          {!done && (
+            <button className="btn icon sm play-btn" aria-label={`Jugar ${m.data.title}`} onClick={() => startMissionQuest(m)}>
+              <Icon name="play" />
+            </button>
+          )}
         </div>
       ) : (
         <div className="muted small">Elige una misión secundaria, capítulo o evento para esta semana.</div>
@@ -631,52 +834,6 @@ function WeeklyCard() {
           </div>
         ))}
       </Sheet>
-    </div>
-  );
-}
-
-function DragonCard() {
-  const { state } = useGame();
-  const [income, setIncome] = useState(false);
-  const [editGoal, setEditGoal] = useState(false);
-  const { monthIncome, goal } = state.money;
-  const cur = state.settings.currency;
-  const dragon = state.bosses.bosses['boss-dragon'];
-  return (
-    <div className="card">
-      <div className="card-head">
-        <div>
-          <div className="eyebrow">Jefe · ingreso del mes</div>
-          <h2>El Dragón Financiero</h2>
-        </div>
-        <button className="btn sm primary" onClick={() => setIncome(true)}>
-          <Icon name="plus" /> Ingreso
-        </button>
-      </div>
-      <Bar
-        value={monthIncome}
-        max={goal}
-        tone="flame"
-        size="lg"
-        label={
-          <>
-            <span className="num">
-              {fmtMoney(monthIncome, cur)} / {fmtMoney(goal, cur)}
-            </span>
-            <button className="btn sm ghost" style={{ minHeight: 0, padding: 0, fontSize: 12 }} onClick={() => setEditGoal(true)}>
-              {Math.round((monthIncome / Math.max(goal, 1)) * 100)}% · editar meta
-            </button>
-          </>
-        }
-      />
-      {dragon && (
-        <div className="tiny muted" style={{ marginTop: 6 }}>
-          Fases vencidas: {dragon.phasesDone}/{dragon.phases.length}
-          {dragon.phases.find((p) => !p.done) && ` · siguiente: ${dragon.phases.find((p) => !p.done)!.title}`}
-        </div>
-      )}
-      {income && <MoneySheet kind="income" onClose={() => setIncome(false)} />}
-      {editGoal && <GoalSheet onClose={() => setEditGoal(false)} />}
     </div>
   );
 }
@@ -757,10 +914,10 @@ export function MoneySheet({ kind, onClose }: { kind: 'income' | 'expense'; onCl
   );
 }
 
-function RecurringDefeatSheet({ onClose }: { onClose: () => void }) {
+function RecurringDefeatSheet({ initialBossId, onClose }: { initialBossId?: string; onClose: () => void }) {
   const { list } = useGame();
   const bosses = list<RecurringBossData>('bosses', 'recurring');
-  const [bossId, setBossId] = useState(bosses[0]?.id ?? '');
+  const [bossId, setBossId] = useState(initialBossId ?? bosses[0]?.id ?? '');
   const [note, setNote] = useState('');
   const boss = bosses.find((b) => b.id === bossId);
   return (

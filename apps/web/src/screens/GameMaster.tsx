@@ -1,14 +1,77 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ATTRIBUTE_IDS, ATTRIBUTE_NAMES, GAME_CONFIG, addDays, type BossData, type Entity, type GameState, type GoalData, type MainQuestData, type MissionData, type NpcData, type TodoData, type ViceData } from '@igv/core';
+import {
+  ATTRIBUTE_IDS,
+  ATTRIBUTE_NAMES,
+  GAME_CONFIG,
+  addDays,
+  type AttributeId,
+  type BossData,
+  type Entity,
+  type GameState,
+  type GoalData,
+  type MainQuestData,
+  type MissionData,
+  type MissionSize,
+  type NpcData,
+  type TodoData,
+  type ViceData,
+} from '@igv/core';
 import { api, type GmParseResult, type GmProposal } from '../data/api';
 import { addEvent, useGame } from '../data/store';
-import { completeMission, completeQuick, writeLesson } from '../lib/actions';
+import { completeMission, completeQuick, saveTodo, writeLesson } from '../lib/actions';
 import { fmtMoney } from '../lib/time';
-import { PageHeader, Tabs, toast } from '../ui/kit';
+import { useVoiceInput } from '../lib/voice';
 import { Icon } from '../ui/icons';
+import { AttrBadge, PageHeader, SizeBadge, Tabs, toast } from '../ui/kit';
+import { startQuest } from '../ui/QuestMode';
 
 type Msg = { role: 'user' | 'assistant'; content: string };
+
+interface ParsedQuestOffer {
+  title: string;
+  reason: string;
+  size: MissionSize;
+  attribute: AttributeId;
+}
+
+function normStr(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+/** Detecta misiones propuestas en el formato `• [Tamaño · Atributo] Título: razón` dentro de las respuestas del GM. */
+function extractQuestOffers(text: string): ParsedQuestOffer[] {
+  const out: ParsedQuestOffer[] = [];
+  const sizeMap: Record<string, MissionSize> = { chica: 'chica', media: 'media', grande: 'grande', epica: 'epica' };
+  const attrMap: Record<string, AttributeId> = {
+    fuerza: 'fuerza',
+    'fuerza fisica': 'fuerza',
+    inteligencia: 'inteligencia',
+    carisma: 'carisma',
+    finanzas: 'finanzas',
+    disciplina: 'disciplina',
+    relaciones: 'relaciones',
+    creatividad: 'creatividad',
+  };
+  for (const rawLine of text.split('\n')) {
+    const line = rawLine.trim();
+    const m = line.match(/^(?:[•\-*–]|\d+\.)\s*\[([^\]·|/-]+)[·|/-]([^\]]+)\]\s*(.+)$/);
+    if (!m) continue;
+    const size = sizeMap[normStr(m[1])];
+    const attribute = attrMap[normStr(m[2])];
+    if (!size || !attribute) continue;
+    const rest = m[3].replace(/\*\*/g, '').trim();
+    const sep = rest.indexOf(':');
+    const title = (sep > 0 ? rest.slice(0, sep) : rest).trim();
+    const reason = sep > 0 ? rest.slice(sep + 1).trim() : '';
+    if (title.length >= 2) out.push({ title, reason, size, attribute });
+  }
+  return out;
+}
 
 /** Resumen compacto del estado del juego para el Game Master (se calcula en tu dispositivo). */
 function buildContext(state: GameState, list: <D>(m: string, k?: string) => Entity<D>[]): string {
@@ -69,7 +132,7 @@ export default function GameMaster() {
   }, []);
   return (
     <>
-      <PageHeader title="Game Master" eyebrow="IA · opcional" />
+      <PageHeader title="Game Master" eyebrow="Narrador IA · opcional" />
       {enabled === false && (
         <div className="card">
           <h2>Activa el Game Master</h2>
@@ -95,7 +158,7 @@ export default function GameMaster() {
   );
 }
 
-/** Cuéntale tu día en texto libre: el GM propone registros y tú confirmas con un toque. */
+/** Cuéntale tu día en texto o voz: el GM propone registros y tú confirmas con un toque. */
 function Registrar() {
   const { state, list } = useGame();
   const [text, setText] = useState('');
@@ -103,6 +166,8 @@ function Registrar() {
   const [err, setErr] = useState<string | null>(null);
   const [res, setRes] = useState<GmParseResult | null>(null);
   const [sel, setSel] = useState<Set<number>>(new Set());
+  const voice = useVoiceInput((t) => setText((prev) => (prev ? `${prev} ${t}` : t)));
+
   const missions = list<MissionData>('missions').filter((m) => ['daily', 'side', 'event', 'chapter'].includes(m.kind) && (m.kind === 'daily' || !state.missions.completions[m.id]));
   const npcs = list<NpcData>('npcs', 'npc');
   const goals = list<GoalData>('goals', 'goal').filter((g) => !state.goals[g.id]?.completedOn);
@@ -117,6 +182,7 @@ function Registrar() {
       'Metas (id | meta | unidad):',
       ...goals.map((g) => `${g.id} | ${g.data.title} | ${g.data.unit}`),
     ].join('\n');
+
   const parse = async () => {
     if (!text.trim() || busy) return;
     setBusy(true);
@@ -131,6 +197,7 @@ function Registrar() {
       setBusy(false);
     }
   };
+
   const label = (p: GmProposal): { title: string; detail: string; ok: boolean } => {
     const mission = p.matchId ? missions.find((m) => m.id === p.matchId) : undefined;
     switch (p.kind) {
@@ -158,6 +225,7 @@ function Registrar() {
         return { title: 'Día de descanso', detail: 'No rompe la racha', ok: true };
     }
   };
+
   const apply = () => {
     if (!res) return;
     let n = 0;
@@ -182,17 +250,25 @@ function Registrar() {
     setRes(null);
     setText('');
   };
+
   return (
     <>
       <div className="card">
         <p className="small muted" style={{ marginTop: 0 }}>
-          Escríbelo como se lo contarías a alguien: “Hoy fui al gym, cerré una venta de $5,000 con Grupo Norte y hablé con mi mamá”. Te propongo los registros y tú decides cuáles guardar.
+          Escríbelo o díctalo por voz: “Hoy fui al gym, cerré una venta de $5,000 con Grupo Norte y hablé con mi mamá”. Te propongo los registros y tú confirmas.
         </p>
         <textarea className="input" rows={4} value={text} onChange={(e) => setText(e.target.value)} placeholder="¿Qué hiciste hoy?" />
-        <button className="btn violet block" style={{ marginTop: 8 }} disabled={busy || !text.trim()} onClick={parse}>
-          <Icon name="sparkles" /> {busy ? 'Leyendo…' : 'Proponer registros'}
-        </button>
-        {err && <p className="small red">{err}</p>}
+        <div className="row" style={{ marginTop: 8, gap: 8 }}>
+          {voice.supported && (
+            <button type="button" className={`btn ${voice.listening ? 'danger' : ''}`} onClick={voice.toggle} aria-label="Dictar por voz">
+              <Icon name="mic" /> {voice.listening ? 'Escuchando…' : 'Dictar'}
+            </button>
+          )}
+          <button className="btn primary grow" disabled={busy || !text.trim()} onClick={parse}>
+            <Icon name="sparkles" /> {busy ? 'Leyendo…' : 'Proponer registros'}
+          </button>
+        </div>
+        {(err || voice.error) && <p className="small red">{err || voice.error}</p>}
       </div>
       {res && (
         <div className="card">
@@ -209,13 +285,15 @@ function Registrar() {
                   type="checkbox"
                   checked={on}
                   disabled={!l.ok}
-                  onChange={() => setSel((s) => {
-                    const n = new Set(s);
-                    if (n.has(i)) n.delete(i);
-                    else n.add(i);
-                    return n;
-                  })}
-                  style={{ width: 20, height: 20, accentColor: 'var(--violet)' }}
+                  onChange={() =>
+                    setSel((s) => {
+                      const n = new Set(s);
+                      if (n.has(i)) n.delete(i);
+                      else n.add(i);
+                      return n;
+                    })
+                  }
+                  style={{ width: 20, height: 20, accentColor: 'var(--gold)' }}
                 />
                 <div className="grow">
                   <div className="item-title">{l.title}</div>
@@ -244,7 +322,9 @@ function Chat() {
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [accepted, setAccepted] = useState<Set<string>>(new Set());
   const end = useRef<HTMLDivElement>(null);
+  const voice = useVoiceInput((t) => setQ((prev) => (prev ? `${prev} ${t}` : t)));
 
   useEffect(() => {
     end.current?.scrollIntoView({ behavior: 'smooth' });
@@ -267,46 +347,92 @@ function Chat() {
     }
   };
 
+  const acceptOffer = (key: string, offer: ParsedQuestOffer) => {
+    saveTodo({ title: offer.title, size: offer.size, attribute: offer.attribute, date: state.today, notes: offer.reason || undefined });
+    setAccepted((s) => new Set(s).add(key));
+    toast(`⚔️ Misión aceptada en tu Agenda de hoy: "${offer.title}"`);
+  };
+
   return (
     <>
-          <div className="card">
-            {msgs.length === 0 && (
-              <>
-                <p className="small muted" style={{ marginTop: 0 }}>
-                  Leo tu progreso (nivel, atributos, racha, energía, jefes, misiones y diario) y te propongo misiones. Lo que propongo no se registra solo: tú decides qué crear.
-                </p>
-                <div className="row wrap" style={{ gap: 6 }}>
-                  {SUGGESTIONS.map((s) => (
-                    <button key={s} className="btn sm" onClick={() => ask(s)}>
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-            <div className="chat">
-              {msgs.map((m, i) => (
-                <div key={i} className={`bubble ${m.role === 'user' ? 'me' : 'gm'}`}>
-                  {m.content}
-                </div>
+      <div className="card">
+        {msgs.length === 0 && (
+          <>
+            <p className="small muted" style={{ marginTop: 0 }}>
+              Leo tu progreso (nivel, atributos, racha, energía, jefes, misiones y diario) y te propongo misiones que puedes aceptar en tu Agenda o jugar al instante.
+            </p>
+            <div className="row wrap" style={{ gap: 6 }}>
+              {SUGGESTIONS.map((s) => (
+                <button key={s} className="btn sm" onClick={() => ask(s)}>
+                  {s}
+                </button>
               ))}
-              {busy && <div className="bubble gm muted">El Game Master está pensando…</div>}
-              {err && <div className="bubble gm red">{err}</div>}
-              <div ref={end} />
             </div>
-          </div>
-          <form
-            className="row"
-            onSubmit={(e) => {
-              e.preventDefault();
-              ask(q);
-            }}
-          >
-            <input className="input" placeholder="Pregúntale al Game Master…" value={q} onChange={(e) => setQ(e.target.value)} />
-            <button className="btn violet" disabled={busy || !q.trim()} aria-label="Enviar">
-              <Icon name="sparkles" />
-            </button>
-          </form>
+          </>
+        )}
+        <div className="chat">
+          {msgs.map((m, i) => {
+            const offers = m.role === 'assistant' ? extractQuestOffers(m.content) : [];
+            return (
+              <div key={i} className="stack" style={{ alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', display: 'flex', flexDirection: 'column' }}>
+                <div className={`bubble ${m.role === 'user' ? 'me' : 'gm'}`}>{m.content}</div>
+                {offers.length > 0 && (
+                  <div className="gm-offers">
+                    {offers.map((o, j) => {
+                      const key = `${i}-${j}`;
+                      const ok = accepted.has(key);
+                      return (
+                        <div key={key} className="gm-offer">
+                          <div className="grow">
+                            <div className="item-title small">{o.title}</div>
+                            <div className="row wrap" style={{ gap: 4, marginTop: 3 }}>
+                              <SizeBadge size={o.size} />
+                              <AttrBadge attr={o.attribute} />
+                            </div>
+                          </div>
+                          <div className="row" style={{ gap: 4 }}>
+                            <button
+                              className="btn icon sm play-btn"
+                              title="Jugar ahora"
+                              aria-label={`Jugar ${o.title}`}
+                              onClick={() => startQuest({ kind: 'quick', title: o.title, size: o.size, attribute: o.attribute })}
+                            >
+                              <Icon name="play" />
+                            </button>
+                            <button className={`btn sm ${ok ? '' : 'primary'}`} disabled={ok} onClick={() => acceptOffer(key, o)}>
+                              {ok ? '✓ Aceptada' : '+ Aceptar'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {busy && <div className="bubble gm muted">El Game Master está consultando tu campaña…</div>}
+          {err && <div className="bubble gm red">{err}</div>}
+          <div ref={end} />
+        </div>
+      </div>
+      <form
+        className="row"
+        onSubmit={(e) => {
+          e.preventDefault();
+          ask(q);
+        }}
+      >
+        {voice.supported && (
+          <button type="button" className={`btn icon ${voice.listening ? 'danger' : ''}`} onClick={voice.toggle} aria-label="Dictar pregunta">
+            <Icon name="mic" />
+          </button>
+        )}
+        <input className="input" placeholder="Pregúntale al Game Master…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <button className="btn primary" disabled={busy || !q.trim()} aria-label="Enviar">
+          <Icon name="sparkles" />
+        </button>
+      </form>
     </>
   );
 }

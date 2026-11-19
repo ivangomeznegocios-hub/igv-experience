@@ -71,6 +71,8 @@ export interface SettingsData {
   budgets?: Record<string, number>;
   /** Logros que el avatar muestra como insignias (máx. 3). */
   avatarBadges?: string[];
+  /** Cosméticos equipados de la armería (aura, emblema, tema visual del HUD). */
+  equipped?: { aura?: string; emblem?: string; skin?: string };
 }
 
 export interface MainQuestData {

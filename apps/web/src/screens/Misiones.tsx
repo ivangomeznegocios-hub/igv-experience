@@ -8,6 +8,7 @@ import { fmtDate, fmtWeekday, newId } from '../lib/time';
 import { AttrBadge, AttrSelect, Badge, Empty, Field, PageHeader, Sheet, SizeBadge, Tabs, confirmAction } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { LessonForm, MissionForm } from '../ui/MissionForm';
+import { startMissionQuest, startTodoQuest } from '../ui/QuestMode';
 
 type Tab = 'main' | 'side' | 'daily' | 'event' | 'agenda';
 
@@ -100,6 +101,16 @@ function MainQuests() {
                       {done && <Badge tone="green">{fmtDate(state.missions.completions[c.id].firstDate, true)}</Badge>}
                     </div>
                   </div>
+                  {!done && (
+                    <button
+                      className="btn icon sm play-btn"
+                      aria-label={`Jugar capítulo ${c.data.number}`}
+                      title="Entrar en Modo Misión"
+                      onClick={() => startMissionQuest(c)}
+                    >
+                      <Icon name="play" width={15} height={15} />
+                    </button>
+                  )}
                   <button className="btn icon ghost" aria-label="Editar capítulo" onClick={() => setChapterFor({ quest: q, chapter: c })}>
                     <Icon name="edit" />
                   </button>
@@ -222,6 +233,14 @@ function Agenda() {
         </div>
         {!isDoneT && (
           <>
+            <button
+              className="btn icon sm play-btn"
+              aria-label={`Jugar ${t.data.title}`}
+              title="Entrar en Modo Misión"
+              onClick={() => startTodoQuest(t)}
+            >
+              <Icon name="play" width={15} height={15} />
+            </button>
             <button className="btn sm ghost" onClick={() => saveTodo({ ...t.data, date: addDays(t.data.date < state.today ? state.today : t.data.date, 1) }, t.id)}>
               +1 día
             </button>
@@ -314,6 +333,16 @@ function MissionList({ kind }: { kind: Exclude<MissionKind, 'main' | 'chapter'> 
           {m.data.notes && <div className="tiny muted" style={{ marginTop: 4 }}>{m.data.notes}</div>}
         </div>
         <div className="row" style={{ gap: 2 }}>
+          {!completed && (
+            <button
+              className="btn icon sm play-btn"
+              aria-label={`Jugar ${m.data.title}`}
+              title="Entrar en Modo Misión"
+              onClick={() => startMissionQuest(m)}
+            >
+              <Icon name="play" width={15} height={15} />
+            </button>
+          )}
           <button className="btn icon ghost" aria-label="Escribir lección" title="Fallé: escribir lección" onClick={() => setLessonFor(m)}>
             <Icon name="feather" />
           </button>

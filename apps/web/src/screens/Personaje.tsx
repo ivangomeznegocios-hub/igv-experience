@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ATTRIBUTE_GUIDE, ATTRIBUTE_IDS, ATTRIBUTE_NAMES, GAME_CONFIG, addDays, type AchievementData, type AttributeId, type SeasonData, type Entity } from '@igv/core';
 import { addEvent, projectAsOf, useGame } from '../data/store';
+import { getArmoryItem } from '../lib/armory';
 import { fmtDate, fmtNum } from '../lib/time';
 import { Hero } from '../ui/Hero';
 import { Bar, PageHeader, confirmAction } from '../ui/kit';
@@ -13,7 +15,7 @@ export default function Personaje() {
   return (
     <>
       <PageHeader title="Personaje" eyebrow="Atributos" />
-      <Hero />
+      <Hero compact />
       <AvatarCard />
       {state.attributes.rated ? <Attributes /> : <RateAttributes />}
       {state.attributes.rated && <SeasonSnapshots />}
@@ -29,24 +31,46 @@ function AvatarCard() {
   const unlocked = list<AchievementData>('achievements', 'achievement').filter((a) => state.achievements[a.id]?.unlocked);
   const chosen = state.settings.avatarBadges ?? [];
   const nextTitle = state.level.nextTitle;
+  const equippedAura = getArmoryItem(state.settings.equipped?.aura);
+  const equippedEmblem = getArmoryItem(state.settings.equipped?.emblem);
+  const equippedSkin = getArmoryItem(state.settings.equipped?.skin);
   return (
     <div className="card">
       <div className="row" style={{ gap: 16 }}>
         <Avatar size={88} />
         <div className="grow small">
           <div>
-            <b>Marco:</b> {state.level.title}
-            {nextTitle ? <span className="muted"> · cambia a {nextTitle.title} en el nivel {nextTitle.level}</span> : null}
+            <b>Rango:</b> {state.level.title}
+            {nextTitle ? <span className="muted"> · evoluciona a {nextTitle.title} en NV {nextTitle.level}</span> : null}
           </div>
           <div>
-            <b>Color:</b> {ATTRIBUTE_NAMES[top]} <span className="muted">(tu atributo más alto)</span>
+            <b>Esencia:</b> {ATTRIBUTE_NAMES[top]} <span className="muted">(tu atributo más alto)</span>
           </div>
           <div>
-            <b>Aura:</b> {state.streak.current >= 7 ? 'encendida 🔥' : <span className="muted">se enciende con racha de 7+ días</span>}
+            <b>Aura:</b>{' '}
+            {equippedAura ? (
+              <span className="gold">{equippedAura.name}</span>
+            ) : state.streak.current >= 7 ? (
+              'encendida 🔥'
+            ) : (
+              <span className="muted">se enciende con racha de 7+ días o en la Armería</span>
+            )}
           </div>
-          <button className="btn sm" style={{ marginTop: 8 }} onClick={() => setPicking((x) => !x)} disabled={!unlocked.length}>
-            <Icon name="trophy" /> Insignias ({chosen.length || 'auto'})
-          </button>
+          {(equippedEmblem || equippedSkin) && (
+            <div className="tiny muted" style={{ marginTop: 2 }}>
+              {equippedEmblem && <span>Emblema: {equippedEmblem.name}</span>}
+              {equippedEmblem && equippedSkin && ' · '}
+              {equippedSkin && <span>Tema HUD: {equippedSkin.name}</span>}
+            </div>
+          )}
+          <div className="row wrap" style={{ gap: 6, marginTop: 8 }}>
+            <button className="btn sm" onClick={() => setPicking((x) => !x)} disabled={!unlocked.length}>
+              <Icon name="trophy" /> Insignias ({chosen.length || 'auto'})
+            </button>
+            <Link to="/tienda" className="btn sm ghost">
+              <Icon name="chest" /> Armería
+            </Link>
+          </div>
         </div>
       </div>
       {picking && (
