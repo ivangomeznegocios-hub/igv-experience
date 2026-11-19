@@ -132,9 +132,17 @@ export interface AssistantSnapshot {
     lastContact: Record<string, string | null>;
   };
   achievements: { unlocked: number; total: number; recent: { name: string; date: string }[] };
-  skills: { id: string; name: string; rank: number; rankName: string | null }[];
+  /** Lo que sabe hacer: rango, categoría, si vive de eso y el tiempo invertido (minutos, sin XP). */
+  skills: { id: string; name: string; rank: number; rankName: string | null; category: string; livelihood: boolean; minutes: number; lastPractice: string | null }[];
   pledges: { id: string; title: string; stake: number; deadline: string }[];
-  library: { reading: { id: string; title: string }[]; finishedThisYear: number };
+  library: {
+    /** Leyendo ahora, con su último avance (percent = null si solo hay página y no se sabe el total). */
+    reading: { id: string; title: string; percent: number | null; page: number | null; pages: number | null; lastUpdate: string | null }[];
+    finishedThisYear: number;
+    /** Notas de "Lo que aprendí" (todas) y las 3 más recientes. */
+    notes: number;
+    recentNotes: { book: string; date: string; text: string }[];
+  };
   savings: { id: string; name: string; current: number; target: number }[];
   lessons: number;
   lastJournal: { weekStart: string; happened: string; learned: string; next: string } | null;
@@ -149,6 +157,21 @@ export interface AssistantSnapshot {
   // [[mapa]]
 
   // [[habilidades]]
+  /** Tu tiempo ("¿a qué te dedicas?"), en minutos. Solo registro: no da XP. */
+  time: {
+    todayTotal: number;
+    today: { area: string; minutes: number }[];
+    thisWeekTotal: number;
+    thisWeek: { area: string; minutes: number }[];
+    lastWeekTotal: number;
+    /** Semana pasada hasta el mismo día de la semana que hoy. */
+    lastWeekToDate: number;
+    skillsThisWeek: { id: string; name: string; minutes: number }[];
+    /** Promedio por día de calendario de los últimos días completos (config timeLog.averageDays). */
+    avgPerDay: number;
+    /** Días con algún registro en esa ventana. */
+    loggedDays: number;
+  };
 
   // [[aprendizaje]]
 
@@ -390,15 +413,30 @@ export function buildSnapshot(
     },
     achievements: { unlocked: unlocked.length, total: achs.length, recent: unlocked.slice(0, 5) },
     skills: list<SkillData>('skills', 'skill').map((s) => {
-      const rank = state.skills[s.id]?.rank ?? 0;
-      return { id: s.id, name: s.data.name, rank, rankName: rank > 0 ? SKILL_RANK_NAMES[rank - 1] : null };
+      const st = state.skills[s.id];
+      const rank = st?.rank ?? 0;
+      return {
+        id: s.id,
+        name: s.data.name,
+        rank,
+        rankName: rank > 0 ? SKILL_RANK_NAMES[rank - 1] : null,
+        category: st?.category ?? 'otro',
+        livelihood: !!s.data.livelihood,
+        minutes: st?.minutes ?? 0,
+        lastPractice: st?.lastPractice ?? null,
+      };
     }),
     pledges: state.gold.pledges.filter((p) => p.valid && p.status === 'open').map((p) => ({ id: p.pledgeId, title: p.title, stake: p.stake, deadline: p.deadline })),
     library: {
       reading: list<BookData>('library', 'book')
         .filter((b) => !state.library.finished[b.id] && b.data.status === 'leyendo')
-        .map((b) => ({ id: b.id, title: b.data.title })),
+        .map((b) => {
+          const pr = state.library.progress[b.id];
+          return { id: b.id, title: b.data.title, percent: pr?.percent ?? null, page: pr?.page ?? null, pages: b.data.pages ?? null, lastUpdate: pr?.date ?? null };
+        }),
       finishedThisYear: state.library.byYear[year] ?? 0,
+      notes: state.library.notes.length,
+      recentNotes: state.library.notes.slice(0, 3).map((n) => ({ book: n.title, date: n.date, text: n.text.slice(0, 200) })),
     },
     savings: list<SavingsData>('finance', 'savings').map((s) => ({ id: s.id, name: s.data.name, current: state.savings[s.id]?.current ?? 0, target: s.data.target })),
     lessons: state.lessons.count,
@@ -413,6 +451,49 @@ export function buildSnapshot(
     // [[mapa]]
 
     // [[habilidades]]
+    time: (() => {
+      const t = state.time;
+      const rows = (rec: Record<string, number>) =>
+        Object.entries(rec)
+          .filter(([, m]) => m > 0)
+          .sort((a, b) => b[1] - a[1])
+          .map(([area, minutes]) => ({ area, minutes }));
+      const lws = addDays(ws, -7);
+      const lwSameDay = addDays(lws, weekday(today));
+      const avgDays = GAME_CONFIG.timeLog.averageDays;
+      const avgFrom = addDays(today, -avgDays);
+      const avgTo = addDays(today, -1);
+      let lastWeekTotal = 0;
+      let lastWeekToDate = 0;
+      let avgSum = 0;
+      const days = new Set<string>();
+      const bySkill: Record<string, number> = {};
+      for (const e of t.entries) {
+        if (e.date >= lws && e.date < ws) {
+          lastWeekTotal += e.minutes;
+          if (e.date <= lwSameDay) lastWeekToDate += e.minutes;
+        }
+        if (e.date >= avgFrom && e.date <= avgTo) {
+          avgSum += e.minutes;
+          days.add(e.date);
+        }
+        if (e.skillId && e.date >= ws && e.date <= today) bySkill[e.skillId] = (bySkill[e.skillId] ?? 0) + e.minutes;
+      }
+      const skillName = (id: string) => (entities.find((x) => x.id === id)?.data as SkillData | undefined)?.name ?? id;
+      return {
+        todayTotal: t.todayMinutes,
+        today: rows(t.todayByArea),
+        thisWeekTotal: t.weekMinutes,
+        thisWeek: rows(t.weekByArea),
+        lastWeekTotal,
+        lastWeekToDate,
+        skillsThisWeek: Object.entries(bySkill)
+          .sort((a, b) => b[1] - a[1])
+          .map(([id, minutes]) => ({ id, name: skillName(id), minutes })),
+        avgPerDay: Math.round(avgSum / avgDays),
+        loggedDays: days.size,
+      };
+    })(),
 
     // [[aprendizaje]]
 

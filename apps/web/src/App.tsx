@@ -50,6 +50,8 @@ const ConectarIA = lazy(() => import('./screens/ConectarIA'));
 // [[mapa]]
 
 // [[habilidades]]
+const Tiempo = lazy(() => import('./screens/Tiempo'));
+const TimerPill = lazy(() => import('./ui/habilidades/TimerPill'));
 
 // [[aprendizaje]]
 
@@ -225,6 +227,7 @@ export default function App() {
                 {/* [[mapa]] */}
 
                 {/* [[habilidades]] */}
+                <Route path="/tiempo" element={<Tiempo />} />
 
                 {/* [[aprendizaje]] */}
 
@@ -257,6 +260,11 @@ export default function App() {
       {/* [[mapa]] */}
 
       {/* [[habilidades]] */}
+      {store.ready && (
+        <Suspense fallback={null}>
+          <TimerPill />
+        </Suspense>
+      )}
 
       {/* [[aprendizaje]] */}
 

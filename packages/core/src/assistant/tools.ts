@@ -76,6 +76,7 @@ export type { EventQuery, AssistantStore, ActivityRefs, ToolResult, ToolGroup, A
 // [[mapa]]
 
 // [[habilidades]]
+import { HABILIDADES_GUIDE, HABILIDADES_TOOLS, renderHabilidadesOverview } from './tools-habilidades';
 
 // [[aprendizaje]]
 
@@ -159,6 +160,7 @@ export function renderOverview(s: AssistantSnapshot): string {
   // [[mapa]]
 
   // [[habilidades]]
+  L.push(...renderHabilidadesOverview(s));
 
   // [[aprendizaje]]
 
@@ -492,6 +494,7 @@ const GUIDE_SYSTEMS: string[] = [
   // [[mapa]]
 
   // [[habilidades]]
+  HABILIDADES_GUIDE,
 
   // [[aprendizaje]]
 
@@ -968,16 +971,27 @@ const terminarLibro = tool({
   title: 'Terminar libro o curso',
   group: 'registrar',
   writes: true,
-  description: 'Marca un libro, curso o audiolibro de la biblioteca como terminado (XP de misión de su tamaño, una vez por libro).',
-  input: z.object({ libro_id: zId, nota: z.string().trim().max(4000).optional(), fecha: zFecha }),
-  async run({ libro_id, nota, fecha }, store) {
+  description:
+    'Marca un libro, curso o audiolibro de la biblioteca como terminado (XP de misión de su tamaño, una vez por libro). "nota" = la idea principal que se lleva; "calificacion" de 1 a 5 (también sirve para calificar uno ya terminado).',
+  input: z.object({ libro_id: zId, nota: z.string().trim().max(4000).optional(), calificacion: z.number().int().min(1).max(5).optional(), fecha: zFecha }),
+  async run({ libro_id, nota, calificacion, fecha }, store) {
     const date = pastDate(store, fecha);
     const b = find<BookData>(await store.catalog(), libro_id, 'library', ['book'], 'el libro');
+    const rate = async () => (calificacion && calificacion !== b.data.rating ? [(await upsert(store, b, { id: b.id, module: 'library', kind: 'book', data: { ...b.data, rating: calificacion } })).ref] : []);
     const prev = await store.events({ types: ['library.finished'], match: { bookId: b.id }, limit: 1 });
-    if (prev.length) return { text: `"${b.data.title}" ya estaba terminado (${prev[0].localDate}).` };
+    if (prev.length) {
+      const entities = await rate();
+      if (entities.length) return ok(`"${b.data.title}" ya estaba terminado (${prev[0].localDate}); le puse ${calificacion}/5.`, `Calificó "${b.data.title}" con ${calificacion}/5`, { entities });
+      return { text: `"${b.data.title}" ya estaba terminado (${prev[0].localDate}).` };
+    }
     const ev = makeEvent(store, 'library.finished', { bookId: b.id, title: b.data.title, size: b.data.size, attribute: b.data.attribute, note: nota || undefined }, date);
     await store.addEvents([ev]);
-    return ok(`Terminado: "${b.data.title}" (+${GAME_CONFIG.missionXp[b.data.size]} XP). Registro [${ev.id}].`, `Terminó "${b.data.title}"`, { events: [ev.id] });
+    const entities = await rate();
+    return ok(
+      `Terminado: "${b.data.title}" (+${GAME_CONFIG.missionXp[b.data.size]} XP)${calificacion ? ` · ${calificacion}/5` : ''}. Registro [${ev.id}].`,
+      `Terminó "${b.data.title}"`,
+      { events: [ev.id], entities },
+    );
   },
 });
 
@@ -1361,7 +1375,8 @@ const guardarLibro = tool({
   title: 'Agregar libro o curso',
   group: 'organizar',
   writes: true,
-  description: 'Agrega o edita un libro, curso o audiolibro en la Biblioteca (estado pendiente o leyendo; al terminarlo usa terminar_libro).',
+  description:
+    'Agrega o edita un libro, curso o audiolibro en la Biblioteca (estado pendiente o leyendo; al terminarlo usa terminar_libro). Opcional: páginas totales (para el avance en %), la habilidad a la que aporta (habilidad_id; null para desligar) y calificación 1–5.',
   input: z.object({
     id: zEditId,
     titulo: zText(300).optional(),
@@ -1371,6 +1386,9 @@ const guardarLibro = tool({
     atributo: zAttr.optional(),
     tamano: zSize.optional(),
     notas: z.string().max(2000).optional(),
+    paginas: z.number().int().min(1).max(100000).nullable().optional(),
+    habilidad_id: zId.nullable().optional(),
+    calificacion: z.number().int().min(1).max(5).nullable().optional(),
   }),
   async run(i, store) {
     const catalog = await store.catalog();
@@ -1378,6 +1396,7 @@ const guardarLibro = tool({
     const p: Partial<BookData> = prev?.data ?? {};
     const title = i.titulo ?? p.title;
     if (!title) throw new ToolError('Falta "titulo".');
+    if (i.habilidad_id) find<SkillData>(catalog, i.habilidad_id, 'skills', ['skill'], 'la habilidad');
     const data: BookData = {
       ...p,
       title,
@@ -1387,6 +1406,9 @@ const guardarLibro = tool({
       attribute: i.atributo ?? p.attribute ?? 'inteligencia',
       size: i.tamano ?? p.size ?? 'media',
       notes: i.notas ?? p.notes,
+      pages: i.paginas !== undefined ? i.paginas : (p.pages ?? null),
+      skillId: i.habilidad_id !== undefined ? i.habilidad_id : (p.skillId ?? null),
+      rating: i.calificacion !== undefined ? i.calificacion : (p.rating ?? null),
     };
     const { saved, ref } = await upsert(store, prev, { id: prev?.id ?? newEntityId(store, 'book'), module: 'library', kind: 'book', data });
     return ok(`${prev ? 'Actualizado' : 'Agregado'}: "${data.title}" (${data.bookType}, ${data.status}). Id [${saved.id}].`, `${prev ? 'Editó' : 'Agregó'} "${data.title}" a la biblioteca`, { entities: [ref] });
@@ -1477,6 +1499,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
   // [[mapa]]
 
   // [[habilidades]]
+  ...HABILIDADES_TOOLS,
 
   // [[aprendizaje]]
 

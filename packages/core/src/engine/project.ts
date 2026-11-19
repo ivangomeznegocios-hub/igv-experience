@@ -33,6 +33,7 @@ import { reduceBody, reduceDayClosures, reduceSavings, type BodyState, type DayC
 // [[mapa]]
 
 // [[habilidades]]
+import { reduceTime, type TimeState } from './modules/time';
 
 // [[aprendizaje]]
 
@@ -94,6 +95,8 @@ export interface GameState {
   // [[mapa]]
 
   // [[habilidades]]
+  /** Tu tiempo: registros por área y habilidad (solo registro, sin XP). */
+  time: TimeState;
 
   // [[aprendizaje]]
 
@@ -185,6 +188,7 @@ export function project(input: ProjectInput): GameState {
   // [[mapa]]
 
   // [[habilidades]]
+  const time = reduceTime(ctx);
 
   // [[aprendizaje]]
 
@@ -242,6 +246,7 @@ export function project(input: ProjectInput): GameState {
     // [[mapa]]
 
     // [[habilidades]]
+    time,
 
     // [[aprendizaje]]
 
