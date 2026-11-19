@@ -71,7 +71,7 @@ export interface SettingsData {
   budgets?: Record<string, number>;
   /** Logros que el avatar muestra como insignias (máx. 3). */
   avatarBadges?: string[];
-  /** Cosméticos equipados de la armería (aura, emblema, tema visual del HUD). */
+  /** Estilo de color de la app (`skin`). `aura` y `emblem` son de una versión anterior y ya no se usan. */
   equipped?: { aura?: string; emblem?: string; skin?: string };
 }
 

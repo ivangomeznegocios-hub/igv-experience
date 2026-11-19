@@ -104,7 +104,7 @@ function NotificationsSync() {
   return null;
 }
 
-/** Aplica la atmósfera visual equipada en la Armería al documento raíz. */
+/** Aplica el estilo de color elegido en Tienda → Estilo al documento raíz. */
 function SkinSync() {
   const { state, store } = useGame();
   const skin = state.settings.equipped?.skin ?? 'obsidian';

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ATTRIBUTE_GUIDE, ATTRIBUTE_IDS, ATTRIBUTE_NAMES, GAME_CONFIG, addDays, type AchievementData, type AttributeId, type SeasonData, type Entity } from '@igv/core';
 import { addEvent, projectAsOf, useGame } from '../data/store';
-import { getArmoryItem } from '../lib/armory';
+import { getTheme } from '../lib/themes';
 import { fmtDate, fmtNum } from '../lib/time';
 import { Hero } from '../ui/Hero';
 import { Bar, PageHeader, confirmAction } from '../ui/kit';
@@ -31,44 +31,36 @@ function AvatarCard() {
   const unlocked = list<AchievementData>('achievements', 'achievement').filter((a) => state.achievements[a.id]?.unlocked);
   const chosen = state.settings.avatarBadges ?? [];
   const nextTitle = state.level.nextTitle;
-  const equippedAura = getArmoryItem(state.settings.equipped?.aura);
-  const equippedEmblem = getArmoryItem(state.settings.equipped?.emblem);
-  const equippedSkin = getArmoryItem(state.settings.equipped?.skin);
+  const theme = getTheme(state.settings.equipped?.skin);
   return (
     <div className="card">
       <div className="row" style={{ gap: 16 }}>
         <Avatar size={88} />
         <div className="grow small">
           <div>
-            <b>Rango:</b> {state.level.title}
+            <b>Título:</b> {state.level.title}
             {nextTitle ? <span className="muted"> · evoluciona a {nextTitle.title} en NV {nextTitle.level}</span> : null}
           </div>
           <div>
             <b>Esencia:</b> {ATTRIBUTE_NAMES[top]} <span className="muted">(tu atributo más alto)</span>
           </div>
           <div>
-            <b>Aura:</b>{' '}
-            {equippedAura ? (
-              <span className="gold">{equippedAura.name}</span>
-            ) : state.streak.current >= 7 ? (
-              'encendida 🔥'
+            <b>Racha:</b>{' '}
+            {state.streak.current >= 7 ? (
+              <span>{state.streak.current} días 🔥 (el anillo se pinta de fuego)</span>
             ) : (
-              <span className="muted">se enciende con racha de 7+ días o en la Armería</span>
+              <span className="muted">{state.streak.current} días · con 7+ el anillo se pinta de fuego</span>
             )}
           </div>
-          {(equippedEmblem || equippedSkin) && (
-            <div className="tiny muted" style={{ marginTop: 2 }}>
-              {equippedEmblem && <span>Emblema: {equippedEmblem.name}</span>}
-              {equippedEmblem && equippedSkin && ' · '}
-              {equippedSkin && <span>Tema HUD: {equippedSkin.name}</span>}
-            </div>
-          )}
+          <div className="tiny muted" style={{ marginTop: 2 }}>
+            El anillo marca tu avance al siguiente nivel · Estilo: {theme.name}
+          </div>
           <div className="row wrap" style={{ gap: 6, marginTop: 8 }}>
             <button className="btn sm" onClick={() => setPicking((x) => !x)} disabled={!unlocked.length}>
               <Icon name="trophy" /> Insignias ({chosen.length || 'auto'})
             </button>
             <Link to="/tienda" className="btn sm ghost">
-              <Icon name="chest" /> Armería
+              <Icon name="sparkles" /> Estilo
             </Link>
           </div>
         </div>

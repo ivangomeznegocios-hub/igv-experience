@@ -2,10 +2,9 @@ import { useMemo, useState } from 'react';
 import { GAME_CONFIG, type Entity, type ShopRewardData } from '@igv/core';
 import { addEvent, deleteEntity, saveEntity, useGame, voidEvent } from '../data/store';
 import { updateSettings } from '../lib/actions';
-import { ARMORY_ITEMS, ownedArmoryIds, type ArmoryItem, type ArmorySlot } from '../lib/armory';
+import { THEMES, getTheme, ownedThemeIds, retiredPurchases, type ThemeItem } from '../lib/themes';
 import { sfx } from '../lib/sound';
 import { fmtDate, fmtNum, newId } from '../lib/time';
-import { Avatar } from '../ui/Avatar';
 import { Icon } from '../ui/icons';
 import { Badge, Chips, Empty, Field, PageHeader, Sheet, Tabs, confirmAction, toast, undoToast } from '../ui/kit';
 
@@ -17,16 +16,10 @@ const IDEAS: ShopRewardData[] = [
   { name: 'Escapada de fin de semana', cost: 400, icon: 'globe' },
 ];
 
-const SLOT_TITLES: Record<ArmorySlot, string> = {
-  aura: 'Auras del personaje',
-  emblem: 'Equipo y emblemas',
-  skin: 'Atmósfera del HUD',
-};
-
-/** Tienda: premios reales y Armería cosmética del juego (se pagan con oro; nunca tocan la XP). */
+/** Tienda: premios reales y estilos de la app (se pagan con oro; nunca tocan la XP). */
 export default function Tienda() {
   const { state, list } = useGame();
-  const [tab, setTab] = useState<'real' | 'armory'>('real');
+  const [tab, setTab] = useState<'real' | 'style'>('real');
   const rewards = list<ShopRewardData>('shop', 'reward').sort((a, b) => a.data.cost - b.data.cost);
   const [edit, setEdit] = useState<Entity<ShopRewardData> | 'new' | null>(null);
   const g = state.gold;
@@ -43,7 +36,7 @@ export default function Tienda() {
     <>
       <PageHeader
         title="Tienda"
-        eyebrow="Oro · Premios y Armería"
+        eyebrow="Oro · Premios y estilo"
         right={
           tab === 'real' ? (
             <button className="btn sm primary" onClick={() => setEdit('new')}>
@@ -67,7 +60,7 @@ export default function Tienda() {
           </div>
         </div>
         <p className="tiny muted" style={{ marginBottom: 0 }}>
-          Ganas 1 de oro por cada {GAME_CONFIG.gold.xpPerGold} XP. Gastar oro en premios reales o cosméticos nunca toca tu XP ni tus niveles.
+          Ganas 1 de oro por cada {GAME_CONFIG.gold.xpPerGold} XP. Gastar oro en premios o estilos nunca toca tu XP ni tus niveles.
         </p>
       </div>
 
@@ -76,7 +69,7 @@ export default function Tienda() {
         onChange={setTab}
         options={[
           { value: 'real', label: 'Premios reales' },
-          { value: 'armory', label: 'Armería RPG' },
+          { value: 'style', label: 'Estilo de la app' },
         ]}
       />
 
@@ -137,7 +130,7 @@ export default function Tienda() {
           )}
         </>
       ) : (
-        <ArmorySection />
+        <StyleSection />
       )}
 
       {edit && <RewardSheet initial={edit === 'new' ? null : edit} onClose={() => setEdit(null)} />}
@@ -145,94 +138,90 @@ export default function Tienda() {
   );
 }
 
-function ArmorySection() {
+function StyleSection() {
   const { state } = useGame();
-  const owned = useMemo(() => ownedArmoryIds(state), [state]);
+  const owned = useMemo(() => ownedThemeIds(state), [state]);
   const equipped = state.settings.equipped ?? {};
-  const [preview, setPreview] = useState<{ aura?: string; emblem?: string } | null>(null);
+  const active = getTheme(equipped.skin).key;
+  const retired = retiredPurchases(state);
+  const refundable = retired.reduce((sum, r) => sum + r.cost, 0);
 
-  const equip = (item: ArmoryItem) => {
-    const cur = equipped[item.slot];
-    const nextVal = item.slot === 'skin' ? item.skinKey : cur === item.id ? undefined : item.id;
-    updateSettings(state.settings, { equipped: { ...equipped, [item.slot]: nextVal } });
+  const apply = (t: ThemeItem) => {
+    updateSettings(state.settings, { equipped: { skin: t.key } });
+    toast(`Estilo: ${t.name}`);
+  };
+
+  const buy = (t: ThemeItem) => {
+    if (state.gold.balance < t.cost) return;
+    if (!confirmAction(`¿Desbloquear el estilo "${t.name}" por ${t.cost} de oro?`)) return;
+    const prev = active;
+    const ev = addEvent('reward.redeemed', { rewardId: t.id, name: `Estilo: ${t.name}`, cost: t.cost });
+    updateSettings(state.settings, { equipped: { skin: t.key } });
     sfx.coin();
-    toast(nextVal ? `Equipado: ${item.name}` : `Desequipado: ${item.name}`);
+    undoToast(`Estilo ${t.name} desbloqueado`, () => {
+      voidEvent(ev.id);
+      updateSettings(state.settings, { equipped: { skin: prev } });
+    });
   };
 
-  const buy = (item: ArmoryItem) => {
-    if (state.gold.balance < item.cost) return;
-    if (!confirmAction(`¿Desbloquear "${item.name}" por ${item.cost} de oro?`)) return;
-    const ev = addEvent('reward.redeemed', { rewardId: item.id, name: `Armería: ${item.name}`, cost: item.cost });
-    updateSettings(state.settings, { equipped: { ...equipped, [item.slot]: item.slot === 'skin' ? item.skinKey : item.id } });
-    sfx.achievement();
-    undoToast(`✨ ${item.name} desbloqueado y equipado`, () => voidEvent(ev.id));
+  const refund = () => {
+    if (!confirmAction(`¿Recuperar ${refundable} de oro de auras y emblemas que ya no existen?`)) return;
+    for (const r of retired) voidEvent(r.eventId);
+    updateSettings(state.settings, { equipped: { skin: equipped.skin } });
+    toast(`+${refundable} de oro de vuelta`);
   };
-
-  const isEquipped = (item: ArmoryItem) =>
-    item.slot === 'skin' ? (equipped.skin ?? 'obsidian') === item.skinKey : equipped[item.slot] === item.id;
 
   return (
     <>
-      <div className="card">
-        <div className="row" style={{ gap: 16 }}>
-          <Avatar size={84} preview={preview ?? undefined} />
-          <div className="grow">
-            <div className="eyebrow">Vista previa de tu personaje</div>
-            <h2 style={{ margin: '2px 0 4px' }}>{state.settings.name}</h2>
-            <div className="small muted">
-              {preview ? 'Previsualizando cosmético…' : 'Compra y equipa auras, emblemas y atmósferas visuales con tu oro.'}
+      {retired.length > 0 && (
+        <div className="card">
+          <div className="row">
+            <div className="grow small">
+              Las auras y emblemas del avatar se retiraron. Gastaste <b className="gold">{refundable} de oro</b> en ellos.
             </div>
-            {preview && (
-              <button className="btn sm ghost" style={{ marginTop: 6 }} onClick={() => setPreview(null)}>
-                Quitar vista previa
-              </button>
-            )}
+            <button className="btn sm primary" onClick={refund}>
+              Recuperar
+            </button>
           </div>
         </div>
-      </div>
-
-      {(['aura', 'emblem', 'skin'] as ArmorySlot[]).map((slot) => (
-        <div key={slot}>
-          <div className="section-title">{SLOT_TITLES[slot]}</div>
-          <div className="card">
-            {ARMORY_ITEMS.filter((i) => i.slot === slot).map((item) => {
-              const has = owned.has(item.id);
-              const eq = isEquipped(item);
-              const canBuy = state.gold.balance >= item.cost;
-              return (
-                <div key={item.id} className="item">
-                  <div className="shop-icon" style={{ color: item.accent, borderColor: item.accent }}>
-                    <Icon name={item.icon} />
-                  </div>
-                  <div
-                    className="grow"
-                    style={{ cursor: slot !== 'skin' ? 'pointer' : undefined }}
-                    onClick={() => slot !== 'skin' && setPreview({ [slot]: item.id })}
-                  >
-                    <div className="item-title">{item.name}</div>
-                    <div className="tiny muted">{item.description}</div>
-                    <div className="row wrap" style={{ gap: 4, marginTop: 4 }}>
-                      {eq && <Badge tone="green">Equipado</Badge>}
-                      {has && !eq && <Badge>Desbloqueado</Badge>}
-                      {!has && <Badge tone="gold">{item.cost} oro</Badge>}
-                      {!has && !canBuy && <span className="tiny muted">faltan {item.cost - state.gold.balance}</span>}
-                    </div>
-                  </div>
-                  {has ? (
-                    <button className={`btn sm ${eq ? '' : 'primary'}`} onClick={() => equip(item)}>
-                      {eq ? (slot === 'skin' ? 'Activo' : 'Quitar') : 'Equipar'}
-                    </button>
-                  ) : (
-                    <button className={`btn sm ${canBuy ? 'primary' : ''}`} disabled={!canBuy} onClick={() => buy(item)}>
-                      Comprar
-                    </button>
-                  )}
+      )}
+      <div className="card">
+        <p className="small muted" style={{ marginTop: 0 }}>
+          Cambia los colores de toda la app. Funciona con el tema claro y el oscuro.
+        </p>
+        {THEMES.map((t) => {
+          const has = owned.has(t.id);
+          const on = active === t.key;
+          const canBuy = state.gold.balance >= t.cost;
+          return (
+            <div key={t.id} className="item">
+              <div className="theme-swatch" aria-hidden="true">
+                {t.swatch.map((c) => (
+                  <span key={c} style={{ background: c }} />
+                ))}
+              </div>
+              <div className="grow">
+                <div className="item-title">{t.name}</div>
+                <div className="tiny muted">{t.description}</div>
+                <div className="row wrap" style={{ gap: 4, marginTop: 4 }}>
+                  {on && <Badge tone="green">En uso</Badge>}
+                  {!has && <Badge tone="gold">{t.cost} oro</Badge>}
+                  {!has && !canBuy && <span className="tiny muted">faltan {t.cost - state.gold.balance}</span>}
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      ))}
+              </div>
+              {has ? (
+                <button className={`btn sm ${on ? '' : 'primary'}`} disabled={on} onClick={() => apply(t)}>
+                  {on ? 'Activo' : 'Usar'}
+                </button>
+              ) : (
+                <button className={`btn sm ${canBuy ? 'primary' : ''}`} disabled={!canBuy} onClick={() => buy(t)}>
+                  Desbloquear
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </>
   );
 }
