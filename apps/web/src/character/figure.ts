@@ -320,7 +320,7 @@ export function buildFigure(spec: FigureSpec): Figure {
   const CK = trait('cheeks');
   const lowerF = 1 + 0.12 * trait('lowerFace');
   const tNose = 0.3 * lowerF;
-  const tMouth = 0.203 * lowerF;
+  const tMouth = 0.197 * lowerF;
   const tChin = 0.07 * lowerF;
   const tEye = tNose + 0.195 * (1 + 0.1 * trait('midFace'));
   const tBrow = tEye + 0.075 + 0.014 * trait('browHeight');
@@ -378,7 +378,10 @@ export function buildFigure(spec: FigureSpec): Figure {
     [tHairline + 0.008, tHairline + 0.004, tHairline - 0.012, tHairline - 0.045, tEye + 0.19, tEye + 0.14, tEye + 0.05, tEar + 0.02, tEar + 0.015, tEar + 0.05, tEar + 0.16, tEar + 0.155, tEar - 0.02, 0.27, 0.25],
   );
   /** Ruido determinista 0–1 (grano de barba, borde irregular del pelo). */
-  const noise = (a: number, b: number) => Math.abs((Math.sin(a * 127.1 + b * 311.7) * 43758.5453) % 1);
+  const noise = (a: number, b: number) => {
+    const v = Math.sin(Math.round(a * 4099) * 12.9898 + Math.round(b * 4099) * 78.233) * 43758.5453;
+    return v - Math.floor(v);
+  };
 
   // --- Nariz: dorso, punta redonda y aletas como volúmenes propios (no un bulto difuso) ---
   const noseS = 1 + 0.3 * trait('nose');
@@ -391,27 +394,27 @@ export function buildFigure(spec: FigureSpec): Figure {
     // Dorso: lomo ancho y suave que se abre hacia la base (sin aristas a los lados).
     const ridge = noseS * ridgeH(Math.max(t, tNose + 0.02)) * gauss(xs, ridgeS(t)) * smoothstep(tNose - 0.004, tNose + 0.03, t);
     // Punta: una bola redonda que cuelga un poco por debajo de las aletas y se mete hacia abajo sin repisa.
-    const ty = (t - (tNose + 0.03)) * hhN;
-    const tip = 0.0156 * noseS * gauss(xs, 0.0096 * noseW) * (ty > 0 ? gauss(ty, 0.0105) : pos(1 - (ty / 0.0098) ** 2) ** 0.85);
+    const ty = (t - (tNose + 0.024)) * hhN;
+    const tip = 0.0158 * noseS * gauss(xs, 0.0094 * noseW) * (ty > 0 ? gauss(ty, 0.0112) : pos(1 - (ty / 0.0064) ** 2) ** 0.6);
     // Aletas: dos lóbulos redondos que bordean la punta y marcan el ancho de la nariz.
     const ay = (t - (tNose + 0.019)) * hhN;
-    const ala = 0.0074 * noseS * gauss(ax - 0.0126 * noseW, 0.0056 * noseW) * (ay > 0 ? gauss(ay, 0.0068) : pos(1 - (ay / 0.0062) ** 2) ** 0.85);
+    const ala = 0.0078 * noseS * gauss(ax - 0.012 * noseW, 0.0052 * noseW) * (ay > 0 ? gauss(ay, 0.0066) : pos(1 - (ay / 0.0048) ** 2) ** 0.6);
     // Unión suave de los tres volúmenes (sin pliegues duros entre ellos).
     return (ridge ** 2.4 + tip ** 2.4 + ala ** 2.4) ** (1 / 2.4);
   };
 
   // --- Labios: superior delgado con arco de cupido, inferior más lleno al centro; los dos se afinan
   // hasta desaparecer en la comisura. El mismo trazo da relieve y color.
-  const lipHWn = 0.0235 * (1 + 0.12 * trait('mouthWidth'));
+  const lipHWn = 0.025 * (1 + 0.12 * trait('mouthWidth'));
   const lipHW = lipHWn * ws;
-  const lipUp = 0.004 * (1 + 0.4 * trait('lips'));
+  const lipUp = 0.0048 * (1 + 0.4 * trait('lips'));
   const lipLo = 0.0068 * (1 + 0.4 * trait('lips'));
   const lipAt = (xs: number, t: number) => {
     const s = xs / lipHWn;
     if (Math.abs(s) >= 1.1 || Math.abs(t - tMouth) > 0.06) return null;
     const s2 = Math.min(1, s * s);
     // Línea de la boca: casi recta, con las comisuras medio milímetro arriba (sonrisa apenas insinuada).
-    const dy = (t - tMouth) * hhN - (0.0005 * s2 - 0.0003 * gauss(s, 0.25));
+    const dy = (t - tMouth) * hhN - (0.001 * s2 - 0.0003 * gauss(s, 0.25));
     const ub = lipUp * (1 - s2) ** 0.8 * (1 + 0.18 * gauss(Math.abs(s) - 0.21, 0.13) - 0.16 * gauss(s, 0.085));
     const lb = lipLo * (1 - s2) ** 1.1;
     let bulge = 0;
@@ -419,11 +422,11 @@ export function buildFigure(spec: FigureSpec): Figure {
     if (dy >= 0 && dy < ub) {
       const q = dy / ub;
       bulge = 0.0013 * Math.sin(PI * q) ** 0.8;
-      mask = smoothstep(1, 0.55, q);
+      mask = smoothstep(1, 0.5, q);
     } else if (dy < 0 && -dy < lb) {
       const q = -dy / lb;
       bulge = 0.0023 * Math.sin(PI * q) ** 0.7;
-      mask = smoothstep(1, 0.6, q);
+      mask = smoothstep(1, 0.5, q);
     }
     const inside = (1 - s2) ** 0.5;
     return { bulge: bulge * inside, mask: mask * smoothstep(1, 0.86, Math.abs(s)), seam: gauss(dy, 0.0007) * (Math.abs(s) < 0.97 ? inside : 0), upper: dy >= 0, mid: gauss(s, 0.4) };
@@ -438,7 +441,7 @@ export function buildFigure(spec: FigureSpec): Figure {
     d += 0.0045 * gauss(t - tBrow, 0.028) * (1 - smoothstep(0.045, 0.068, ax2));
     d -= 0.0095 * gauss(ax2 - eyeX / ws, 0.017) * gauss(t - tEye, 0.03);
     d += 0.003 * (1 + CK) * gauss(ax2 - 0.046, 0.022) * gauss(t - (tNose + 0.085), 0.06);
-    d += 0.0034 * gauss(xs, 0.028) * gauss(t - tMouth, 0.04);
+    d += 0.0028 * gauss(xs, 0.028) * gauss(t - tMouth, 0.04);
     // Párpado cerrado sobre el globo: el ojo abomba la cuenca (así el iris se ve redondo desde cualquier ángulo).
     d += 0.0034 * pos(1 - ((ax2 - eyeX / ws) / 0.0135) ** 2 - (((t - tEye) * hhN) / 0.0098) ** 2) ** 1.3;
     d -= 0.0012 * gauss(xs, 0.0042) * smoothstep(tMouth + 0.025, tMouth + 0.04, t) * (1 - smoothstep(tNose - 0.02, tNose - 0.006, t));
@@ -491,23 +494,23 @@ export function buildFigure(spec: FigureSpec): Figure {
     if (base <= 0) return 0;
     // Bigote continuo (más tenue al centro), que baja por las comisuras hasta el mentón; mosca bajo el
     // labio y un rastro leve por el borde de la mandíbula.
-    const moustache = smoothstep(tMouth + 0.014, tMouth + 0.03, t) * (1 - smoothstep(tNose - 0.05, tNose - 0.03, t)) * (1 - smoothstep(0.03, 0.04, xs)) * (0.6 + 0.4 * smoothstep(0.004, 0.014, xs));
+    const moustache = smoothstep(tMouth + 0.014, tMouth + 0.032, t) * (1 - smoothstep(tNose - 0.045, tNose - 0.02, t)) * (1 - smoothstep(0.028, 0.04, xs)) * (0.7 + 0.3 * smoothstep(0.004, 0.014, xs));
     const corner = 0.3 * gauss(xs - (lipHWn + 0.005), 0.0065) * smoothstep(0.1 * lowerF, 0.14 * lowerF, t) * (1 - smoothstep(tMouth + 0.005, tMouth + 0.03, t));
     const chin = 0.75 * gauss(xs, 0.026) * (t < tChin ? 1 : gauss(t - tChin, 0.045));
     const soul = 0.5 * gauss(xs, 0.006) * gauss(t - (tMouth - 0.04), 0.012);
     const jawEdge = lerp(0.1 * lowerF, tNose, clamp(phi / (0.42 * PI)) ** 1.6);
     const jaw = 0.16 * (1 - smoothstep(jawEdge - 0.02, jawEdge + 0.05, t)) * (1 - smoothstep(0.3 * PI, 0.42 * PI, phi));
-    return clamp(base * Math.max(moustache * 0.8, corner, chin, soul, jaw, 0.04) * (0.5 + 1.0 * noise(u * 31.7, t * 47.3)) * beardK);
+    return clamp(base * Math.max(moustache * 0.6, corner, chin * 0.8, soul, jaw, 0.04) * (0.72 + 0.56 * noise(u, t)) * beardK);
   };
 
   // --- Piel pintada por vértice: rubor, luz, sombras suaves, labios, fosas, barba y nacimiento del pelo ---
   const skinC = new Color(look.skin);
   const blushC = new Color(mix(look.skin, '#c05a52', 0.55));
   const lightC = new Color(mix(look.skin, '#fff1e6', 0.5));
-  const lipC = new Color(mix(look.skin, '#b2596a', 0.46));
-  const lipUpC = new Color(mix(look.skin, '#93474f', 0.5));
+  const lipC = new Color(mix(look.skin, '#b9506a', 0.6));
+  const lipUpC = new Color(mix(look.skin, '#9a4553', 0.6));
   const mouthC = new Color(mix(look.skin, '#3a1c1a', 0.82));
-  const nostrilC = new Color(mix(look.skin, '#2e1513', 0.68));
+  const nostrilC = new Color(mix(look.skin, '#2e1513', 0.78));
   const stubbleC = new Color(mix(look.skin, mix(look.hairColor, '#7d695f', 0.4), 0.58));
   const hairC = new Color(look.hairColor);
   const tmpC = new Color();
@@ -518,16 +521,16 @@ export function buildFigure(spec: FigureSpec): Figure {
       const xs = x / ws;
       const ax = Math.abs(xs);
       c.lerp(blushC, 0.13 * gauss(ax - 0.04, 0.034) * gauss(t - (tNose + 0.05), 0.09) + 0.12 * gauss(xs, 0.014) * gauss(t - (tNose + 0.03), 0.03) + 0.05 * gauss(xs, 0.03) * gauss(t - tChin, 0.05));
-      c.lerp(lightC, 0.25 * gauss(xs, 0.04) * gauss(t - (tBrow + 0.12), 0.08));
+      c.lerp(lightC, 0.12 * gauss(xs, 0.04) * gauss(t - (tBrow + 0.12), 0.08) + 0.22 * gauss(xs, 0.006) * gauss(t - (tNose + 0.03), 0.02) + 0.12 * gauss(xs, 0.0045) * smoothstep(tNose + 0.04, tNose + 0.1, t) * (1 - smoothstep(tBrow - 0.05, tBrow, t)));
       // Sombras suaves: lagrimal, pliegue de la aleta, bajo la punta y bajo el labio (sin franjas).
-      c.multiplyScalar(1 - 0.12 * gauss(ax - (eyeX / ws - 0.016), 0.007) * gauss(t - (tEye + 0.004), 0.022) - 0.05 * gauss(xs, 0.007) * gauss((t - (tNose - 0.006)) * hhN, 0.003) - 0.04 * gauss(xs, 0.02) * gauss(t - tMouth * 0.6, 0.018) - 0.05 * gauss(ax - 0.0192 * noseW, 0.0028) * gauss(t - (tNose + 0.022), 0.02) - 0.1 * gauss(ax - lipHWn * 1.04, 0.003) * gauss((t - tMouth) * hhN, 0.003));
+      c.multiplyScalar(1 - 0.12 * gauss(ax - (eyeX / ws - 0.016), 0.007) * gauss(t - (tEye + 0.004), 0.022) - 0.05 * gauss(xs, 0.007) * gauss((t - (tNose - 0.006)) * hhN, 0.003) - 0.04 * gauss(xs, 0.02) * gauss(t - tMouth * 0.6, 0.018) - 0.1 * gauss(ax - 0.0186 * noseW, 0.0026) * gauss(t - (tNose + 0.02), 0.018) - 0.1 * gauss(ax - lipHWn * 1.04, 0.003) * gauss((t - tMouth) * hhN, 0.003));
       // La base de la nariz mira hacia abajo y se oscurece sola: se aclara un poco para que no sea una franja.
-      c.lerp(lightC, 0.55 * gauss(xs, 0.016 * noseW) * gauss((t - (tNose - 0.002)) * hhN, 0.0034));
+      c.lerp(lightC, 0.5 * gauss(xs, 0.016 * noseW) * gauss((t - (tNose + 0.004)) * hhN, 0.003));
       // Fosas nasales: dos óvalos pequeños e inclinados, separados por la columela.
       {
-        const nx = ax - 0.0076 * noseW;
-        const ny = (t - (tNose + 0.0035)) * hhN;
-        c.lerp(nostrilC, 0.85 * gauss(nx * 0.94 + ny * 0.34, 0.0031) * gauss(ny * 0.94 - nx * 0.34, 0.0015));
+        const nx = ax - 0.0074 * noseW;
+        const ny = (t - (tNose + 0.005)) * hhN;
+        c.lerp(nostrilC, 0.95 * gauss(nx * 0.94 + ny * 0.34, 0.003) * gauss(ny * 0.94 - nx * 0.34, 0.0017));
       }
       const lip = lipAt(xs, t);
       if (lip) {
@@ -540,9 +543,9 @@ export function buildFigure(spec: FigureSpec): Figure {
     // El pelo no termina en un corte seco: bajo la mata el cuero cabelludo va del color del pelo y, hacia
     // la piel, se desvanece en unos milímetros con borde irregular.
     if (look.hair !== 'calvo') {
-      const h = hairline(phi) - t + 0.006 * (noise(u * 23.1, 0.7) - 0.5);
+      const h = hairline(phi) - t + 0.006 * (noise(u, 0.7) - 0.5);
       if (h <= 0) c.lerp(hairC, 0.92);
-      else if (h < 0.028) c.lerp(hairC, (1 - h / 0.028) ** 1.6 * 0.85 * (0.7 + 0.3 * noise(u * 41.3, t * 53.9)));
+      else if (h < 0.028) c.lerp(hairC, (1 - h / 0.028) ** 1.6 * 0.85 * (0.7 + 0.3 * noise(u, t)));
     }
     return c;
   };
@@ -625,9 +628,9 @@ export function buildFigure(spec: FigureSpec): Figure {
   // encima, párpados con grosor que tapan el borde alto del iris (mirada tranquila, no fija) ---
   const eyeK = 1 + 0.1 * trait('eyes');
   const eyeHW = 0.0152 * ws * (1 + 0.15 * trait('eyes'));
-  const upH = 0.0043 * ws * eyeK * (1 + 0.25 * trait('eyeOpen'));
+  const upH = 0.0048 * ws * eyeK * (1 + 0.25 * trait('eyeOpen'));
   const loH = 0.005 * ws * eyeK * (1 + 0.25 * trait('eyeOpen'));
-  const irisR = 0.0061 * ws;
+  const irisR = 0.0066 * ws;
   const pupilR = irisR * 0.4;
   const scleraC = new Color('#c9bbb0');
   const cornerC = new Color('#a8978c');
@@ -637,7 +640,7 @@ export function buildFigure(spec: FigureSpec): Figure {
   const irisInC = irisC.clone().lerp(new Color('#8a5a3a'), 0.22);
   const pupilC = new Color('#070605');
   const glintC = new Color('#fffaf2');
-  const lashC = new Color(mix(look.skin, '#1c120e', 0.92));
+  const lashC = new Color(mix(look.skin, '#2c1b15', 0.86));
   const lidC = new Color(mix(look.skin, '#7a4a3c', 0.16));
   const creaseC = new Color(mix(look.skin, '#5a352b', 0.5));
   const browColor = look.hair === 'calvo' ? mix(look.hairColor, '#2a1e17', 0.5) : look.hairColor;
@@ -693,7 +696,7 @@ export function buildFigure(spec: FigureSpec): Figure {
         if (j === 0) return { p: faceFront(x, tEye + (margin - 0.0004 * ws) / hh, 0.0004 * ws), c: lashC, a: end };
         const w = (j - 1) / 7;
         const off = (0.0003 + 0.0013 * (1 - w) ** 0.8 * end) * ws;
-        const c = lidC.clone().lerp(lashC, (1 - smoothstep(0, 0.2, w)) * 0.95).lerp(creaseC, gauss(w - 1, 0.2) * 0.55);
+        const c = lidC.clone().lerp(lashC, (1 - smoothstep(0, 0.12, w)) * 0.95).lerp(creaseC, gauss(w - 1, 0.2) * 0.55);
         return { p: faceFront(x, tEye + lerp(margin, crease, w) / hh, off), c, a: w > 0.99 ? 0 : end * (1 - 0.3 * smoothstep(0.8, 1, w)) };
       },
       3,
@@ -708,7 +711,7 @@ export function buildFigure(spec: FigureSpec): Figure {
         const w = j / 4;
         const end = pos(1 - Math.abs(so) ** 8);
         const y = lerp(lower(sc) + 0.0003 * ws, lower(sc) - 0.0024 * ws, w);
-        return { p: faceFront(cx + side * so * eyeHW, tEye + y / hh, (0.0003 + 0.0008 * (1 - w) * end) * ws), c: lidC.clone().lerp(creaseC, (1 - w) * 0.3), a: end * (1 - w) ** 0.7 };
+        return { p: faceFront(cx + side * so * eyeHW, tEye + y / hh, (0.0003 + 0.0008 * (1 - w) * end) * ws), c: lidC.clone().lerp(lightC, (1 - w) * 0.25), a: end * (1 - w) ** 0.7 };
       },
       3,
     );
@@ -720,14 +723,14 @@ export function buildFigure(spec: FigureSpec): Figure {
       const so = (i / 96) * 2 - 1; // −1 = entrecejo, +1 = cola (hacia la sien)
       const v = (j - 5) / 5;
       const arch = (0.0022 * (1 - (so - 0.2) ** 2) - 0.002 * Math.max(0, so) ** 2) * ws;
-      const th = browHalf * (so < 0.3 ? 1 - 0.1 * Math.max(0, -so) ** 3 : 1 - 0.72 * ((so - 0.3) / 0.7) ** 1.2);
+      const th = browHalf * (so < -0.35 ? 1 - 0.3 * ((-so - 0.35) / 0.65) ** 2 : so < 0.2 ? 1 : 1 - 0.74 * ((so - 0.2) / 0.8) ** 1.2);
       const xm = so * browLen;
       const ym = v * th * 1.3;
       const lean = lerp(0.4, 3.2, smoothstep(-1, 1, so));
       const strokes = 0.92 + 0.08 * Math.sin((xm - ym * lean) * 2300 + 4 * noise(i * 0.37, 1.7));
       // Bordes difuminados; el extremo junto al entrecejo se desvanece en unos milímetros.
-      const body = (1 - smoothstep(0.45, 1, Math.abs(v) ** 1.4)) * smoothstep(-1, -0.8, so) * (1 - smoothstep(0.9, 1, so));
-      return { p: faceFront(side * (eyeX + 0.0012 * ws + xm), tBrow + (arch + ym) / hh, 0.0009), c: browC, a: 0.96 * body * strokes };
+      const body = (1 - smoothstep(0.45, 1, Math.abs(v) ** 1.4)) * smoothstep(-1, -0.72, so) * (1 - smoothstep(0.9, 1, so));
+      return { p: faceFront(side * (eyeX + 0.0012 * ws + xm), tBrow + (arch + ym) / hh, 0.0009), c: browC, a: 0.88 * body * strokes };
     });
   }
 

@@ -225,9 +225,14 @@ pnpm --filter @igv/web dev  # Vite en :5173 con proxy de /api a :8787
   El anillo del piso es el avance al siguiente nivel. Estética sobria tipo maniquí realista (nada caricatura).
   Para probarlo en local sin GPU: Chromium con `--use-gl=angle --use-angle=swiftshader`.
   - **Cabeza**: los rasgos van en alturas `t` (0 = mentón, ~1 = coronilla) con proporciones anatómicas (ojos a
-    media cabeza, base de la nariz a ~7 cm del mentón). Ojos, cejas, fosas, labios y sombra de barba son parches
-    pintados por vértice con transparencia (bordes difuminados, sin recuadros). Mapeo de tonos neutro: los
-    colores se ven como su hex.
+    media cabeza, base de la nariz a ~7 cm del mentón). La malla es fina al frente y en la zona de los rasgos
+    (~1 mm). El relieve (`faceRelief`) esculpe nariz (dorso, punta y aletas como volúmenes), labios, cuencas y
+    el abombado del párpado; la piel va pintada por vértice (`paintSkin`: rubor, luz, sombras suaves, labios,
+    fosas, sombra de barba con grano y nacimiento del pelo desvanecido). Encima van mallas pequeñas: globo
+    ocular (iris redondo, pupila, brillo), párpados con grosor y cejas con trazo de vello, con transparencia en
+    los bordes. Mapeo de tonos neutro: los colores se ven como su hex. Qué evitar (ya probado y descartado por
+    verse raro): córnea muy abombada (deforma el iris de lado), ojos muy abiertos (mirada fija), comisuras en
+    punta (mueca), rayas verticales en las cejas y un borde claro entre pelo y piel.
   - **Parecido con el usuario**: `DEFAULT_CHARACTER.look` (`packages/core/src/types.ts`) ES su cara, afinada
     contra una foto suya (cara ancha y llena, frente amplia, cejas gruesas y bajas, nariz corta y ancha, copete
     peinado hacia atrás y a su izquierda, barba de uno o dos días). Si guarda otra apariencia en Ajustes, gana la
