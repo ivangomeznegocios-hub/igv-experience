@@ -47,6 +47,10 @@ export * from './assistant/toolkit';
 // [[gente]]
 
 // [[mapa]]
+export * from './engine/map-catalog';
+export { foldMapEvents, mapCatalogLinks, mapCollectionProgress } from './engine/modules/map';
+export type { PlaceVisit, MapFirst, MapCollectionState, MapSummary, MapFold } from './engine/modules/map';
+export { renderMapaOverview, MAPA_TOOLS } from './assistant/tools-mapa';
 
 // [[habilidades]]
 

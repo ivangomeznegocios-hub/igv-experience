@@ -143,6 +143,15 @@ export const GAME_CONFIG = {
   // [[gente]]
 
   // [[mapa]]
+  /**
+   * Mapa: la primera visita a un lugar da `rewards.discovery` (una vez por lugar). Con `habitualVisits` visitas
+   * se vuelve "habitual" (también se puede marcar a mano). Completar una colección del catálogo de Jalisco da
+   * la XP de una misión de su tamaño (una vez). La capa empresa suma a `empresaAttribute`.
+   */
+  mapa: {
+    habitualVisits: 5,
+    empresaAttribute: 'finanzas',
+  },
 
   // [[habilidades]]
 

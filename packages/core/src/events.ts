@@ -134,6 +134,19 @@ export const EVENT_SCHEMAS = {
   // [[gente]]
 
   // [[mapa]]
+  /**
+   * Visita a un lugar del mapa: con quién (solo, pareja, familia, amigos, trabajo u otro) y qué personas de
+   * "Mi gente" fueron. La primera visita vuelve "conocido" el lugar (da la XP de primera visita una vez).
+   * `company` repite VISIT_COMPANIES (types.ts); una prueba verifica que coincidan.
+   */
+  'place.visited': z.object({
+    placeId: id,
+    company: z.enum(['solo', 'pareja', 'familia', 'amigos', 'trabajo', 'otro']),
+    npcIds: z.array(id).max(30).optional(),
+    note: z.string().max(2000).optional(),
+    /** Qué tal estuvo (1–5). */
+    rating: z.number().int().min(1).max(5).optional(),
+  }),
 
   // [[habilidades]]
 
@@ -187,6 +200,7 @@ export const EVENT_LABELS: Record<EventType, string> = {
   // [[gente]]
 
   // [[mapa]]
+  'place.visited': 'Visita a un lugar',
 
   // [[habilidades]]
 

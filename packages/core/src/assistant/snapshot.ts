@@ -147,6 +147,8 @@ export interface AssistantSnapshot {
   // [[gente]]
 
   // [[mapa]]
+  /** Mapa: conocidos, habituales, colecciones, visitas recientes y dónde opera la empresa (opcional: fotos viejas no lo traen). */
+  mapa?: import('../engine/modules/map').MapSummary;
 
   // [[habilidades]]
 
@@ -411,6 +413,7 @@ export function buildSnapshot(
     // [[gente]]
 
     // [[mapa]]
+    mapa: state.map.summary,
 
     // [[habilidades]]
 
