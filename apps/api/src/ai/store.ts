@@ -6,12 +6,14 @@ import {
   GAME_CONFIG,
   SNAPSHOT_SCHEMA,
   buildSnapshot,
+  challengeAttempts,
   isValidEntityKind,
   project,
   toLocalDate,
   type ActivityRefs,
   type AssistantSnapshot,
   type AssistantStore,
+  type ChallengeData,
   type Entity,
   type EventQuery,
   type GameEvent,
@@ -97,6 +99,11 @@ export class D1AssistantStore implements AssistantStore {
       .orderBy(...order);
     const rows = q.limit ? await base.limit(q.limit) : await base;
     return rows.map(rowToEvent);
+  }
+
+  /** Catálogo completo, incluidos los borrados (para deshacer). */
+  async allEntities(): Promise<Entity[]> {
+    return (await this.db.select().from(entities)).map(rowToEntity);
   }
 
   async getEvent(id: string): Promise<GameEvent | null> {
@@ -194,19 +201,10 @@ export async function undoActivity(d1: D1Database, id: string): Promise<{ ok: bo
   const own = new Set(refs.events);
   let kept = 0;
 
-  for (const evId of refs.events) {
-    const ev = await store.getEvent(evId);
-    if (!ev || ev.voidedAt) continue;
-    // Un reto iniciado por la IA en el que Iván ya marcó días: anular su inicio borraría esos días (y su XP).
-    if (ev.type === 'challenge.started') {
-      const checks = await store.events({ types: ['challenge.checked'], match: { challengeId: String(ev.payload.challengeId) }, from: ev.localDate });
-      if (checks.some((c) => !own.has(c.id))) {
-        kept++;
-        continue;
-      }
-    }
-    await store.voidEvent(evId);
-  }
+  const ownEvents = (await Promise.all(refs.events.map((evId) => store.getEvent(evId)))).filter((e): e is GameEvent => !!e && !e.voidedAt);
+  const keep = await protectedChallengeEvents(store, ownEvents, own);
+  kept += keep.challenges;
+  for (const ev of ownEvents) if (!keep.ids.has(ev.id)) await store.voidEvent(ev.id);
   for (const evId of refs.voided ?? []) await store.restoreEvent(evId);
 
   // En orden inverso: si se editó dos veces lo mismo, queda la versión original.
@@ -243,6 +241,50 @@ export async function undoActivity(d1: D1Database, id: string): Promise<{ ok: bo
   }
   await db.update(aiActivity).set({ undoneAt: Date.now() }).where(eq(aiActivity.id, id));
   return { ok: true, kept };
+}
+
+/**
+ * Retos de N días: un día marcado depende de que el intento siga vivo. Si la IA inició o marcó días de un intento
+ * en el que Iván marcó días DESPUÉS, anular lo de la IA rompería la cadena y borraría los días de Iván (y su XP).
+ * Esos eventos se conservan. Se evalúa intento por intento con la misma regla del motor (`challengeAttempts`).
+ */
+async function protectedChallengeEvents(store: D1AssistantStore, ownEvents: GameEvent[], own: Set<string>): Promise<{ ids: Set<string>; challenges: number }> {
+  const ids = new Set<string>();
+  let challenges = 0;
+  const byChallenge = new Map<string, GameEvent[]>();
+  for (const e of ownEvents) {
+    if (e.type !== 'challenge.started' && e.type !== 'challenge.checked') continue;
+    const cid = String(e.payload?.challengeId ?? '');
+    if (!byChallenge.has(cid)) byChallenge.set(cid, []);
+    byChallenge.get(cid)!.push(e);
+  }
+  if (!byChallenge.size) return { ids, challenges };
+  const catalog = new Map((await store.allEntities()).map((e) => [e.id, e]));
+  for (const [cid, mine] of byChallenge) {
+    const data = catalog.get(cid)?.data as ChallengeData | undefined;
+    if (!data) continue;
+    const days = Math.max(1, Math.min(365, Math.round(data.days || GAME_CONFIG.challenge.defaultDays)));
+    const all = await store.events({ types: ['challenge.started', 'challenge.checked'], match: { challengeId: cid } });
+    const checks = all.filter((e) => e.type === 'challenge.checked');
+    const attempts = challengeAttempts(all.filter((e) => e.type === 'challenge.started').map((e) => e.localDate), new Set(checks.map((e) => e.localDate)), days, store.today);
+    const foreignChecks = new Set(checks.filter((e) => !own.has(e.id)).map((e) => e.localDate));
+    const foreignStarts = new Set(all.filter((e) => e.type === 'challenge.started' && !own.has(e.id)).map((e) => e.localDate));
+    let any = false;
+    for (const e of mine) {
+      const a = attempts.find((x) => e.localDate >= x.startDate && e.localDate <= (x.closedOn ?? x.endDate));
+      if (!a) continue;
+      const protect =
+        e.type === 'challenge.started'
+          ? a.startDate === e.localDate && !foreignStarts.has(e.localDate) && a.checked.some((d) => foreignChecks.has(d))
+          : !foreignChecks.has(e.localDate) && a.checked.some((d) => d > e.localDate && foreignChecks.has(d));
+      if (protect) {
+        ids.add(e.id);
+        any = true;
+      }
+    }
+    if (any) challenges++;
+  }
+  return { ids, challenges };
 }
 
 async function remapSavedAt(d1: D1Database, exceptId: string, entityId: string, from: number, to: number) {

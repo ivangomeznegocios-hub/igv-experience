@@ -22,7 +22,7 @@ export type { BountyState, BountyInfo } from './engine/modules/bounty';
 export type { GoldState, Redemption, GoldBonus, Pledge } from './engine/modules/gold';
 export { goldFor, dayCloseBonus } from './engine/modules/gold';
 export type { ChallengeState, ChallengeAttempt } from './engine/modules/challenges';
-export { challengeDayNumber } from './engine/modules/challenges';
+export { challengeAttempts, challengeDayNumber } from './engine/modules/challenges';
 export type { DayPlan, PlanItem } from './engine/modules/plans';
 export * from './engine/insights';
 export type { GoalState } from './engine/modules/goals';

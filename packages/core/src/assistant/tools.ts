@@ -4,6 +4,7 @@ import { validateEvent, type EventPayload, type EventType } from '../events';
 import { energyFromSleep } from '../engine/energy';
 import { quickMissionId } from '../engine/reports';
 import { REPEATABLE_KINDS } from '../engine/modules/missions';
+import { challengeAttempts } from '../engine/modules/challenges';
 import {
   ATTRIBUTE_IDS,
   ATTRIBUTE_NAMES,
@@ -906,7 +907,7 @@ const marcarReto = tool({
     const date = pastDate(store, fecha);
     const ch = find<ChallengeData>(await store.catalog(), reto_id, 'challenges', ['challenge'], 'el reto');
     const st = (await store.snapshot()).challenges.find((c) => c.id === ch.id);
-    const days = ch.data.days;
+    const days = Math.max(1, Math.min(365, Math.round(ch.data.days || GAME_CONFIG.challenge.defaultDays)));
     const evs: GameEvent[] = [];
     let n = 0;
     let started = false;
@@ -923,13 +924,15 @@ const marcarReto = tool({
       // Rescate: el intento falló justo por este día sin marcar. Marcarlo lo revive (si los días siguientes ya
       // estaban marcados o son hoy). Se informa el estado real que calcula el motor.
       const ids = await addEvents(store, [makeEvent(store, 'challenge.checked', { challengeId: ch.id }, date)]);
-      const after = (await store.snapshot()).challenges.find((c) => c.id === ch.id);
+      // Estado real del intento con la misma regla del motor (una sola consulta; sin recalcular toda la foto).
+      const evs2 = await store.events({ types: ['challenge.checked'], match: { challengeId: ch.id }, from: st.lastStartDate });
+      const attempt = challengeAttempts([st.lastStartDate], new Set(evs2.map((e) => e.localDate)), days, store.today)[0];
       const msg =
-        after?.status === 'en curso'
-          ? `Rescaté "${ch.data.title}": marqué el ${date} y el intento sigue vivo (día ${after.checked} de ${days}).${after.checkedToday ? '' : ' Hoy también toca marcarlo.'}`
-          : after?.status === 'completado'
+        attempt?.status === 'active'
+          ? `Rescaté "${ch.data.title}": marqué el ${date} y el intento sigue vivo (día ${attempt.checked.length} de ${days}).${attempt.checked.includes(store.today) ? '' : ' Hoy también toca marcarlo.'}`
+          : attempt?.status === 'completed'
             ? `¡Reto "${ch.data.title}" completado! +${GAME_CONFIG.missionXp[ch.data.size]} XP.`
-            : `Marqué el ${date}, pero el intento de "${ch.data.title}" sigue fallido: faltan otros días sin marcar${after?.lastClosedOn ? ` (el ${after.lastClosedOn})` : ''}.`;
+            : `Marqué el ${date}, pero el intento de "${ch.data.title}" sigue fallido: faltan otros días sin marcar${attempt?.closedOn ? ` (el ${attempt.closedOn})` : ''}.`;
       return ok(`${msg} Registro [${ids[0]}].`, msg, { events: ids });
     } else {
       // Empieza un intento nuevo en `date`: después del último intento y sin dejar días pasados sin marcar.

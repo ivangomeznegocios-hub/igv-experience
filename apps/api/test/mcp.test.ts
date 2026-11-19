@@ -328,4 +328,46 @@ describe('deshacer: retos iniciados por la IA y orden', () => {
     const sync = (await (await m('/api/sync?since=0')).json()) as { entities: { id: string; deletedAt: number | null }[] };
     expect(sync.entities.find((x) => x.id === id)?.deletedAt).not.toBeNull();
   });
+
+  it('protege por intento: conserva el día 1 que marcó la IA si Iván siguió, y deshace un intento ya terminado', async () => {
+    const e = { DB: fakeD1(), DEV_BYPASS_AUTH: 'true' } as any;
+    const m = (path: string, init?: RequestInit) => app.request(path, init, e);
+    const key = ((await (await m('/api/ai/keys', json({ name: 'k' }))).json()) as any).token;
+    const call2 = async (name: string, args: unknown) => {
+      const res = await mcpApp.request('/mcp', json({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, { authorization: `Bearer ${key}` }), e);
+      return ((await res.json()) as any).result;
+    };
+    const fmt = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Mexico_City' }).format(d);
+    const today = fmt(new Date());
+    const [y, mo, d] = today.split('-').map(Number);
+    const yesterday = new Date(Date.UTC(y, mo - 1, d - 1)).toISOString().slice(0, 10);
+    const put = (id: string, days: number) =>
+      m(`/api/entities/${id}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ module: 'challenges', kind: 'challenge', data: { title: id, days, attribute: 'disciplina', size: 'media' } }) });
+    const check = (id: string, cid: string, date: string, type = 'challenge.checked') =>
+      m('/api/events', json({ id, type, occurredAt: new Date().toISOString(), localDate: date, payload: { challengeId: cid } }));
+    const undoLast = async () => {
+      const items = ((await (await m('/api/ai/activity')).json()) as any).items as { id: string; undoneAt: number | null }[];
+      return (await (await m(`/api/ai/activity/${items.find((x) => !x.undoneAt)!.id}/undo`, { method: 'POST' })).json()) as any;
+    };
+    const live = async (cid: string) =>
+      ((await (await m('/api/sync?since=0')).json()) as { events: { type: string; localDate: string; voidedAt: string | null; payload: any }[] }).events.filter(
+        (x) => x.payload?.challengeId === cid && !x.voidedAt,
+      );
+
+    // (1) La IA empieza ayer marcando el día 1; Iván marca hoy. Deshacer no debe romper su cadena.
+    await put('ch-largo', 7);
+    expect((await call2('marcar_reto', { reto_id: 'ch-largo', fecha: yesterday })).isError).toBe(false);
+    await check('evt-ivan-hoy-01', 'ch-largo', today);
+    expect((await undoLast())).toMatchObject({ ok: true, kept: 1 });
+    expect((await live('ch-largo')).map((x) => `${x.type}@${x.localDate}`).sort()).toEqual([`challenge.checked@${today}`, `challenge.checked@${yesterday}`, `challenge.started@${yesterday}`].sort());
+
+    // (2) Intento de la IA ya terminado (reto de 1 día, ayer) y luego Iván empieza otro hoy: deshacer sí anula lo de la IA.
+    await put('ch-corto', 1);
+    expect((await call2('marcar_reto', { reto_id: 'ch-corto', fecha: yesterday })).isError).toBe(false);
+    await check('evt-ivan-start-02', 'ch-corto', today, 'challenge.started');
+    await check('evt-ivan-check-02', 'ch-corto', today);
+    expect((await undoLast())).toMatchObject({ ok: true, kept: 0 });
+    expect((await live('ch-corto')).map((x) => x.localDate)).toEqual([today, today]);
+  });
 });
+
