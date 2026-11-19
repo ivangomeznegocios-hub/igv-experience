@@ -70,6 +70,7 @@ export type { EventQuery, AssistantStore, ActivityRefs, ToolResult, ToolGroup, A
 // [[voz]]
 
 // [[entreno]]
+import { ENTRENO_GUIDE, ENTRENO_TOOLS, renderTrainingOverview } from './tools-entreno';
 
 // [[gente]]
 
@@ -153,6 +154,7 @@ export function renderOverview(s: AssistantSnapshot): string {
   // [[voz]]
 
   // [[entreno]]
+  L.push(...renderTrainingOverview(s));
 
   // [[gente]]
 
@@ -486,6 +488,7 @@ const GUIDE_SYSTEMS: string[] = [
   // [[voz]]
 
   // [[entreno]]
+  ENTRENO_GUIDE,
 
   // [[gente]]
 
@@ -1471,6 +1474,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
   // [[voz]]
 
   // [[entreno]]
+  ...ENTRENO_TOOLS,
 
   // [[gente]]
 

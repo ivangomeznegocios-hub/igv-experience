@@ -63,6 +63,7 @@ const P: Record<string, string> = {
   // [[voz]]
 
   // [[entreno]]
+  dumbbell: 'M3.5 9.5v5M6.5 7v10M17.5 7v10M20.5 9.5v5M6.5 12h11',
 
   // [[gente]]
 

@@ -17,6 +17,7 @@ export type XpSource =
   // [[voz]]
 
   // [[entreno]]
+  | 'training_record'
 
   // [[gente]]
 

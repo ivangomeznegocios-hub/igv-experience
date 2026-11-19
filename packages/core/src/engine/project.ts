@@ -27,6 +27,7 @@ import { reduceBody, reduceDayClosures, reduceSavings, type BodyState, type DayC
 // [[voz]]
 
 // [[entreno]]
+import { reduceTraining, type TrainingState } from './modules/training';
 
 // [[gente]]
 
@@ -88,6 +89,8 @@ export interface GameState {
   // [[voz]]
 
   // [[entreno]]
+  /** Entrenamiento: registros, récords y agregados por músculo (el análisis con la hora está en engine/training.ts). */
+  training: TrainingState;
 
   // [[gente]]
 
@@ -179,6 +182,7 @@ export function project(input: ProjectInput): GameState {
   // [[voz]]
 
   // [[entreno]]
+  const training = reduceTraining(ctx);
 
   // [[gente]]
 
@@ -236,6 +240,7 @@ export function project(input: ProjectInput): GameState {
     // [[voz]]
 
     // [[entreno]]
+    training,
 
     // [[gente]]
 

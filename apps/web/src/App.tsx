@@ -44,6 +44,8 @@ const ConectarIA = lazy(() => import('./screens/ConectarIA'));
 // [[voz]]
 
 // [[entreno]]
+const Entreno = lazy(() => import('./screens/Entreno'));
+const WorkoutSheetHost = lazy(() => import('./ui/WorkoutSheet'));
 
 // [[gente]]
 
@@ -219,6 +221,7 @@ export default function App() {
                 {/* [[voz]] */}
 
                 {/* [[entreno]] */}
+                <Route path="/entreno" element={<Entreno />} />
 
                 {/* [[gente]] */}
 
@@ -251,6 +254,11 @@ export default function App() {
       {/* [[voz]] */}
 
       {/* [[entreno]] */}
+      {store.ready && (
+        <Suspense fallback={null}>
+          <WorkoutSheetHost />
+        </Suspense>
+      )}
 
       {/* [[gente]] */}
 

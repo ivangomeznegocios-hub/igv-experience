@@ -139,6 +139,43 @@ export const GAME_CONFIG = {
   // [[voz]]
 
   // [[entreno]]
+  /**
+   * Entrenamiento (engine/training.ts). Números basados en la evidencia de hipertrofia y salud:
+   * 10–20 series duras por músculo a la semana (mínimo efectivo ~6), cada músculo ≥ 2 veces por semana,
+   * 48 h de recuperación para músculos chicos y 72 h para grandes tras series duras, y 150–300 min de cardio
+   * moderado por semana (OMS).
+   */
+  training: {
+    /** Horas de recuperación tras una sesión con al menos `recoveryMinSets` series duras del músculo. */
+    recoveryHours: { grande: 72, chico: 48 },
+    /** Series efectivas de un músculo en una sesión para que necesite recuperarse (4 series de sentadilla = 2 de espalda baja: no). */
+    recoveryMinSets: 3,
+    /** Series duras por semana (lunes a domingo) para músculos principales. */
+    weeklySets: { min: 6, target: 10, max: 20 },
+    /** Músculos accesorios (trapecio, antebrazo, aductores, oblicuos): reciben trabajo indirecto, piden menos. */
+    accessoryWeeklySets: { min: 3, target: 6, max: 16 },
+    /** Una serie cuenta completa para el músculo principal y así para los secundarios. */
+    secondaryFactor: 0.5,
+    /** Veces por semana recomendadas por músculo. */
+    minFrequency: 2,
+    /** Días sin trabajar un músculo para considerarlo olvidado. */
+    forgottenDays: 8,
+    /** Cardio moderado por semana (minutos). */
+    cardioMinutes: { min: 150, target: 300 },
+    /** Días para medir el equilibrio empuje/jalón y torso/pierna, y cuánta diferencia es desequilibrio. */
+    balanceDays: 14,
+    balanceRatio: 1.5,
+    /** Series mínimas del lado fuerte para hablar de desequilibrio (con menos, no hay datos suficientes). */
+    balanceMinSets: 12,
+    /** Sesión sugerida: series por ejercicio, máximo de ejercicios y de series duras. */
+    suggestion: { setsPerExercise: 3, maxExercises: 6, sessionSets: 20 },
+    /** Semanas seguidas: cuentan las semanas con al menos estas sesiones. */
+    streakMinSessions: 2,
+    /** La misión que se completa al registrar un entrenamiento si no elegiste una diaria en Ajustes. */
+    mission: { title: 'Entrenar', size: 'media', attribute: 'fuerza' },
+    /** Récord personal nuevo (mejor que todo lo anterior de ese ejercicio): XP de una misión de este tamaño. */
+    record: { size: 'chica', attribute: 'fuerza', maxPerDay: 3 },
+  },
 
   // [[gente]]
 

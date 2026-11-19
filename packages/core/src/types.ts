@@ -462,6 +462,7 @@ export const ENTITY_KINDS: Record<string, readonly string[]> = {
   // [[voz]]
 
   // [[entreno]]
+  training: ['exercise', 'routine', 'settings'],
 
   // [[gente]]
 
@@ -488,6 +489,136 @@ export function isValidEntityKind(module: string, kind: string): boolean {
 // [[voz]]
 
 // [[entreno]]
+// ---------- Entrenamiento (ver engine/training.ts y docs/sistemas/entreno.md) ----------
+
+/**
+ * Grupos musculares (ids estables: los usan los registros, el mapa del cuerpo y, más adelante, el personaje 3D).
+ * `lumbar` = espalda baja (erectores), `isquios` = isquiotibiales, `espalda` = dorsales y espalda alta.
+ */
+export const MUSCLE_IDS = [
+  'pecho',
+  'espalda',
+  'trapecio',
+  'hombro_frontal',
+  'hombro_lateral',
+  'hombro_posterior',
+  'biceps',
+  'triceps',
+  'antebrazo',
+  'abdomen',
+  'oblicuos',
+  'lumbar',
+  'gluteos',
+  'cuadriceps',
+  'isquios',
+  'aductores',
+  'pantorrillas',
+] as const;
+export type MuscleId = (typeof MUSCLE_IDS)[number];
+
+/** Tipo de entrenamiento. */
+export const WORKOUT_KINDS = ['fuerza', 'cardio', 'movilidad', 'deporte', 'clase', 'caminata', 'otro'] as const;
+export type WorkoutKind = (typeof WORKOUT_KINDS)[number];
+export const WORKOUT_KIND_NAMES: Record<WorkoutKind, string> = {
+  fuerza: 'Fuerza',
+  cardio: 'Cardio',
+  movilidad: 'Movilidad',
+  deporte: 'Deporte',
+  clase: 'Clase',
+  caminata: 'Caminata',
+  otro: 'Otro',
+};
+
+/** Dónde entrenaste (opcionalmente con un lugar del mapa: `placeId`). */
+export const WORKOUT_PLACES = ['gym', 'casa', 'parque', 'calle', 'alberca', 'cancha', 'otro'] as const;
+export type WorkoutPlace = (typeof WORKOUT_PLACES)[number];
+export const WORKOUT_PLACE_NAMES: Record<WorkoutPlace, string> = {
+  gym: 'Gym',
+  casa: 'Casa',
+  parque: 'Parque',
+  calle: 'Calle',
+  alberca: 'Alberca',
+  cancha: 'Cancha',
+  otro: 'Otro',
+};
+
+/** Cómo se mide un ejercicio: peso (reps × kg), corporal (reps), tiempo (segundos) o distancia (min / km). */
+export const EXERCISE_MEASURES = ['peso', 'corporal', 'tiempo', 'distancia'] as const;
+export type ExerciseMeasure = (typeof EXERCISE_MEASURES)[number];
+
+export const EQUIPMENT = ['barra', 'mancuerna', 'maquina', 'polea', 'corporal', 'kettlebell', 'banda', 'cardio'] as const;
+export type Equipment = (typeof EQUIPMENT)[number];
+export const EQUIPMENT_NAMES: Record<Equipment, string> = {
+  barra: 'Barra',
+  mancuerna: 'Mancuernas',
+  maquina: 'Máquina',
+  polea: 'Polea',
+  corporal: 'Peso corporal',
+  kettlebell: 'Kettlebell',
+  banda: 'Banda',
+  cardio: 'Cardio',
+};
+
+/** Una serie: reps × kg (fuerza), segundos (isométricos) o minutos / km (cardio). */
+export interface WorkoutSet {
+  reps?: number;
+  kg?: number;
+  sec?: number;
+  min?: number;
+  km?: number;
+}
+
+export interface WorkoutExercise {
+  /** Id de la biblioteca (`press-banca`) o de un ejercicio propio (`ex-…`). */
+  exerciseId: string;
+  name: string;
+  /** Solo ejercicios propios: músculos del momento (por si después se borra el ejercicio). */
+  primary?: MuscleId[];
+  secondary?: MuscleId[];
+  sets: WorkoutSet[];
+}
+
+/** Payload del evento `workout.logged`. */
+export interface WorkoutPayload {
+  kind: WorkoutKind;
+  title?: string;
+  where?: WorkoutPlace;
+  placeId?: string | null;
+  minutes?: number;
+  /** Esfuerzo percibido 1–10. */
+  rpe?: number;
+  note?: string;
+  routineId?: string | null;
+  /** La `mission.completed` que se registró junto con este entrenamiento (para anular ambos). */
+  missionEventId?: string | null;
+  exercises: WorkoutExercise[];
+}
+
+/** Ejercicio propio (`training/exercise`). */
+export interface ExerciseData {
+  name: string;
+  primary: MuscleId[];
+  secondary?: MuscleId[];
+  equipment?: Equipment;
+  measure: ExerciseMeasure;
+  notes?: string;
+}
+
+/** Rutina guardada (`training/routine`): lista de ejercicios con series y reps sugeridas. */
+export interface RoutineData {
+  name: string;
+  kind?: WorkoutKind;
+  exercises: { exerciseId: string; name: string; sets: number; reps?: number }[];
+  notes?: string;
+}
+
+/** Ajustes de entrenamiento (`training/settings`, id `training-settings`). */
+export interface TrainingSettingsData {
+  /** Diaria del catálogo que se completa al registrar un entrenamiento. Sin ella: misión rápida "Entrenar". */
+  missionId?: string | null;
+  /** Dónde entrenas normalmente. */
+  where?: WorkoutPlace | null;
+}
 
 // [[gente]]
 

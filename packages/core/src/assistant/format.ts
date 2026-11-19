@@ -68,6 +68,7 @@ export const EVENT_TEXT: Record<string, string> = {
   // [[voz]]
 
   // [[entreno]]
+  'workout.logged': 'Entrenamiento',
 
   // [[gente]]
 
@@ -174,6 +175,11 @@ export function describeEvent(e: GameEvent, byId: Map<string, Entity>, currency 
     // [[voz]]
 
     // [[entreno]]
+    case 'workout.logged': {
+      const ex = Array.isArray(p.exercises) ? (p.exercises as { name: string; sets?: unknown[] }[]) : [];
+      detail = [p.title ?? p.kind, p.where ?? '', p.minutes ? `${p.minutes} min` : '', ex.length ? ex.map((x) => `${x.name} ${(x.sets ?? []).length}×`).join(', ') : ''].filter(Boolean).join(' · ');
+      break;
+    }
 
     // [[gente]]
 
