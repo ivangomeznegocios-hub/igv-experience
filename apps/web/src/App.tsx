@@ -40,6 +40,24 @@ const Retos = lazy(() => import('./screens/Retos'));
 const Records = lazy(() => import('./screens/Records'));
 const ConectarIA = lazy(() => import('./screens/ConectarIA'));
 
+// ---- Sistemas nuevos (pantallas) ----
+// [[voz]]
+
+// [[entreno]]
+
+// [[gente]]
+
+// [[mapa]]
+
+// [[habilidades]]
+
+// [[aprendizaje]]
+
+// [[salud]]
+
+// [[habitos]]
+
+
 const PROGRESS = ['/progreso', '/jefes', '/logros', '/habilidades', '/temporadas', '/metas', '/estadisticas', '/reporte', '/anual', '/tienda', '/historial', '/retos', '/records'];
 const WORLD = ['/mas', '/inventario', '/npcs', '/mapa', '/vida', '/ajustes', '/game-master', '/conectar-ia', '/enemigos', '/biblioteca', '/cuerpo', '/buscar'];
 
@@ -198,6 +216,22 @@ export default function App() {
                 <Route path="/retos" element={<Retos />} />
                 <Route path="/records" element={<Records />} />
                 <Route path="/conectar-ia" element={<ConectarIA />} />
+                {/* [[voz]] */}
+
+                {/* [[entreno]] */}
+
+                {/* [[gente]] */}
+
+                {/* [[mapa]] */}
+
+                {/* [[habilidades]] */}
+
+                {/* [[aprendizaje]] */}
+
+                {/* [[salud]] */}
+
+                {/* [[habitos]] */}
+
                 <Route path="*" element={<Hoy />} />
               </Routes>
             </Suspense>
@@ -214,6 +248,22 @@ export default function App() {
       {store.ready && <NotificationsSync />}
       {store.ready && <SkinSync />}
       {store.ready && <AiSnapshotSync />}
+      {/* [[voz]] */}
+
+      {/* [[entreno]] */}
+
+      {/* [[gente]] */}
+
+      {/* [[mapa]] */}
+
+      {/* [[habilidades]] */}
+
+      {/* [[aprendizaje]] */}
+
+      {/* [[salud]] */}
+
+      {/* [[habitos]] */}
+
     </BrowserRouter>
   );
 }

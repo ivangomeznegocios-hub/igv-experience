@@ -64,6 +64,23 @@ export const EVENT_TEXT: Record<string, string> = {
   'challenge.checked': 'Día de reto cumplido',
   'pledge.made': 'Compromiso',
   'pledge.resolved': 'Compromiso resuelto',
+
+  // [[voz]]
+
+  // [[entreno]]
+
+  // [[gente]]
+
+  // [[mapa]]
+
+  // [[habilidades]]
+
+  // [[aprendizaje]]
+
+  // [[salud]]
+
+  // [[habitos]]
+
 };
 
 const MOODS = ['muy mal', 'mal', 'normal', 'bien', 'excelente'];
@@ -153,6 +170,23 @@ export function describeEvent(e: GameEvent, byId: Map<string, Entity>, currency 
     case 'map.status_changed':
       detail = `${name(p.placeId)} → ${p.status === 'dominado' ? 'habitual' : p.status === 'descubierto' ? 'conocido' : 'por conocer'}`;
       break;
+
+    // [[voz]]
+
+    // [[entreno]]
+
+    // [[gente]]
+
+    // [[mapa]]
+
+    // [[habilidades]]
+
+    // [[aprendizaje]]
+
+    // [[salud]]
+
+    // [[habitos]]
+
   }
   return detail ? `${label}: ${detail}` : label;
 }

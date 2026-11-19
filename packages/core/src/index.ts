@@ -37,3 +37,22 @@ export * from './assistant/snapshot';
 export * from './assistant/tools';
 export * from './assistant/format';
 export * from './assistant/memory';
+export * from './assistant/toolkit';
+
+// ---- Sistemas nuevos (exports) ----
+// [[voz]]
+
+// [[entreno]]
+
+// [[gente]]
+
+// [[mapa]]
+
+// [[habilidades]]
+
+// [[aprendizaje]]
+
+// [[salud]]
+
+// [[habitos]]
+

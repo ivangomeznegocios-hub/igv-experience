@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { GAME_CONFIG } from '../config/game';
-import { validateEvent, type EventPayload, type EventType } from '../events';
 import { energyFromSleep } from '../engine/energy';
 import { quickMissionId } from '../engine/reports';
 import { REPEATABLE_KINDS } from '../engine/modules/missions';
@@ -34,149 +33,56 @@ import {
   type TodoData,
   type ViceData,
 } from '../types';
-import { addDays, diffDays, isDateString, monthKey, weekStart } from '../util/dates';
+import { addDays, diffDays, monthKey, weekStart } from '../util/dates';
 import type { AssistantSnapshot } from './snapshot';
 import { describeEvent, fmtDay, fmtMoney, fmtMonthName, fmtNum, sizeAttr } from './format';
 
-// ---------------------------------------------------------------------------------------------
-// Contrato con quien guarda los datos (D1 en el Worker, memoria en las pruebas).
-// ---------------------------------------------------------------------------------------------
+import {
+  MAX_PAST_DAYS,
+  SIZE_HELP,
+  ToolError,
+  addEvents,
+  currencyOf,
+  find,
+  list,
+  makeEvent,
+  newEntityId,
+  ok,
+  pastDate,
+  settingsOf,
+  tool,
+  upsert,
+  zAttr,
+  zDate,
+  zFecha,
+  zId,
+  zSize,
+  zText,
+  type AssistantStore,
+  type AssistantTool,
+  type ToolResult,
+} from './toolkit';
 
-export interface EventQuery {
-  from?: string;
-  to?: string;
-  types?: string[];
-  /** Coincidencia exacta de campos del payload (p. ej. { missionId: 'daily-leer' }). */
-  match?: Record<string, string>;
-  includeVoided?: boolean;
-  limit?: number;
-  order?: 'asc' | 'desc';
-}
+export { ToolError } from './toolkit';
+export type { EventQuery, AssistantStore, ActivityRefs, ToolResult, ToolGroup, AssistantTool } from './toolkit';
 
-export interface AssistantStore {
-  /** Día local (CDMX) de hoy. */
-  today: string;
-  now(): Date;
-  newId(): string;
-  /** Catálogo activo (sin borrados). */
-  catalog(): Promise<Entity[]>;
-  events(q: EventQuery): Promise<GameEvent[]>;
-  getEvent(id: string): Promise<GameEvent | null>;
-  /** Estado derivado actual (se recalcula si hace falta). */
-  snapshot(): Promise<AssistantSnapshot>;
-  addEvents(events: GameEvent[]): Promise<void>;
-  putEntity(entity: Entity): Promise<Entity>;
-  deleteEntity(id: string): Promise<boolean>;
-  voidEvent(id: string): Promise<boolean>;
-}
+// ---- Sistemas nuevos: cada uno importa aquí sus herramientas (assistant/tools-<sistema>.ts) ----
+// [[voz]]
 
-/** Lo que una acción de la IA cambió, para poder deshacerla desde la app. */
-export interface ActivityRefs {
-  /** Registros creados (deshacer = anularlos). */
-  events: string[];
-  /**
-   * Elementos del catálogo creados, editados o borrados, con su versión previa (null = no existía) y el
-   * `updatedAt` de la versión que dejó la IA (sin él = la IA lo borró). Deshacer solo revierte si nadie lo
-   * cambió después.
-   */
-  entities: { id: string; prev: Entity | null; savedAt?: number }[];
-  /** Registros que la IA anuló (deshacer = restaurarlos). */
-  voided?: string[];
-}
+// [[entreno]]
 
-export interface ToolResult {
-  text: string;
-  isError?: boolean;
-  /** Una línea para la bitácora de actividad (solo herramientas que escriben). */
-  summary?: string;
-  refs?: ActivityRefs;
-}
+// [[gente]]
 
-export type ToolGroup = 'consultar' | 'registrar' | 'organizar';
+// [[mapa]]
 
-export interface AssistantTool<I = any> {
-  name: string;
-  title: string;
-  description: string;
-  group: ToolGroup;
-  writes: boolean;
-  destructive?: boolean;
-  input: z.ZodType<I>;
-  run(input: I, store: AssistantStore): Promise<ToolResult>;
-}
+// [[habilidades]]
 
-export class ToolError extends Error {}
+// [[aprendizaje]]
 
-// ---------------------------------------------------------------------------------------------
-// Utilidades
-// ---------------------------------------------------------------------------------------------
+// [[salud]]
 
-const MAX_PAST_DAYS = 366;
-const SIZE_HELP = 'Tamaño: chica (10 XP, minutos), media (30, ~1 hora o esfuerzo real), grande (100, logro importante), epica (300, excepcional).';
+// [[habitos]]
 
-const zDate = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Usa el formato YYYY-MM-DD')
-  .refine(isDateString, 'Fecha inválida');
-const zFecha = zDate.optional().describe('Día al que pertenece (YYYY-MM-DD, hora de CDMX). Si se omite, hoy.');
-const zSize = z.enum(MISSION_SIZES);
-const zAttr = z.enum(ATTRIBUTE_IDS);
-const zText = (max: number) => z.string().trim().min(1).max(max);
-const zId = z.string().trim().min(1).max(100);
-
-function pastDate(store: AssistantStore, fecha?: string): string {
-  const d = fecha ?? store.today;
-  if (d > store.today) throw new ToolError(`No se puede registrar en el futuro (${d}). Hoy es ${store.today}. Para planear usa planear_dia o agendar_pendiente.`);
-  if (diffDays(d, store.today) > MAX_PAST_DAYS) throw new ToolError(`La fecha ${d} es demasiado antigua (máximo un año atrás).`);
-  return d;
-}
-
-function makeEvent<T extends EventType>(store: AssistantStore, type: T, payload: EventPayload<T>, localDate: string): GameEvent {
-  const now = store.now();
-  const v = validateEvent({ id: store.newId(), type, occurredAt: now.toISOString(), localDate, payload });
-  if (!v.ok) throw new ToolError(`Datos inválidos: ${v.error}`);
-  return { ...v.event, voidedAt: null, createdAt: now.getTime(), updatedAt: now.getTime() };
-}
-
-async function addEvents(store: AssistantStore, events: GameEvent[]): Promise<string[]> {
-  await store.addEvents(events);
-  return events.map((e) => e.id);
-}
-
-function find<D>(catalog: Entity[], id: string, module: string, kinds?: string[], what = 'elemento'): Entity<D> {
-  const e = catalog.find((x) => x.id === id);
-  if (!e || e.module !== module || (kinds && !kinds.includes(e.kind))) {
-    throw new ToolError(`No encontré ${what} con id "${id}". Consulta los ids con ver_catalogo.`);
-  }
-  return e as Entity<D>;
-}
-
-const list = <D>(catalog: Entity[], module: string, kind?: string) =>
-  catalog.filter((e) => e.module === module && (!kind || e.kind === kind)).sort((a, b) => a.sort - b.sort) as Entity<D>[];
-
-const settingsOf = (catalog: Entity[]) => (catalog.find((e) => e.id === 'settings')?.data ?? {}) as Partial<SettingsData>;
-const currencyOf = (catalog: Entity[]) => settingsOf(catalog).currency ?? 'MXN';
-
-function newEntityId(store: AssistantStore, prefix: string) {
-  return `${prefix}-${store.newId().replace(/-/g, '').slice(0, 8)}`;
-}
-
-/** Crea o actualiza un elemento del catálogo y devuelve la referencia para "deshacer". */
-async function upsert<D>(store: AssistantStore, existing: Entity | null, entity: Omit<Entity<D>, 'sort'> & { sort?: number }) {
-  const now = store.now().getTime();
-  const saved = await store.putEntity({ ...entity, sort: entity.sort ?? existing?.sort ?? now, createdAt: existing?.createdAt ?? now, updatedAt: now, deletedAt: null } as Entity);
-  return { saved, ref: { id: saved.id, prev: existing, savedAt: saved.updatedAt ?? now } };
-}
-
-const ok = (text: string, summary?: string, refs?: Partial<ActivityRefs>): ToolResult => ({
-  text,
-  summary,
-  refs: summary ? { events: refs?.events ?? [], entities: refs?.entities ?? [], ...(refs?.voided ? { voided: refs.voided } : {}) } : undefined,
-});
-
-function tool<S extends z.ZodTypeAny>(def: Omit<AssistantTool<z.infer<S>>, 'input'> & { input: S }): AssistantTool<z.infer<S>> {
-  return def as unknown as AssistantTool<z.infer<S>>;
-}
 
 const DAY_NAMES = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
 
@@ -243,6 +149,23 @@ export function renderOverview(s: AssistantSnapshot): string {
   if (s.pledges.length) L.push(`Compromisos abiertos: ${s.pledges.map((p) => `${p.title} (${p.stake} de oro, vence ${p.deadline}) [${p.id}]`).join('; ')}.`);
   if (s.library.reading.length) L.push(`Leyendo: ${s.library.reading.map((b) => `${b.title} [${b.id}]`).join('; ')}.`);
   if (s.lastJournal) L.push(`Último diario semanal (${s.lastJournal.weekStart}): pasó "${s.lastJournal.happened}"; aprendió "${s.lastJournal.learned}"; sigue "${s.lastJournal.next}".`);
+  // ---- Sistemas nuevos (panorama) ----
+  // [[voz]]
+
+  // [[entreno]]
+
+  // [[gente]]
+
+  // [[mapa]]
+
+  // [[habilidades]]
+
+  // [[aprendizaje]]
+
+  // [[salud]]
+
+  // [[habitos]]
+
   if (s.xp.recent.length) L.push('', `XP reciente: ${s.xp.recent.slice(0, 10).map((e) => `${e.date} ${e.label} +${e.amount}`).join('; ')}.`);
   L.push('', `(Calculado por ${s.computedBy === 'app' ? 'la app' : 'el servidor'} · ${s.computedAt.slice(0, 16).replace('T', ' ')} UTC)`);
   return L.join('\n');
@@ -558,6 +481,26 @@ const verDinero = tool({
   },
 });
 
+/** Una línea de guía por cada sistema nuevo (se agregan a APP_GUIDE). */
+const GUIDE_SYSTEMS: string[] = [
+  // [[voz]]
+
+  // [[entreno]]
+
+  // [[gente]]
+
+  // [[mapa]]
+
+  // [[habilidades]]
+
+  // [[aprendizaje]]
+
+  // [[salud]]
+
+  // [[habitos]]
+
+];
+
 export const APP_GUIDE = `IGV EXPERIENCE es el tablero personal de Iván Gómez Vera para medir y mejorar su vida real con mecánicas de juego. Todo es en español de México, con tono de app sobria de rendimiento personal (nada de fantasía ni RPG: di "grandes retos", "personas", "Mi gente", "hábitos a dejar").
 
 Cómo funciona:
@@ -570,7 +513,7 @@ Cómo funciona:
 - Oro: 1 por cada 10 XP; se gasta en premios reales de la tienda. El dinero real (ingresos, gastos, ahorro) NO da XP.
 - Grandes retos: fases en orden; algunas se cumplen solas (ingresos, semanas seguidas) y otras se marcan a mano.
 - Metas con contador, retos de N días seguidos, hábitos a dejar (días sin recaer), biblioteca, cuerpo, personas clave (aviso a los 30 días sin contacto).
-- Reglas de oro: la XP nunca se resta; descansar no quita XP; XP por acciones y resultados, no por horas.
+- Reglas de oro: la XP nunca se resta; descansar no quita XP; XP por acciones y resultados, no por horas.${GUIDE_SYSTEMS.map((l) => `\n- ${l}`).join('')}
 
 Cómo usar las herramientas:
 - Empieza con ver_resumen para saber cómo va. Usa ver_catalogo para obtener ids antes de registrar algo del catálogo.
@@ -1524,6 +1467,23 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
   guardarHabito,
   guardarLibro,
   borrarElemento,
+
+  // [[voz]]
+
+  // [[entreno]]
+
+  // [[gente]]
+
+  // [[mapa]]
+
+  // [[habilidades]]
+
+  // [[aprendizaje]]
+
+  // [[salud]]
+
+  // [[habitos]]
+
 ];
 
 const BY_NAME = new Map(ASSISTANT_TOOLS.map((t) => [t.name, t]));

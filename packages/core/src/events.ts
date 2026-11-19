@@ -125,6 +125,24 @@ export const EVENT_SCHEMAS = {
   'pledge.resolved': z.object({ pledgeId: id, kept: z.boolean() }),
   /** Movimiento a una meta de ahorro (positivo = aportar, negativo = retirar). Dinero real: no da XP. */
   'savings.moved': z.object({ goalId: id, amount: z.number().refine((n) => n !== 0 && Math.abs(n) < 1e12, 'Monto inválido') }),
+
+  // ---- Sistemas nuevos: cada uno agrega sus eventos DEBAJO de su ancla (no borres ni muevas las anclas) ----
+  // [[voz]]
+
+  // [[entreno]]
+
+  // [[gente]]
+
+  // [[mapa]]
+
+  // [[habilidades]]
+
+  // [[aprendizaje]]
+
+  // [[salud]]
+
+  // [[habitos]]
+
 } as const;
 
 export type EventType = keyof typeof EVENT_SCHEMAS;
@@ -161,6 +179,23 @@ export const EVENT_LABELS: Record<EventType, string> = {
   'challenge.checked': 'Día de reto cumplido',
   'pledge.made': 'Compromiso hecho',
   'pledge.resolved': 'Compromiso resuelto',
+
+  // [[voz]]
+
+  // [[entreno]]
+
+  // [[gente]]
+
+  // [[mapa]]
+
+  // [[habilidades]]
+
+  // [[aprendizaje]]
+
+  // [[salud]]
+
+  // [[habitos]]
+
 };
 
 export const eventEnvelopeSchema = z.object({

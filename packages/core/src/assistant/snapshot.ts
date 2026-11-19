@@ -32,7 +32,7 @@ import { addDays, weekStart, weekday } from '../util/dates';
  * calcula el estado) o el servidor cuando la que tiene quedó vieja.
  * Si cambias su forma, sube SNAPSHOT_SCHEMA para que se descarten las fotos guardadas.
  */
-export const SNAPSHOT_SCHEMA = 2;
+export const SNAPSHOT_SCHEMA = 3;
 
 /**
  * Huella de los números del juego (config/game.ts). Si se despliega otra configuración, las fotos viejas
@@ -138,6 +138,24 @@ export interface AssistantSnapshot {
   savings: { id: string; name: string; current: number; target: number }[];
   lessons: number;
   lastJournal: { weekStart: string; happened: string; learned: string; next: string } | null;
+
+  // ---- Sistemas nuevos (foto para la IA) ----
+  // [[voz]]
+
+  // [[entreno]]
+
+  // [[gente]]
+
+  // [[mapa]]
+
+  // [[habilidades]]
+
+  // [[aprendizaje]]
+
+  // [[salud]]
+
+  // [[habitos]]
+
 }
 
 type Lister = <D>(module: string, kind?: string) => Entity<D>[];
@@ -385,6 +403,23 @@ export function buildSnapshot(
     savings: list<SavingsData>('finance', 'savings').map((s) => ({ id: s.id, name: s.data.name, current: state.savings[s.id]?.current ?? 0, target: s.data.target })),
     lessons: state.lessons.count,
     lastJournal: journal ? { weekStart: journal.weekStart, happened: journal.happened, learned: journal.learned, next: journal.next } : null,
+
+    // [[voz]]
+
+    // [[entreno]]
+
+    // [[gente]]
+
+    // [[mapa]]
+
+    // [[habilidades]]
+
+    // [[aprendizaje]]
+
+    // [[salud]]
+
+    // [[habitos]]
+
   };
 }
 

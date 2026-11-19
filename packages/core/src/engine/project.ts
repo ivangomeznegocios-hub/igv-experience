@@ -23,6 +23,24 @@ import { reduceChallenges, type ChallengeState } from './modules/challenges';
 import { reducePlans, type DayPlan } from './modules/plans';
 import { reduceBody, reduceDayClosures, reduceSavings, type BodyState, type DayClosure, type SavingsState } from './modules/life-logs';
 
+// ---- Sistemas nuevos (imports) ----
+// [[voz]]
+
+// [[entreno]]
+
+// [[gente]]
+
+// [[mapa]]
+
+// [[habilidades]]
+
+// [[aprendizaje]]
+
+// [[salud]]
+
+// [[habitos]]
+
+
 export interface ProjectInput {
   events: GameEvent[];
   entities: Entity[];
@@ -65,6 +83,24 @@ export interface GameState {
   /** Plan de cada día (forDate → plan). */
   plans: Record<string, DayPlan>;
   challenges: Record<string, ChallengeState>;
+
+  // ---- Sistemas nuevos (estado) ----
+  // [[voz]]
+
+  // [[entreno]]
+
+  // [[gente]]
+
+  // [[mapa]]
+
+  // [[habilidades]]
+
+  // [[aprendizaje]]
+
+  // [[salud]]
+
+  // [[habitos]]
+
 }
 
 export const DEFAULT_SETTINGS: SettingsData = {
@@ -138,6 +174,24 @@ export function project(input: ProjectInput): GameState {
   const dayClosures = reduceDayClosures(ctx);
   const plans = reducePlans(ctx, missions);
   const challenges = reduceChallenges(ctx);
+
+  // ---- Sistemas nuevos (reductores; corren antes de logros, atributos y oro) ----
+  // [[voz]]
+
+  // [[entreno]]
+
+  // [[gente]]
+
+  // [[mapa]]
+
+  // [[habilidades]]
+
+  // [[aprendizaje]]
+
+  // [[salud]]
+
+  // [[habitos]]
+
   const achievements = reduceAchievements(ctx, { missions, streak, lessons, bosses, money, map, seasons });
   const attributes = reduceAttributes(ctx, xp);
   // El oro se calcula al final: depende de toda la XP ganada.
@@ -178,5 +232,22 @@ export function project(input: ProjectInput): GameState {
     dayClosures,
     plans,
     challenges,
+
+    // [[voz]]
+
+    // [[entreno]]
+
+    // [[gente]]
+
+    // [[mapa]]
+
+    // [[habilidades]]
+
+    // [[aprendizaje]]
+
+    // [[salud]]
+
+    // [[habitos]]
+
   };
 }

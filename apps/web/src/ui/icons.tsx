@@ -58,6 +58,24 @@ const P: Record<string, string> = {
   chest: 'M3 10h18v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-9zM3 10V8a5 5 0 0 1 5-5h8a5 5 0 0 1 5 5v2M10 10v4h4v-4',
   pin: 'M12 21s-6-5.3-6-10a6 6 0 1 1 12 0c0 4.7-6 10-6 10zM12 13a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
   campfire: 'M12 15c2.2 0 4-1.8 4-4 0-2.5-2-4-2-6.5-1.5 1.2-2.5 2.7-2.5 4.2-.6-.6-1-1.3-1-2.2C9 7.8 8 9.2 8 11c0 2.2 1.8 4 4 4zM4 20l16-4M4 16l16 4',
+
+  // ---- Sistemas nuevos (íconos) ----
+  // [[voz]]
+
+  // [[entreno]]
+
+  // [[gente]]
+
+  // [[mapa]]
+
+  // [[habilidades]]
+
+  // [[aprendizaje]]
+
+  // [[salud]]
+
+  // [[habitos]]
+
 };
 
 export type IconName = keyof typeof P | string;

@@ -458,8 +458,46 @@ export const ENTITY_KINDS: Record<string, readonly string[]> = {
   library: ['book'],
   life: ['milestone'],
   challenges: ['challenge'],
+
+  // [[voz]]
+
+  // [[entreno]]
+
+  // [[gente]]
+
+  // [[mapa]]
+
+  // [[habilidades]]
+
+  // [[aprendizaje]]
+
+  // [[salud]]
+
+  // [[habitos]]
+
 };
 
 export function isValidEntityKind(module: string, kind: string): boolean {
   return !!ENTITY_KINDS[module]?.includes(kind);
 }
+
+// =============================================================================================
+// Sistemas nuevos: cada uno agrega sus tipos DEBAJO de su ancla (no borres ni muevas las anclas).
+// =============================================================================================
+
+// [[voz]]
+
+// [[entreno]]
+
+// [[gente]]
+
+// [[mapa]]
+
+// [[habilidades]]
+
+// [[aprendizaje]]
+
+// [[salud]]
+
+// [[habitos]]
+

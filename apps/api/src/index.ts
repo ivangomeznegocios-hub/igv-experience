@@ -10,6 +10,24 @@ import { gmRoute } from './gm';
 import { pushRoute, runScheduledPush } from './push';
 import { aiRoute } from './ai/routes';
 import { consentRoute } from './ai/oauth';
+
+// ---- Sistemas nuevos (rutas) ----
+// [[voz]]
+
+// [[entreno]]
+
+// [[gente]]
+
+// [[mapa]]
+
+// [[habilidades]]
+
+// [[aprendizaje]]
+
+// [[salud]]
+
+// [[habitos]]
+
 import type { Env } from './env';
 
 const app = new Hono<AppEnv>().basePath('/api');
@@ -199,6 +217,23 @@ app.route('/gm', gmRoute);
 app.route('/push', pushRoute);
 app.route('/ai', aiRoute);
 app.route('/oauth', consentRoute);
+
+// [[voz]]
+
+// [[entreno]]
+
+// [[gente]]
+
+// [[mapa]]
+
+// [[habilidades]]
+
+// [[aprendizaje]]
+
+// [[salud]]
+
+// [[habitos]]
+
 
 app.notFound((c) => c.json({ error: 'No encontrado' }, 404));
 

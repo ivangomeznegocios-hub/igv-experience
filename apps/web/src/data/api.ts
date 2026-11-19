@@ -64,7 +64,8 @@ export class ApiError extends Error {
   }
 }
 
-async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
+/** Petición a /api con manejo de sesión de Access. Los sistemas nuevos la usan en su propio archivo data/<sistema>Api.ts. */
+export async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(`/api${path}`, {
     ...init,
     credentials: 'same-origin',

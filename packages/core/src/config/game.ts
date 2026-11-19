@@ -135,6 +135,23 @@ export const GAME_CONFIG = {
     bonusPercent: 50,
   },
 
+  // ---- Sistemas nuevos: cada uno agrega su sección DEBAJO de su ancla ----
+  // [[voz]]
+
+  // [[entreno]]
+
+  // [[gente]]
+
+  // [[mapa]]
+
+  // [[habilidades]]
+
+  // [[aprendizaje]]
+
+  // [[salud]]
+
+  // [[habitos]]
+
   /** Meta mensual inicial del Dragón Financiero (MXN). Editable en la app. */
   defaultMonthlyGoal: 100_000,
 } as const;
