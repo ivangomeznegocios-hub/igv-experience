@@ -231,11 +231,24 @@ describe('pantalla Permitir y registro abierto', () => {
     expect(html).toContain('name="confirm"');
   });
 
-  it('el registro dinámico tiene tope de apps sin conectar', async () => {
+  it('el registro dinámico no escribe en D1 y un client_id alterado no sirve', async () => {
     const fresh = { DB: fakeD1(), DEV_BYPASS_AUTH: 'true' } as any;
-    const reg = () => mcpApp.request('/oauth/register', json({ client_name: 'x', redirect_uris: ['https://claude.ai/api/mcp/auth_callback'] }), fresh);
-    for (let i = 0; i < 30; i++) expect((await reg()).status).toBe(201);
-    expect((await reg()).status).toBe(429);
+    const reg = async () => (await (await mcpApp.request('/oauth/register', json({ client_name: 'x', redirect_uris: ['https://claude.ai/api/mcp/auth_callback'] }), fresh)).json()) as any;
+    const first = await reg();
+    const count = async () => ((await fresh.DB.prepare('SELECT count(*) AS n FROM ai_credentials').first()) as { n: number }).n;
+    const before = await count();
+    for (let i = 0; i < 50; i++) await reg();
+    expect(await count()).toBe(before);
+    expect(before).toBe(0);
+    // Cambiar los datos del client_id (p. ej. la dirección de regreso) invalida la firma.
+    const [prefix, payload, sig] = first.client_id.split('.');
+    const forged = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+    forged.r = ['https://evil.example/cb'];
+    const forgedId = [prefix, btoa(JSON.stringify(forged)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''), sig].join('.');
+    const q = new URLSearchParams({ response_type: 'code', client_id: forgedId, redirect_uri: 'https://evil.example/cb', code_challenge: challenge, code_challenge_method: 'S256' });
+    const res = await app.request(`/api/oauth/authorize?${q}`, {}, fresh);
+    expect(res.status).toBe(400);
+    expect(await res.text()).toContain('App desconocida');
   });
 });
 
@@ -270,5 +283,49 @@ describe('deshacer respeta lo que pasó después', () => {
     const d = sync.entities.find((x) => x.id === dailyId)!;
     expect(d.deletedAt).toBeNull();
     expect(d.data.title).toBe('Meditar 15 min');
+  });
+});
+
+describe('deshacer: retos iniciados por la IA y orden', () => {
+  it('no borra los días que Iván marcó en un reto que la IA creó e inició', async () => {
+    const e = { DB: fakeD1(), DEV_BYPASS_AUTH: 'true' } as any;
+    const m = (path: string, init?: RequestInit) => app.request(path, init, e);
+    const key = ((await (await m('/api/ai/keys', json({ name: 'k' }))).json()) as any).token;
+    const call2 = async (name: string, args: unknown) => {
+      const res = await mcpApp.request('/mcp', json({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, { authorization: `Bearer ${key}` }), e);
+      return ((await res.json()) as any).result;
+    };
+    const created = await call2('guardar_reto', { titulo: 'Sin azúcar', dias: 2, tamano: 'grande', iniciar: true });
+    const id = /Id \[([^\]]+)\]/.exec(created.content[0].text)![1];
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Mexico_City' }).format(new Date());
+    await m('/api/events', json({ id: 'evt-check-0001', type: 'challenge.checked', occurredAt: new Date().toISOString(), localDate: today, payload: { challengeId: id } }));
+    const items = ((await (await m('/api/ai/activity')).json()) as any).items as { id: string }[];
+    const r = (await (await m(`/api/ai/activity/${items[0].id}/undo`, { method: 'POST' })).json()) as any;
+    expect(r.ok).toBe(true);
+    const sync = (await (await m('/api/sync?since=0')).json()) as { events: { type: string; voidedAt: string | null }[]; entities: { id: string; data: any; deletedAt: number | null }[] };
+    expect(sync.events.find((x) => x.type === 'challenge.started')?.voidedAt).toBeNull();
+    const ent = sync.entities.find((x) => x.id === id)!;
+    expect(ent.deletedAt).toBeNull();
+    expect(ent.data.archived).toBe(true);
+  });
+
+  it('deshacer en orden (lo más reciente primero) regresa al estado original', async () => {
+    const e = { DB: fakeD1(), DEV_BYPASS_AUTH: 'true' } as any;
+    const m = (path: string, init?: RequestInit) => app.request(path, init, e);
+    const key = ((await (await m('/api/ai/keys', json({ name: 'k' }))).json()) as any).token;
+    const call2 = async (name: string, args: unknown) => {
+      const res = await mcpApp.request('/mcp', json({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, { authorization: `Bearer ${key}` }), e);
+      return ((await res.json()) as any).result;
+    };
+    const created = await call2('guardar_premio', { nombre: 'Cena', costo: 40 });
+    const id = /Id \[([^\]]+)\]/.exec(created.content[0].text)![1];
+    await call2('guardar_premio', { id, costo: 60 });
+    const items = ((await (await m('/api/ai/activity')).json()) as any).items as { id: string }[];
+    for (const it of items) {
+      const r = (await (await m(`/api/ai/activity/${it.id}/undo`, { method: 'POST' })).json()) as any;
+      expect(r).toMatchObject({ ok: true, kept: 0 });
+    }
+    const sync = (await (await m('/api/sync?since=0')).json()) as { entities: { id: string; deletedAt: number | null }[] };
+    expect(sync.entities.find((x) => x.id === id)?.deletedAt).not.toBeNull();
   });
 });

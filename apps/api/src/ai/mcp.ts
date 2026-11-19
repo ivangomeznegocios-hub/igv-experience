@@ -72,11 +72,24 @@ export async function handleRpc(msg: unknown, ctx: RpcContext): Promise<object |
       if (!ASSISTANT_TOOLS.some((t) => t.name === name)) return rpcError(id, -32602, `Herramienta desconocida: ${name}`);
       const { allowWrites } = await getAiSettings(drizzle(ctx.env.DB));
       const store = new D1AssistantStore(ctx.env.DB);
-      const result = await runAssistantTool(name, m.params?.arguments ?? {}, store, { allowWrites });
-      if (!result.isError && result.summary && result.refs) {
-        await recordActivity(ctx.env.DB, { source: ctx.caller.label, tool: name, summary: result.summary, refs: result.refs });
+      let result: Awaited<ReturnType<typeof runAssistantTool>>;
+      try {
+        result = await runAssistantTool(name, m.params?.arguments ?? {}, store, { allowWrites });
+      } catch (err) {
+        console.error('mcp tool', name, err);
+        const text = 'Error interno a mitad de la herramienta: pudo haberse guardado en parte. Revisa con ver_dia o ver_historial antes de reintentar.';
+        return rpcResult(id, { content: [{ type: 'text', text }], isError: true });
       }
-      return rpcResult(id, { content: [{ type: 'text', text: result.text }], isError: !!result.isError });
+      let text = result.text;
+      if (!result.isError && result.summary && result.refs) {
+        try {
+          await recordActivity(ctx.env.DB, { source: ctx.caller.label, tool: name, summary: result.summary, refs: result.refs });
+        } catch (err) {
+          console.error('mcp activity', name, err);
+          text += ' (Nota: no quedó en la bitácora de la app.)';
+        }
+      }
+      return rpcResult(id, { content: [{ type: 'text', text }], isError: !!result.isError });
     }
     case 'resources/list':
       return rpcResult(id, { resources: [] });

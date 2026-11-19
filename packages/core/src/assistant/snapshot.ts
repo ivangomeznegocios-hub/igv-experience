@@ -115,8 +115,10 @@ export interface AssistantSnapshot {
     /** Intento en curso: día de inicio y días marcados. */
     startDate: string | null;
     checkedDates: string[];
-    /** Día en que se cerró (completó o falló) el último intento. */
+    /** Último intento cerrado: cuándo empezó, cuándo se cerró y cómo (si falló, closedOn es el día sin marcar). */
     lastClosedOn: string | null;
+    lastStartDate: string | null;
+    lastStatus: 'completado' | 'fallido' | null;
     checkedToday: boolean;
     completions: number;
     archived: boolean;
@@ -257,7 +259,14 @@ export function buildSnapshot(
       checked: cur?.checked.length ?? 0,
       startDate: cur?.startDate ?? null,
       checkedDates: cur ? [...cur.checked] : [],
-      lastClosedOn: [...(st?.attempts ?? [])].reverse().find((a) => a.closedOn)?.closedOn ?? null,
+      ...(() => {
+        const closed = [...(st?.attempts ?? [])].reverse().find((a) => a.closedOn);
+        return {
+          lastClosedOn: closed?.closedOn ?? null,
+          lastStartDate: closed?.startDate ?? null,
+          lastStatus: closed ? (closed.status === 'completed' ? ('completado' as const) : ('fallido' as const)) : null,
+        };
+      })(),
       checkedToday: !!st?.checkedToday,
       completions: st?.completions ?? 0,
       archived: !!c.data.archived,

@@ -191,10 +191,24 @@ export async function undoActivity(d1: D1Database, id: string): Promise<{ ok: bo
   if (row.undoneAt) return { ok: false, error: 'Ya se había deshecho' };
   const refs = JSON.parse(row.refs) as ActivityRefs;
   const store = new D1AssistantStore(d1);
-  let kept = 0;
-  for (const ev of refs.events) await store.voidEvent(ev);
-  for (const ev of refs.voided ?? []) await store.restoreEvent(ev);
   const own = new Set(refs.events);
+  let kept = 0;
+
+  for (const evId of refs.events) {
+    const ev = await store.getEvent(evId);
+    if (!ev || ev.voidedAt) continue;
+    // Un reto iniciado por la IA en el que Iván ya marcó días: anular su inicio borraría esos días (y su XP).
+    if (ev.type === 'challenge.started') {
+      const checks = await store.events({ types: ['challenge.checked'], match: { challengeId: String(ev.payload.challengeId) }, from: ev.localDate });
+      if (checks.some((c) => !own.has(c.id))) {
+        kept++;
+        continue;
+      }
+    }
+    await store.voidEvent(evId);
+  }
+  for (const evId of refs.voided ?? []) await store.restoreEvent(evId);
+
   // En orden inverso: si se editó dos veces lo mismo, queda la versión original.
   for (const ent of [...refs.entities].reverse()) {
     const [cur] = await db.select().from(entities).where(eq(entities.id, ent.id));
@@ -211,12 +225,16 @@ export async function undoActivity(d1: D1Database, id: string): Promise<{ ok: bo
       continue;
     }
     if (ent.prev) {
-      await store.putEntity(ent.prev);
+      const restored = await store.putEntity(ent.prev);
+      // Las acciones anteriores sobre este elemento lo dejaron en la versión que se acaba de restaurar: se les
+      // actualiza la referencia para que deshacerlas después (en orden) también funcione.
+      if (ent.prev.updatedAt !== undefined) await remapSavedAt(d1, id, ent.id, ent.prev.updatedAt, restored.updatedAt ?? Date.now());
       continue;
     }
     const guard = current?.module === 'goals' ? { types: ['goal.progress'], key: 'goalId' } : current?.module === 'challenges' ? { types: ['challenge.started', 'challenge.checked'], key: 'challengeId' } : null;
     const used = guard ? (await store.events({ types: guard.types, match: { [guard.key]: ent.id } })).some((e) => !own.has(e.id)) : false;
     if (used && current) {
+      // Tiene avances de Iván: se archiva (su XP depende de que exista).
       await store.putEntity({ ...current, data: { ...current.data, archived: true } });
       kept++;
     } else {
@@ -225,4 +243,21 @@ export async function undoActivity(d1: D1Database, id: string): Promise<{ ok: bo
   }
   await db.update(aiActivity).set({ undoneAt: Date.now() }).where(eq(aiActivity.id, id));
   return { ok: true, kept };
+}
+
+async function remapSavedAt(d1: D1Database, exceptId: string, entityId: string, from: number, to: number) {
+  const db = drizzle(d1);
+  const rows = await db.select().from(aiActivity).where(isNull(aiActivity.undoneAt)).orderBy(desc(aiActivity.at)).limit(200);
+  for (const r of rows) {
+    if (r.id === exceptId || !r.refs.includes(entityId)) continue;
+    const refs = JSON.parse(r.refs) as ActivityRefs;
+    let changed = false;
+    for (const e of refs.entities) {
+      if (e.id === entityId && e.savedAt === from) {
+        e.savedAt = to;
+        changed = true;
+      }
+    }
+    if (changed) await db.update(aiActivity).set({ refs: JSON.stringify(refs) }).where(eq(aiActivity.id, r.id));
+  }
 }

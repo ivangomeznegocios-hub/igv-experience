@@ -13,7 +13,6 @@ import {
   refreshGrant,
   registerClient,
   revokeToken,
-  TooManyClientsError,
   type ClientData,
 } from './credentials';
 import { appOrigin } from './urls';
@@ -78,18 +77,8 @@ oauthServerRoutes.post('/oauth/register', async (c) => {
   const meta: ClientData = {
     client_name: str(body.client_name, 80) ?? 'App sin nombre',
     redirect_uris: uris,
-    client_uri: str(body.client_uri, 300),
-    logo_uri: str(body.logo_uri, 300),
-    scope: str(body.scope, 200),
   };
-  let registered: { id: string; createdAt: number };
-  try {
-    registered = await registerClient(drizzle(c.env.DB), meta);
-  } catch (err) {
-    if (err instanceof TooManyClientsError) return c.json({ error: 'temporarily_unavailable', error_description: 'Demasiados registros recientes. Intenta más tarde.' }, 429);
-    throw err;
-  }
-  const { id, createdAt } = registered;
+  const { id, createdAt } = await registerClient(drizzle(c.env.DB), meta);
   return c.json(
     {
       client_id: id,

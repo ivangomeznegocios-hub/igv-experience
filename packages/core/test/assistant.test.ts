@@ -254,4 +254,29 @@ describe('herramientas de IA: protegen la XP ganada y las fechas', () => {
     const saved = (await store.catalog()).find((e) => e.id === ref.id)!;
     expect(ref.savedAt).toBe(saved.updatedAt);
   });
+
+  it('marcar_reto: iniciar solo hoy, rescatar el día olvidado y no fallar si ya se completó', async () => {
+    const r5: Entity = { id: 'ch-5', module: 'challenges', kind: 'challenge', sort: 1, data: { title: 'Cinco días', days: 5, attribute: 'disciplina', size: 'media' } };
+    // Empezó el 16, marcó 16 y 17, olvidó el 18 → el motor lo da por fallido el 18.
+    const store = mk(
+      [ev('challenge.started', '2026-11-16', { challengeId: 'ch-5' }), ev('challenge.checked', '2026-11-16', { challengeId: 'ch-5' }), ev('challenge.checked', '2026-11-17', { challengeId: 'ch-5' })],
+      [...seed, r5],
+    );
+    expect((await store.snapshot()).challenges.find((c) => c.id === 'ch-5')?.status).toBe('fallido');
+    expect((await run(store, 'marcar_reto', { reto_id: 'ch-5', accion: 'iniciar', fecha: '2026-11-18' })).isError).toBe(true);
+    const rescate = await run(store, 'marcar_reto', { reto_id: 'ch-5', fecha: '2026-11-18' });
+    expect(rescate.isError).toBeFalsy();
+    expect(rescate.text).toContain('Rescaté');
+    const st = (await store.snapshot()).challenges.find((c) => c.id === 'ch-5')!;
+    expect(st.status).toBe('en curso');
+    expect(st.checked).toBe(3);
+
+    // Reto de 2 días completado hoy: volver a marcarlo no es un error.
+    const r2: Entity = { id: 'ch-6', module: 'challenges', kind: 'challenge', sort: 1, data: { title: 'Dos días', days: 2, attribute: 'disciplina', size: 'media' } };
+    const done = mk([ev('challenge.started', '2026-11-18', { challengeId: 'ch-6' }), ev('challenge.checked', '2026-11-18', { challengeId: 'ch-6' }), ev('challenge.checked', TODAY, { challengeId: 'ch-6' })], [...seed, r2]);
+    const again = await run(done, 'marcar_reto', { reto_id: 'ch-6' });
+    expect(again.isError).toBeFalsy();
+    expect(again.text).toContain('ya estaba marcado');
+    expect((await run(done, 'marcar_reto', { reto_id: 'ch-6', accion: 'iniciar' })).text).toContain('mañana');
+  });
 });

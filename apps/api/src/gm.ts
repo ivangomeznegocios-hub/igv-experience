@@ -114,17 +114,29 @@ gmRoute.post('/ask', async (c) => {
     if (++toolCalls > MAX_TOOL_CALLS || queries.count >= QUERY_BUDGET) {
       return { type: 'tool_result', tool_use_id: use.id, is_error: true, content: 'Llegaste al límite de acciones por mensaje. Dile a Iván qué quedó hecho y que te pida el resto en otro mensaje.' };
     }
+    let r: Awaited<ReturnType<typeof runAssistantTool>>;
     try {
-      const r = await runAssistantTool(use.name, use.input, store, { allowWrites });
-      if (!r.isError && r.summary && r.refs) {
-        const activityId = await recordActivity(DB, { source: 'Coach', tool: use.name, summary: r.summary, refs: r.refs });
-        actions.push({ tool: use.name, summary: r.summary, activityId });
-      }
-      return { type: 'tool_result', tool_use_id: use.id, content: r.text, is_error: !!r.isError };
+      r = await runAssistantTool(use.name, use.input, store, { allowWrites });
     } catch (err) {
       console.error('coach tool', use.name, err);
-      return { type: 'tool_result', tool_use_id: use.id, is_error: true, content: 'Error interno al ejecutar la herramienta. No se registró nada con ella.' };
+      return {
+        type: 'tool_result',
+        tool_use_id: use.id,
+        is_error: true,
+        content: 'Error interno a mitad de la herramienta: pudo haberse guardado en parte. Revisa con ver_dia o ver_historial antes de reintentar y dile a Iván qué pasó.',
+      };
     }
+    if (!r.isError && r.summary && r.refs) {
+      try {
+        const activityId = await recordActivity(DB, { source: 'Coach', tool: use.name, summary: r.summary, refs: r.refs });
+        actions.push({ tool: use.name, summary: r.summary, activityId });
+      } catch (err) {
+        // Lo hecho se queda; solo no quedó en la bitácora (sin "Deshacer" desde ahí; se corrige en la app).
+        console.error('coach activity', use.name, err);
+        return { type: 'tool_result', tool_use_id: use.id, content: `${r.text} (Nota: no quedó en la bitácora de la app.)` };
+      }
+    }
+    return { type: 'tool_result', tool_use_id: use.id, content: r.text, is_error: !!r.isError };
   };
 
   try {

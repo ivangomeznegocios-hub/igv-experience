@@ -114,8 +114,9 @@ Para usar la app desde Claude (web, escritorio, móvil, Claude Code), ChatGPT, C
 - **Protocolo** (`apps/api/src/ai/mcp.ts`): Streamable HTTP sin estado (POST /mcp → JSON; sin SSE ni
   sesiones; GET/DELETE → 405). Versiones 2025-11-25 … 2024-11-05. `instructions` = guía de la app.
 - **Autenticación** (`ai/credentials.ts`, `ai/oauth.ts`, tabla `ai_credentials`, tokens solo como SHA-256):
-  OAuth 2.1 con metadatos RFC 9728/8414, registro dinámico (RFC 7591, clientes públicos; tope de 30 apps sin
-  conectar por hora → 429, para no agotar la cuota de D1), PKCE S256 obligatorio, access 1 h, refresh 90 días
+  OAuth 2.1 con metadatos RFC 9728/8414, registro dinámico SIN ESTADO (RFC 7591, clientes públicos: el
+  `client_id` = `cli1.<metadatos en base64url>.<HMAC>` firmado con el secreto `server_meta.ai_secret`; registrar
+  no toca D1, así que el registro público no se puede abusar), PKCE S256 obligatorio, access 1 h, refresh 90 días
   que ROTA (reusar uno rotado hace más de 60 s revoca la conexión; dentro de ese margen se acepta por
   refrescos en paralelo o reintentos; rotar no anula los access vigentes), revocación.
   La pantalla "Permitir" vive en la app (`GET/POST /api/oauth/authorize`, detrás de Access + anclaje; CSRF
@@ -128,14 +129,17 @@ Para usar la app desde Claude (web, escritorio, móvil, Claude Code), ChatGPT, C
   y agendar) ni más de un año atrás, no duplican misiones que ya contaron, y no borran metas/retos con
   avances (su XP depende de la entidad: se archivan), ni cambian días/tamaño de un reto completado u
   objetivo/tamaño de una meta cumplida (le quitaría XP). `marcar_reto` solo marca días del intento en curso
-  y solo empieza hoy o ayer. Los errores vuelven como `isError` (no excepciones).
+  y solo empieza hoy o ayer (`iniciar` solo hoy); si un intento falló por un día sin marcar, marcar ese día lo
+  rescata. Los errores vuelven como `isError` (no excepciones).
 - **Permisos**: `server_meta.ai_settings.allowWrites` (pantalla Conectar IA). En solo lectura, las
   herramientas que escriben ni se listan ni se ejecutan.
 - **Bitácora** (tabla `ai_activity`): cada acción que escribe guarda quién (nombre de la llave o de la app
   OAuth, o "Coach"), un resumen y sus referencias (eventos creados, eventos anulados, versión previa de cada
   entidad y `savedAt` de la que dejó la IA) → "Deshacer" en la app (`POST /api/ai/activity/:id/undo`). Deshacer
   no pisa lo que Iván cambió o borró después, y una meta o reto creados por la IA con avances propios se
-  archivan en vez de borrarse (responde `kept` = cuántos cambios se respetaron).
+  archivan en vez de borrarse; tampoco anula el inicio de un reto en el que Iván ya marcó días (responde `kept` =
+  cuántos cambios se respetaron). Al restaurar una versión, las acciones anteriores sobre el mismo elemento se
+  re-apuntan a ella, así que deshacer en orden (lo más reciente primero) regresa al estado original.
 - **Estado para la IA = foto en caché** (`server_meta.ai_snapshot`, `buildSnapshot`): la app la sube tras
   sincronizar (`lib/aiSnapshot.ts`, solo sin cambios pendientes; `version` = cursor de sync). El Worker la
   usa si `version ≥ max(updated_at)`, es del mismo día y su `config` = `CONFIG_FINGERPRINT` (huella de

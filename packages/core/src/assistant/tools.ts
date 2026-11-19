@@ -917,9 +917,26 @@ const marcarReto = tool({
       if (st.checkedDates.includes(date)) return { text: `"${ch.data.title}" ya estaba marcado el ${date === store.today ? 'día de hoy' : date}.` };
       evs.push(makeEvent(store, 'challenge.checked', { challengeId: ch.id }, date));
       n = st.checkedDates.length + 1;
+    } else if (accion !== 'iniciar' && st?.lastStatus === 'completado' && st.lastClosedOn === date) {
+      return { text: `"${ch.data.title}" ya estaba marcado: se completó el ${date === store.today ? 'día de hoy' : date}.` };
+    } else if (accion !== 'iniciar' && st?.lastStatus === 'fallido' && st.lastClosedOn === date && st.lastStartDate && date >= st.lastStartDate) {
+      // Rescate: el intento falló justo por este día sin marcar. Marcarlo lo revive (si los días siguientes ya
+      // estaban marcados o son hoy). Se informa el estado real que calcula el motor.
+      const ids = await addEvents(store, [makeEvent(store, 'challenge.checked', { challengeId: ch.id }, date)]);
+      const after = (await store.snapshot()).challenges.find((c) => c.id === ch.id);
+      const msg =
+        after?.status === 'en curso'
+          ? `Rescaté "${ch.data.title}": marqué el ${date} y el intento sigue vivo (día ${after.checked} de ${days}).${after.checkedToday ? '' : ' Hoy también toca marcarlo.'}`
+          : after?.status === 'completado'
+            ? `¡Reto "${ch.data.title}" completado! +${GAME_CONFIG.missionXp[ch.data.size]} XP.`
+            : `Marqué el ${date}, pero el intento de "${ch.data.title}" sigue fallido: faltan otros días sin marcar${after?.lastClosedOn ? ` (el ${after.lastClosedOn})` : ''}.`;
+      return ok(`${msg} Registro [${ids[0]}].`, msg, { events: ids });
     } else {
-      // Empieza un intento nuevo en `date`: debe ser después del último intento y no dejar días pasados sin marcar.
-      if (st?.lastClosedOn && date <= st.lastClosedOn) throw new ToolError(`El intento anterior de "${ch.data.title}" terminó el ${st.lastClosedOn}. El nuevo debe empezar después (hoy).`);
+      // Empieza un intento nuevo en `date`: después del último intento y sin dejar días pasados sin marcar.
+      if (accion === 'iniciar' && date !== store.today) throw new ToolError('Para empezar un reto en una fecha pasada usa accion "marcar" con esa fecha (un día sin marcar lo haría fallar).');
+      if (st?.lastClosedOn && date <= st.lastClosedOn) {
+        throw new ToolError(`El intento anterior de "${ch.data.title}" terminó el ${st.lastClosedOn}. El nuevo debe empezar ${st.lastClosedOn >= store.today ? 'mañana' : 'hoy'}.`);
+      }
       if (date < addDays(store.today, -1)) throw new ToolError('Un reto solo puede empezar hoy o ayer: si empieza antes, los días sin marcar lo harían fallar.');
       evs.push(makeEvent(store, 'challenge.started', { challengeId: ch.id }, date));
       started = true;

@@ -1,11 +1,11 @@
 import { and, desc, eq, gt, inArray, isNull, lt } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { aiCredentials, serverMeta, type AiCredentialRow } from '@igv/db';
-import { randomId, randomToken, sha256Hex } from './crypto';
+import { base64url, fromBase64url, hmacSign, hmacVerify, randomId, randomToken, sha256Hex } from './crypto';
 
 /**
  * Credenciales de los asistentes de IA (tabla `ai_credentials`):
- *  - client:  app registrada por OAuth (registro dinámico). data = metadatos del cliente.
+ *  - (las apps registradas por OAuth no se guardan: su client_id va firmado, ver registerClient)
  *  - code:    código de autorización (10 min, un solo uso). data = client, redirect, PKCE.
  *  - grant:   una conexión aprobada por ti (Claude, ChatGPT…). Revocarla corta todos sus tokens.
  *  - access:  token de acceso OAuth (1 h).  refresh: token de renovación (90 días, rota en cada uso).
@@ -57,6 +57,10 @@ export interface Caller {
 const parse = <T>(row: AiCredentialRow) => JSON.parse(row.data) as T;
 
 // ---------- Clientes OAuth (registro dinámico, RFC 7591) ----------
+//
+// Sin estado: el client_id lleva los metadatos de la app (nombre y redirect_uris) firmados con HMAC usando un
+// secreto del servidor. Registrar no lee ni escribe D1, así que el registro público no se puede usar para
+// llenar la base ni para bloquear conexiones nuevas. Solo quien conoce el secreto puede fabricar un client_id.
 
 export function isAllowedRedirect(uri: string): boolean {
   let u: URL;
@@ -97,38 +101,45 @@ export function redirectMatches(registered: string[], uri: string): boolean {
   });
 }
 
-/** Máximo de apps registradas en la última hora que aún no se conectan. El registro es público: esto lo acota. */
-const MAX_PENDING_CLIENTS = 30;
+const SECRET_KEY = 'ai_secret';
+let secretCache: string | null = null;
 
-export class TooManyClientsError extends Error {}
+/** Secreto del servidor para firmar los client_id (se crea una vez y vive en server_meta, nunca se sincroniza). */
+async function serverSecret(db: Db): Promise<string> {
+  if (secretCache) return secretCache;
+  const read = async () => (await db.select().from(serverMeta).where(eq(serverMeta.key, SECRET_KEY)))[0]?.value;
+  let value = await read();
+  if (!value) {
+    // onConflictDoNothing: si dos solicitudes llegan a la vez, gana la primera y ambas usan esa.
+    await db.insert(serverMeta).values({ key: SECRET_KEY, value: randomToken(''), updatedAt: Date.now() }).onConflictDoNothing();
+    value = await read();
+  }
+  if (!value) throw new Error('No se pudo crear el secreto del servidor');
+  secretCache = value;
+  return value;
+}
+
+const CLIENT_PREFIX = 'cli1.';
 
 export async function registerClient(db: Db, meta: ClientData): Promise<{ id: string; createdAt: number }> {
   const now = Date.now();
-  // Limpieza acotada: clientes que nunca se conectaron en 24 h.
-  const stale = await db
-    .select({ id: aiCredentials.id })
-    .from(aiCredentials)
-    .where(and(eq(aiCredentials.kind, 'client'), isNull(aiCredentials.lastUsedAt), lt(aiCredentials.createdAt, now - 86_400_000)))
-    .limit(90);
-  if (stale.length) await db.delete(aiCredentials).where(inArray(aiCredentials.id, stale.map((s) => s.id)));
-  // Tope: si hay demasiados registros sin usar, no se escribe nada (evita agotar la cuota diaria de D1).
-  const pending = await db
-    .select({ id: aiCredentials.id })
-    .from(aiCredentials)
-    .where(and(eq(aiCredentials.kind, 'client'), isNull(aiCredentials.lastUsedAt), gt(aiCredentials.createdAt, now - 3_600_000)))
-    .limit(MAX_PENDING_CLIENTS);
-  if (pending.length >= MAX_PENDING_CLIENTS) throw new TooManyClientsError('Demasiados registros pendientes');
-  const id = `cli_${randomId().replace(/-/g, '')}`;
-  await db.insert(aiCredentials).values({ id, kind: 'client', data: JSON.stringify(meta), createdAt: now });
-  return { id, createdAt: now };
+  const payload = base64url(new TextEncoder().encode(JSON.stringify({ n: meta.client_name, r: meta.redirect_uris, t: Math.floor(now / 1000) })));
+  const sig = await hmacSign(await serverSecret(db), payload);
+  return { id: `${CLIENT_PREFIX}${payload}.${sig}`, createdAt: now };
 }
 
 export async function getClient(db: Db, clientId: string): Promise<(ClientData & { id: string }) | null> {
-  const [row] = await db
-    .select()
-    .from(aiCredentials)
-    .where(and(eq(aiCredentials.id, clientId), eq(aiCredentials.kind, 'client')));
-  return row ? { ...parse<ClientData>(row), id: row.id } : null;
+  if (!clientId.startsWith(CLIENT_PREFIX) || clientId.length > 4000) return null;
+  const [payload, sig, extra] = clientId.slice(CLIENT_PREFIX.length).split('.');
+  if (!payload || !sig || extra !== undefined) return null;
+  if (!(await hmacVerify(await serverSecret(db), payload, sig))) return null;
+  try {
+    const d = JSON.parse(new TextDecoder().decode(fromBase64url(payload))) as { n: string; r: string[] };
+    if (typeof d.n !== 'string' || !Array.isArray(d.r)) return null;
+    return { id: clientId, client_name: d.n, redirect_uris: d.r };
+  } catch {
+    return null;
+  }
 }
 
 // ---------- Códigos de autorización ----------
@@ -145,8 +156,6 @@ export async function createCode(db: Db, clientId: string, data: CodeData): Prom
     createdAt: now,
     expiresAt: now + CODE_TTL_MS,
   });
-  // Marca el cliente como usado (no se limpia).
-  await db.update(aiCredentials).set({ lastUsedAt: now }).where(eq(aiCredentials.id, clientId));
   return code;
 }
 

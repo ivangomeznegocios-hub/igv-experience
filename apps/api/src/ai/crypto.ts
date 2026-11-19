@@ -34,3 +34,30 @@ export async function verifyPkce(verifier: string, challenge: string): Promise<b
   for (let i = 0; i < computed.length; i++) diff |= computed.charCodeAt(i) ^ challenge.charCodeAt(i);
   return diff === 0;
 }
+
+export function fromBase64url(s: string): Uint8Array<ArrayBuffer> {
+  const b64 = s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4);
+  const bin = atob(b64);
+  const out = new Uint8Array(new ArrayBuffer(bin.length));
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+async function hmacKey(secret: string, usage: KeyUsage[]): Promise<CryptoKey> {
+  return crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, usage);
+}
+
+/** Firma HMAC-SHA256 (base64url) de un texto. */
+export async function hmacSign(secret: string, data: string): Promise<string> {
+  const sig = await crypto.subtle.sign('HMAC', await hmacKey(secret, ['sign']), new TextEncoder().encode(data));
+  return base64url(new Uint8Array(sig));
+}
+
+/** Verifica una firma HMAC-SHA256 en tiempo constante (WebCrypto). */
+export async function hmacVerify(secret: string, data: string, signature: string): Promise<boolean> {
+  try {
+    return await crypto.subtle.verify('HMAC', await hmacKey(secret, ['verify']), fromBase64url(signature), new TextEncoder().encode(data));
+  } catch {
+    return false;
+  }
+}
