@@ -163,7 +163,11 @@ export function foldMapEvents(events: GameEvent[], habitualVisits: number): MapF
   return { places, discoveries, visits, firsts };
 }
 
-/** Qué lugares (ids) están ligados a cada lugar del catálogo fijo. */
+/**
+ * Qué lugares (ids) están ligados a cada lugar del catálogo fijo. `placeIds` = lugares con eventos del mapa;
+ * `entities` puede traer también los borrados: un lugar borrado con visitas conserva su liga (por `catalogId`
+ * o por nombre), para que borrarlo no quite la XP de sus colecciones. Los borrados sin visitas no cuentan.
+ */
 export function mapCatalogLinks(placeIds: Iterable<string>, entities: Entity[]): Map<string, string[]> {
   const links = new Map<string, string[]>();
   const add = (cid: string | null, pid: string) => {
@@ -172,8 +176,13 @@ export function mapCatalogLinks(placeIds: Iterable<string>, entities: Entity[]):
     if (!l.includes(pid)) l.push(pid);
     links.set(cid, l);
   };
-  for (const e of entities) if (e.module === 'map' && e.kind === 'place' && !e.deletedAt) add(catalogIdOfPlace(e.id, e.data as PlaceData), e.id);
-  for (const id of placeIds) add(catalogIdOfPlace(id, null), id);
+  const dataById = new Map<string, PlaceData>();
+  for (const e of entities) {
+    if (e.module !== 'map' || e.kind !== 'place') continue;
+    dataById.set(e.id, e.data as PlaceData);
+    if (!e.deletedAt) add(catalogIdOfPlace(e.id, e.data as PlaceData), e.id);
+  }
+  for (const id of placeIds) add(catalogIdOfPlace(id, dataById.get(id) ?? null), id);
   return links;
 }
 
@@ -218,7 +227,7 @@ export function reduceMap(ctx: Ctx): MapState {
   }
 
   // Colecciones del catálogo fijo.
-  const links = mapCatalogLinks(Object.keys(places), ctx.entities);
+  const links = mapCatalogLinks(Object.keys(places), ctx.allEntities ?? ctx.entities);
   const collections: Record<string, MapCollectionState> = {};
   const { knownOn, collections: progress } = mapCollectionProgress(places, links);
   for (const { collection: c, knownIds, completedOn } of progress) {

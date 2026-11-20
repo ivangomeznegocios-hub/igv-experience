@@ -162,6 +162,7 @@ export function project(input: ProjectInput): GameState {
     events,
     byType,
     entities,
+    allEntities: input.entities,
     entityById,
     settings,
     xp,

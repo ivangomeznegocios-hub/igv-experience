@@ -8,6 +8,7 @@ import {
   VISIT_COMPANIES,
   addDays,
   buildSnapshot,
+  catalogIdOfPlace,
   catalogPlaceEntityId,
   googleMapsUrl,
   memoryAssistantStore,
@@ -194,6 +195,47 @@ describe('mapa: catálogo de Jalisco y colecciones', () => {
     expect(s.map.catalog['gdl-catedral'].placeId).toBe(own.id);
   });
 
+  it('un lugar viejo (id al azar, sin catalogId) con el mismo nombre que uno del catálogo se liga y no se duplica', () => {
+    const old = place('place-1a2b3c4d', { name: 'Bosque Los Colomos', placeType: 'lugar' });
+    const events = [ev('map.status_changed', '2026-03-01', { placeId: old.id, status: 'descubierto' })];
+    const s = run(events, TODAY, { entities: [...seed, old] });
+    expect(s.map.catalog['gdl-colomos']).toEqual({ placeId: old.id, discoveredOn: '2026-03-01' });
+    expect(s.map.collections.naturaleza.knownIds).toEqual(['gdl-colomos']);
+    expect(bySource(s, 'discovery')).toBe(discovery);
+    // Solo nombre exacto (sin acentos ni mayúsculas) y solo en la capa vida.
+    expect(catalogIdOfPlace('place-x', { name: 'bosque los colomos', placeType: 'lugar' })).toBe('gdl-colomos');
+    expect(catalogIdOfPlace('place-x', { name: 'Colomos', placeType: 'lugar' })).toBeNull();
+    expect(catalogIdOfPlace('place-x', { name: 'Tequila', placeType: 'cliente', layer: 'empresa' })).toBeNull();
+    expect(catalogIdOfPlace('place-x', { name: 'Tequila Grill', placeType: 'restaurante' })).toBeNull();
+  });
+
+  it('borrar un lugar ligado por catalogId (o por nombre) no quita la XP de la colección', () => {
+    const col = MAP_COLLECTIONS.find((c) => c.id === 'en-vivo')!;
+    const own = place('place-abcdef1234', { name: 'El Akron', catalogId: 'zap-akron' });
+    const ents = [own, ...col.placeIds.filter((cid) => cid !== 'zap-akron').map(fromCat)];
+    const events = ents.map((e, i) => visit(addDays('2026-11-01', i), e.id));
+    const before = run(events, TODAY, { entities: [...seed, ...ents] });
+    expect(before.map.collections['en-vivo'].completedOn).toBe(addDays('2026-11-01', ents.length - 1));
+    const deleted = [{ ...own, deletedAt: Date.parse('2026-11-15T12:00:00Z') }, ...ents.slice(1)];
+    const after = run(events, TODAY, { entities: [...seed, ...deleted] });
+    expect(after.map.collections['en-vivo']).toMatchObject({ known: col.placeIds.length, completedOn: before.map.collections['en-vivo'].completedOn });
+    expect(after.xp.total).toBe(before.xp.total);
+    expect(after.map.catalog['zap-akron'].placeId).toBe(own.id);
+
+    // Igual con un lugar viejo ligado solo por su nombre.
+    const old = place('place-9z9z9z9z', { name: 'Estadio Akron' });
+    const ents2 = [old, ...ents.slice(1)];
+    const events2 = ents2.map((e, i) => visit(addDays('2026-11-01', i), e.id));
+    const b2 = run(events2, TODAY, { entities: [...seed, ...ents2] });
+    const a2 = run(events2, TODAY, { entities: [...seed, { ...old, deletedAt: Date.parse('2026-11-15T12:00:00Z') }, ...ents.slice(1)] });
+    expect(b2.map.collections['en-vivo'].completedOn).not.toBeNull();
+    expect(a2.xp.total).toBe(b2.xp.total);
+
+    // Un lugar borrado sin visitas no deja liga (vuelve a salir como sugerencia).
+    const wish = { ...place('place-qwerty12', { name: 'Ajijic' }), deletedAt: Date.parse('2026-11-15T12:00:00Z') };
+    expect(run([], TODAY, { entities: [...seed, wish] }).map.catalog['jal-ajijic']).toBeUndefined();
+  });
+
   it('propiedad: agregar cualquier visita o cambio de estado nunca baja la XP ni los atributos', () => {
     let seedN = 7;
     const r = () => ((seedN = (seedN * 1664525 + 1013904223) % 4294967296) / 4294967296);
@@ -226,6 +268,10 @@ describe('mapa: utilidades', () => {
     expect(parseMapCoords('20.6767, -103.3475')).toEqual({ lat: 20.6767, lng: -103.3475 });
     expect(parseMapCoords('https://www.google.com/maps/place/Catedral/@20.6767,-103.3475,17z/data=x')).toEqual({ lat: 20.6767, lng: -103.3475 });
     expect(parseMapCoords('https://maps.google.com/?q=20.67,-103.34')).toEqual({ lat: 20.67, lng: -103.34 });
+    // El pin (!3d…!4d…) gana sobre el centro de la vista (@…).
+    expect(parseMapCoords('https://www.google.com/maps/place/Eiffel+Tower/@48.8583701,2.2919064,17z/data=!3m1!4b1!4m6!3m5!1s0x0:0x0!8m2!3d48.8583701!4d2.2944813')).toEqual({ lat: 48.8583701, lng: 2.2944813 });
+    expect(parseMapCoords('geo:20.6767,-103.3475?q=Catedral')).toEqual({ lat: 20.6767, lng: -103.3475 });
+    expect(parseMapCoords('https://maps.app.goo.gl/AbCdEf123')).toBeNull();
     expect(parseMapCoords('no es coordenada')).toBeNull();
     expect(parseMapCoords('200, 500')).toBeNull();
   });
@@ -345,6 +391,76 @@ describe('mapa: herramientas de IA', () => {
     expect(renderOverview(snap)).toContain('## Mapa');
     const state = project({ events: store.allEvents(), entities: store.allEntities(), today: TODAY });
     expect(buildSnapshot(state, store.allEntities(), { version: 1, computedBy: 'app' }).mapa?.collections.length).toBe(MAP_COLLECTIONS.length);
+  });
+
+  it('registrar_visita no confunde un lugar nuevo con uno guardado o del catálogo que solo está contenido en su nombre', async () => {
+    const casa = place('place-casa', { name: 'Casa', city: 'Zapopan' });
+    const ofi = place('place-ofi', { name: 'Oficina', city: 'Guadalajara' });
+    const palreal = place('place-palreal', { name: 'Café Palreal', placeType: 'cafe' });
+    const store = mk([], [...seed, ...people, casa, ofi, palreal]);
+    const mapPlaces = () => store.allEntities().filter((x) => x.module === 'map');
+
+    const a = await call(store, 'registrar_visita', { lugar: 'Casa Bariachi', compania: 'familia', tipo: 'restaurante' });
+    expect(a.isError).toBeFalsy();
+    expect(a.text).toContain('lugar nuevo');
+    expect(a.text).toContain('Primera visita');
+    const b = await call(store, 'registrar_visita', { lugar: 'Casa de mi abuela', compania: 'familia' });
+    expect(b.isError).toBeFalsy();
+    expect(b.text).toContain('lugar nuevo');
+    const c = await call(store, 'registrar_visita', { lugar: 'La oficina de mi cliente Grupo Ruiz', compania: 'trabajo' });
+    expect(c.text).toContain('lugar nuevo');
+    expect(mapPlaces()).toHaveLength(6);
+    expect(store.allEvents().every((e) => e.payload.placeId !== casa.id && e.payload.placeId !== ofi.id)).toBe(true);
+
+    // Lo que sí es el mismo lugar se sigue encontrando: con artículo, fragmento del nombre o del catálogo.
+    const d = await call(store, 'registrar_visita', { lugar: 'la oficina', compania: 'trabajo' });
+    expect(d.text).toContain('lugar [place-ofi]');
+    const e = await call(store, 'registrar_visita', { lugar: 'Palreal', compania: 'amigos' });
+    expect(e.text).toContain('lugar [place-palreal]');
+    const f = await call(store, 'registrar_visita', { lugar: 'Akron', compania: 'amigos' });
+    expect(f.text).toContain('lugar [place-zap-akron]');
+    expect(mapPlaces()).toHaveLength(7);
+  });
+
+  it('"Tequila Grill" no es el pueblo de Tequila: con tipo se crea aparte; sin datos pregunta', async () => {
+    const store = mk();
+    const ask = await call(store, 'registrar_visita', { lugar: 'Tequila Grill', compania: 'amigos' });
+    expect(ask.isError).toBe(true);
+    expect(ask.text).toContain('[jal-tequila]');
+    expect(store.allEvents()).toHaveLength(0);
+
+    const r = await call(store, 'registrar_visita', { lugar: 'Tequila Grill', compania: 'amigos', tipo: 'restaurante', ciudad: 'Zapopan' });
+    expect(r.isError).toBeFalsy();
+    expect(r.text).toContain('lugar nuevo');
+    expect(r.text).not.toContain('Escapadas');
+    const ent = store.allEntities().find((x) => x.module === 'map')!;
+    expect(ent.id).not.toBe('place-jal-tequila');
+    expect(ent.data).toMatchObject({ name: 'Tequila Grill', placeType: 'restaurante', city: 'Zapopan' });
+    expect(ent.data.catalogId).toBeUndefined();
+    const s = stateOf(store);
+    expect(s.map.collections.escapadas.known).toBe(0);
+    expect(s.map.catalog['jal-tequila']).toBeUndefined();
+  });
+
+  it('un lugar viejo con el nombre del catálogo: ver_mapa no lo sugiere, la visita por id del catálogo va a él y renombrarlo no rompe la liga', async () => {
+    const old = place('place-1a2b3c4d', { name: 'Bosque Los Colomos', placeType: 'lugar' });
+    const store = mk([ev('map.status_changed', '2026-03-01', { placeId: old.id, status: 'descubierto' })], [...seed, ...people, old]);
+    const v = await call(store, 'ver_mapa', { sugerencias: true });
+    expect(v.text).not.toContain('[gdl-colomos]');
+    expect(v.text).toContain('Naturaleza tapatía 1/6');
+
+    const r = await call(store, 'registrar_visita', { lugar: 'gdl-colomos', compania: 'pareja' });
+    expect(r.isError).toBeFalsy();
+    expect(r.text).not.toContain('Primera visita');
+    expect(r.text).not.toContain('lugar nuevo');
+    expect(r.text).toContain(`lugar [${old.id}]`);
+    expect(store.allEntities().filter((x) => x.module === 'map')).toHaveLength(1);
+    expect(bySource(stateOf(store), 'discovery')).toBe(discovery);
+
+    const ren = await call(store, 'guardar_lugar', { id: old.id, nombre: 'Colomos' });
+    expect(ren.isError).toBeFalsy();
+    expect(store.allEntities().find((x) => x.id === old.id)!.data).toMatchObject({ name: 'Colomos', catalogId: 'gdl-colomos' });
+    expect(stateOf(store).map.collections.naturaleza.knownIds).toEqual(['gdl-colomos']);
   });
 
   it('en solo lectura registrar_visita y guardar_lugar se niegan', async () => {
