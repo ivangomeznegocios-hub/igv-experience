@@ -279,8 +279,8 @@ export class Stage {
     // Encuadre: cuerpo completo o rostro, ajustado al tamaño del lienzo.
     const H = this.figure?.height ?? 1.75;
     const tan = Math.tan((this.camera.fov * Math.PI) / 360);
-    const fitH = this.view === 'face' ? 0.46 : H * 1.14;
-    const fitW = this.view === 'face' ? 0.4 : 0.95;
+    const fitH = this.view === 'face' ? 0.37 : H * 1.14;
+    const fitW = this.view === 'face' ? 0.3 : 0.95;
     const dist = Math.max(fitH / (2 * tan), fitW / (2 * tan * this.camera.aspect)) / this.zoom;
     const targetY = this.view === 'face' ? (this.figure?.faceY ?? H * 0.93) : H * 0.47 + (1 - 1 / this.zoom) * H * 0.32;
     if (!this.frame.init) this.frame = { y: targetY, dist, init: true };

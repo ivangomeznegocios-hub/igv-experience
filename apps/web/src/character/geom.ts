@@ -158,11 +158,21 @@ export const warpU = (v: number, amount: number) => v + amount * Math.cos(v);
  * Malla de un tubo. `displace` permite esculpir relieve (pectorales, nariz…) vértice por vértice.
  * Las normales salen suaves y la costura no se nota (los anillos comparten vértices al cerrar).
  */
-export function loft(t: Tube, seg: number, o: { warp?: number; displace?: (p: P3, u: number, ring: Ring) => void } = {}): BufferGeometry {
+export function loft(
+  t: Tube,
+  seg: number,
+  o: {
+    warp?: number;
+    displace?: (p: P3, u: number, ring: Ring) => void;
+    /** Color por vértice (RGB lineal). Se llama antes de `displace`, con el punto aún sin esculpir. */
+    paint?: (p: P3, u: number, out: Float32Array, at: number) => void;
+  } = {},
+): BufferGeometry {
   const { ringAt, ys } = t;
   const rows = ys.length;
   const count = rows * seg + (t.top !== undefined ? 1 : 0) + (t.bottom !== undefined ? 1 : 0);
   const pos = new Float32Array(count * 3);
+  const col = o.paint ? new Float32Array(count * 3) : null;
   const p: P3 = { x: 0, y: 0, z: 0 };
   let k = 0;
   for (let i = 0; i < rows; i++) {
@@ -173,6 +183,7 @@ export function loft(t: Tube, seg: number, o: { warp?: number; displace?: (p: P3
       p.x = x;
       p.y = ring.y;
       p.z = z;
+      if (col) o.paint!(p, u, col, k);
       o.displace?.(p, u, ring);
       pos[k++] = p.x;
       pos[k++] = p.y;
@@ -194,6 +205,7 @@ export function loft(t: Tube, seg: number, o: { warp?: number; displace?: (p: P3
     p.x = r.cx;
     p.y = y;
     p.z = r.cz;
+    if (col) o.paint!(p, Math.PI / 2, col, v * 3);
     o.displace?.(p, Math.PI / 2, { ...r, y, w: 0, f: 0, b: 0 });
     pos[v * 3] = p.x;
     pos[v * 3 + 1] = p.y;
@@ -211,6 +223,7 @@ export function loft(t: Tube, seg: number, o: { warp?: number; displace?: (p: P3
   }
   const g = new BufferGeometry();
   g.setAttribute('position', new BufferAttribute(pos, 3));
+  if (col) g.setAttribute('color', new BufferAttribute(col, 3));
   g.setIndex(idx);
   g.computeVertexNormals();
   return g;
