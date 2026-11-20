@@ -8,6 +8,7 @@ import {
   VIDA_PLACE_TYPES,
   VISIT_COMPANIES,
   VISIT_COMPANY_NAMES,
+  catalogIdOfPlace,
   catalogPlaceEntityId,
   mapNormalize,
   parseMapCoords,
@@ -59,6 +60,9 @@ function Stars({ value, onChange }: { value?: number; onChange: (v: number | und
     </div>
   );
 }
+
+/** Personas que se ven de entrada en "¿Quiénes?" (el resto con "Ver todas"). */
+const PEOPLE_SHOWN = 14;
 
 const CITY_LIST_ID = 'mapa-cities';
 function CityDatalist({ extra }: { extra: string[] }) {
@@ -154,8 +158,12 @@ export function VisitForm({
   const [note, setNote] = useState('');
   const [extra, setExtra] = useState<Partial<PlaceData>>({ placeType: 'restaurante' });
   const [locating, setLocating] = useState(false);
+  const [allPeople, setAllPeople] = useState(false);
   const npcs = sortPeopleFor(list<NpcData>('npcs', 'npc'), company);
-  const placeState = target?.kind === 'place' ? state.map.places[target.place.id] : undefined;
+  const shownPeople = allPeople ? npcs : npcs.filter((n, i) => i < PEOPLE_SHOWN || npcIds.includes(n.id));
+  // Mismo lugar que usará registerVisit (un lugar del catálogo ya conocido, aunque se haya borrado, no vuelve a dar XP).
+  const placeState =
+    target?.kind === 'place' ? state.map.places[target.place.id] : target?.kind === 'catalog' ? state.map.places[state.map.catalog[target.place.id]?.placeId ?? catalogPlaceEntityId(target.place.id)] : undefined;
   const first = !!target && !placeState?.discoveredOn;
   const name = target ? (target.kind === 'new' ? target.name : target.kind === 'place' ? target.place.data.name : target.place.name) : '';
   const sub = target ? (target.kind === 'place' ? whereText(target.place.data) : target.kind === 'catalog' ? whereText(target.place) : 'Lugar nuevo') : '';
@@ -221,7 +229,12 @@ export function VisitForm({
       </Field>
       {npcs.length > 0 && company && company !== 'solo' && (
         <Field label="¿Quiénes? (opcional)">
-          <MultiChips value={npcIds} onChange={setNpcIds} options={npcs.slice(0, 14).map((n) => ({ value: n.id, label: n.data.name }))} />
+          <MultiChips value={npcIds} onChange={setNpcIds} options={shownPeople.map((n) => ({ value: n.id, label: n.data.name }))} />
+          {!allPeople && npcs.length > shownPeople.length && (
+            <button type="button" className="btn sm ghost" style={{ marginTop: 6 }} onClick={() => setAllPeople(true)}>
+              Ver todas ({npcs.length})
+            </button>
+          )}
         </Field>
       )}
       <Field label="¿Qué tal estuvo? (opcional)">
@@ -274,7 +287,9 @@ export function PlaceForm({ initial, layer, onClose, onSaved }: { initial?: Enti
   const ids = new Set(mine.map((p) => p.id));
   const npcs = list<NpcData>('npcs', 'npc');
   const types = lay === 'empresa' ? EMPRESA_PLACE_TYPES : VIDA_PLACE_TYPES;
-  const catHits = !initial && lay === 'vida' && !d.catalogId && d.name.trim().length >= 3 ? searchMapCatalog(d.name, 3).filter((c) => !ids.has(state.map.catalog[c.id]?.placeId ?? catalogPlaceEntityId(c.id))) : [];
+  // También al editar: así un lugar viejo (sin liga) se puede ligar a su lugar emblemático y contar en sus colecciones.
+  const catHits = lay === 'vida' && !d.catalogId && d.name.trim().length >= 3 ? searchMapCatalog(d.name, 3).filter((c) => !ids.has(state.map.catalog[c.id]?.placeId ?? catalogPlaceEntityId(c.id))) : [];
+  const shortLink = !parseMapCoords(coordText) && /goo\.gl|maps\.app/i.test(coordText);
   const start: MapViewState = hasCoords(d) ? { lat: d.lat!, lng: d.lng!, z: 15 } : (() => {
     const ref = mine.find((p) => hasCoords(p.data) && (!d.city || mapNormalize(p.data.city ?? '') === mapNormalize(d.city)));
     return ref ? { lat: ref.data.lat!, lng: ref.data.lng!, z: 13 } : { ...GDL_CENTER, z: 12 };
@@ -302,6 +317,9 @@ export function PlaceForm({ initial, layer, onClose, onSaved }: { initial?: Enti
       data.lat = null;
       data.lng = null;
     }
+    // Un lugar ligado al catálogo solo por su nombre guarda la liga (si lo renombras, sigue contando).
+    const nameLink = initial && !data.catalogId ? catalogIdOfPlace(initial.id, initial.data) : null;
+    if (nameLink) data.catalogId = nameLink;
     const id = initial?.id ?? (d.catalogId ? catalogPlaceEntityId(d.catalogId) : `place-${newId().replace(/-/g, '').slice(0, 10)}`);
     saveEntity<PlaceData>({ id, module: 'map', kind: 'place', data });
     toast(initial ? 'Lugar actualizado' : `"${data.name}" quedó en tu mapa`);
@@ -346,15 +364,19 @@ export function PlaceForm({ initial, layer, onClose, onSaved }: { initial?: Enti
               type="button"
               className="mapa-pick"
               onClick={() => {
-                setD({ ...placeFromCatalog(c), notes: d.notes });
+                // Al editar se liga sin perder lo tuyo (mismo id, nombre, notas y ubicación).
+                const next = initial ? { ...d, catalogId: c.id, lat: d.lat ?? c.lat, lng: d.lng ?? c.lng, city: d.city || c.city, zone: d.zone || c.zone } : { ...placeFromCatalog(c), notes: d.notes };
+                setD(next);
                 setMapOpen(true);
-                setFocus({ lat: c.lat, lng: c.lng, z: 15, key: Date.now() });
+                setFocus({ lat: next.lat!, lng: next.lng!, z: 15, key: Date.now() });
               }}
             >
               <Icon name="compass" width={18} />
               <span className="grow">
                 <b>{c.name}</b>
-                <small>{whereText(c)} · usar datos del lugar emblemático</small>
+                <small>
+                  {whereText(c)} · {initial ? 'es este lugar emblemático: cuenta en sus colecciones' : 'usar datos del lugar emblemático'}
+                </small>
               </span>
             </button>
           ))}
@@ -434,6 +456,7 @@ export function PlaceForm({ initial, layer, onClose, onSaved }: { initial?: Enti
             aria-label="Coordenadas o liga de Google Maps"
           />
         </div>
+        {shortLink && <p className="tiny muted">Las ligas cortas de Google Maps no traen coordenadas. Ábrela en el navegador y pega la liga completa, o las coordenadas.</p>}
       </Field>
 
       {lay === 'empresa' && (

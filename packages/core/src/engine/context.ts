@@ -55,6 +55,8 @@ export interface Ctx {
   events: GameEvent[];
   byType: Map<string, GameEvent[]>;
   entities: Entity[];
+  /** Todas las entidades, también las borradas (p. ej. para no perder la liga de un lugar borrado). */
+  allEntities?: Entity[];
   entityById: Map<string, Entity>;
   settings: SettingsData;
   xp: XpEntry[];

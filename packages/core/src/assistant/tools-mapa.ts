@@ -85,20 +85,33 @@ function resolvePlace(
   }
   const n = mapNormalize(q);
   if (!n) throw new ToolError('Indica el lugar (nombre o id).');
-  const exact = mine.filter((p) => mapNormalize(p.data.name) === n);
+  // "la oficina" = "Oficina": sin artículo al inicio.
+  const bare = n.replace(/^(?:el|la|los|las|al|del)\s+/, '');
+  const exact = mine.filter((p) => {
+    const pn = mapNormalize(p.data.name);
+    return pn === n || pn === bare;
+  });
   if (exact.length === 1) return { entity: exact[0], isNew: false };
   if (exact.length > 1) throw new ToolError(`Hay varios lugares llamados "${q}": ${exact.map((p) => `${p.data.name} (${where(p.data) || 'sin ciudad'}) [${p.id}]`).join('; ')}. Usa el id.`);
-  const partial = mine.filter((p) => {
-    const pn = mapNormalize(p.data.name);
-    return n.length >= 4 && (pn.includes(n) || (pn.length >= 4 && n.includes(pn)));
-  });
+  // Parcial solo en una dirección: lo escrito es parte del nombre guardado ("Palreal" → "Café Palreal"). Al revés
+  // no: "Casa Bariachi" o "Casa de mi abuela" son lugares nuevos aunque ya exista "Casa".
+  const partial = bare.length >= 4 ? mine.filter((p) => mapNormalize(p.data.name).includes(bare)) : [];
   if (partial.length === 1) return { entity: partial[0], isNew: false };
   if (partial.length > 1) throw new ToolError(`"${q}" coincide con varios lugares: ${partial.map((p) => `${p.data.name} [${p.id}]`).join('; ')}. Usa el id.`);
+  // Catálogo de Jalisco: se liga solo si lo escrito es el nombre, su inicio o palabras completas de él
+  // ("Akron" → "Estadio Akron"); "Tequila Grill" no es el pueblo de Tequila.
   const cat = searchMapCatalog(q, 4);
-  const strong = cat.filter((c) => mapNormalize(c.name) === n || mapNormalize(c.name).startsWith(n) || n.includes(mapNormalize(c.name)));
-  const pick = strong.length === 1 ? strong[0] : cat.length === 1 ? cat[0] : null;
-  if (pick) return fromCatalog(catalog, pick) ?? newPlace(store, placeFromCatalog(pick), catalogPlaceEntityId(pick.id));
-  if (cat.length > 1 && strong.length > 1) throw new ToolError(`"${q}" puede ser: ${cat.map((c) => `${c.name} [${c.id}]`).join('; ')}. Usa el id del catálogo.`);
+  const strong = cat.filter((c) => {
+    const cn = mapNormalize(c.name);
+    return [n, bare].some((x) => cn.startsWith(x) || (x.length >= 4 && ` ${cn} `.includes(` ${x} `)));
+  });
+  if (strong.length === 1) return fromCatalog(catalog, strong[0]) ?? newPlace(store, placeFromCatalog(strong[0]), catalogPlaceEntityId(strong[0].id));
+  if (strong.length > 1) throw new ToolError(`"${q}" puede ser: ${strong.map((c) => `${c.name} [${c.id}]`).join('; ')}. Usa el id del catálogo.`);
+  const saysNew = !!(create?.tipo || create?.ciudad || create?.zona);
+  if (cat.length && !saysNew)
+    throw new ToolError(
+      `No encontré "${q}" tal cual. ¿Es alguno de estos lugares emblemáticos? ${cat.map((c) => `${c.name} [${c.id}]`).join('; ')}. Si es uno, usa su id; si es un lugar nuevo, manda también tipo o ciudad.`,
+    );
   if (!create) throw new ToolError(`No encontré "${q}" en el mapa. Consulta ver_mapa o créalo con guardar_lugar.`);
   const placeType: PlaceType = create.tipo ?? 'lugar';
   const layer: PlaceLayer = create.capa ?? ((EMPRESA_PLACE_TYPES as readonly string[]).includes(placeType) ? 'empresa' : 'vida');
@@ -382,6 +395,9 @@ const guardarLugar = tool({
     if (i.personas) data.npcIds = resolvePeople(catalog, i.personas);
     if (i.activo !== undefined) data.active = i.activo;
     if (i.desde !== undefined) data.since = i.desde;
+    // Un lugar viejo ligado al catálogo solo por su nombre guarda la liga (si se renombra, sigue contando).
+    const nameLink = existing && !cat && !data.catalogId ? catalogIdOfPlace(existing.id, existing.data) : null;
+    if (nameLink) data.catalogId = nameLink;
     if (cat) {
       data.catalogId = cat.id;
       if (data.lat == null || data.lng == null) {

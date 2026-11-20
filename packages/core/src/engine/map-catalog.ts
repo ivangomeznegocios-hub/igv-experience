@@ -1,4 +1,4 @@
-import type { MissionSize, PlaceData, PlaceType } from '../types';
+import { placeLayer, type MissionSize, type PlaceData, type PlaceType } from '../types';
 
 /**
  * Catálogo fijo de lugares emblemáticos de Guadalajara y Jalisco (coordenadas aproximadas). En el mapa salen
@@ -126,10 +126,18 @@ export function catalogPlaceEntityId(catalogId: string): string {
   return `place-${catalogId}`;
 }
 
-/** Lugar del catálogo fijo al que corresponde un lugar (por `catalogId` o por su id `place-<id>`). */
-export function catalogIdOfPlace(placeId: string, data?: Pick<PlaceData, 'catalogId'> | null): string | null {
+/** Nombre normalizado → id del catálogo fijo. */
+const CATALOG_ID_BY_NAME: ReadonlyMap<string, string> = new Map(MAP_CATALOG.map((p) => [mapNormalize(p.name), p.id]));
+
+/**
+ * Lugar del catálogo fijo al que corresponde un lugar: por `catalogId`, por su id `place-<id>` o, si no trae
+ * ninguno (lugares guardados antes del catálogo, con id al azar), porque se llama exactamente igual que uno
+ * del catálogo (solo en la capa vida). Así no se duplica ni vuelve a dar la XP de primera visita.
+ */
+export function catalogIdOfPlace(placeId: string, data?: Pick<PlaceData, 'catalogId' | 'name' | 'layer' | 'placeType'> | null): string | null {
   if (data?.catalogId && MAP_CATALOG_BY_ID.has(data.catalogId)) return data.catalogId;
   if (placeId.startsWith('place-') && MAP_CATALOG_BY_ID.has(placeId.slice(6))) return placeId.slice(6);
+  if (data?.name && placeLayer(data) === 'vida') return CATALOG_ID_BY_NAME.get(mapNormalize(data.name)) ?? null;
   return null;
 }
 
@@ -184,12 +192,19 @@ export function validMapCoords(lat: unknown, lng: unknown): boolean {
 }
 
 /**
- * Lee coordenadas de texto: "20.6767, -103.3475" o una liga de Google Maps (…/@20.67,-103.34,15z, ?q=… o
- * ?query=…). Devuelve null si no encuentra un par válido.
+ * Lee coordenadas de texto: "20.6767, -103.3475", "geo:20.67,-103.34" o una liga de Google Maps (el pin
+ * …!3d20.67!4d-103.34 primero; si no, …/@20.67,-103.34,15z, que es el centro de la vista, ?q=… o ?query=…).
+ * Devuelve null si no encuentra un par válido (p. ej. ligas cortas maps.app.goo.gl, que no traen coordenadas).
  */
 export function parseMapCoords(text: string): { lat: number; lng: number } | null {
   const t = text.trim();
-  const patterns = [/@(-?\d{1,3}\.\d+),\s*(-?\d{1,3}\.\d+)/, /[?&](?:q|query|ll|center)=(-?\d{1,3}\.\d+)(?:,|%2C)\s*(-?\d{1,3}\.\d+)/i, /^(-?\d{1,3}(?:\.\d+)?)\s*[, ]\s*(-?\d{1,3}(?:\.\d+)?)$/];
+  const patterns = [
+    /!3d(-?\d{1,3}\.\d+)!4d(-?\d{1,3}\.\d+)/,
+    /^(?:geo|loc):\s*(-?\d{1,3}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)/i,
+    /@(-?\d{1,3}\.\d+),\s*(-?\d{1,3}\.\d+)/,
+    /[?&](?:q|query|ll|center)=(-?\d{1,3}\.\d+)(?:,|%2C)\s*(-?\d{1,3}\.\d+)/i,
+    /^(-?\d{1,3}(?:\.\d+)?)\s*[, ]\s*(-?\d{1,3}(?:\.\d+)?)$/,
+  ];
   for (const re of patterns) {
     const m = t.match(re);
     if (!m) continue;

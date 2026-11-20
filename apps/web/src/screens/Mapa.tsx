@@ -233,6 +233,7 @@ export default function Mapa() {
       {selCatalog && (
         <CatalogCard
           place={selCatalog}
+          knownOn={state.map.catalog[selCatalog.id]?.discoveredOn ?? null}
           onVisit={() => setVisit({ preset: { kind: 'catalog', place: selCatalog } })}
           onWish={() => {
             const id = saveWish(selCatalog, state);
@@ -441,7 +442,7 @@ function PlaceCard({ place, byId, today, onVisit, onEdit, onClose }: { place: En
   );
 }
 
-function CatalogCard({ place, onVisit, onWish, onClose }: { place: CatalogPlace; onVisit: () => void; onWish: () => void; onClose: () => void }) {
+function CatalogCard({ place, knownOn, onVisit, onWish, onClose }: { place: CatalogPlace; knownOn: string | null; onVisit: () => void; onWish: () => void; onClose: () => void }) {
   const cols = MAP_COLLECTIONS.filter((c) => c.placeIds.includes(place.id));
   return (
     <div className="card mapa-sel">
@@ -449,7 +450,7 @@ function CatalogCard({ place, onVisit, onWish, onClose }: { place: CatalogPlace;
         <div className="grow">
           <div className="row wrap" style={{ gap: 6, marginBottom: 6 }}>
             <Badge>{PLACE_TYPE_NAMES[place.placeType]}</Badge>
-            <Badge>Por conocer</Badge>
+            {knownOn ? <Badge tone={STATUS_TONE.descubierto}>{PLACE_STATUS_NAMES.descubierto}</Badge> : <Badge>{PLACE_STATUS_NAMES.inexplorado}</Badge>}
           </div>
           <h2 style={{ margin: 0 }}>{place.name}</h2>
           <div className="small muted">{whereText(place)}</div>
@@ -459,7 +460,7 @@ function CatalogCard({ place, onVisit, onWish, onClose }: { place: CatalogPlace;
         </button>
       </div>
       <div className="tiny muted" style={{ marginTop: 8 }}>
-        Primera visita: +{GAME_CONFIG.rewards.discovery} XP · Cuenta para {cols.map((c) => c.name).join(' y ')}
+        {knownOn ? `Conocido desde ${fmtDate(knownOn, true)}` : `Primera visita: +${GAME_CONFIG.rewards.discovery} XP`} · Cuenta para {cols.map((c) => c.name).join(' y ')}
       </div>
       <div className="row wrap" style={{ gap: 8, marginTop: 12 }}>
         <button className="btn primary" onClick={onVisit}>
