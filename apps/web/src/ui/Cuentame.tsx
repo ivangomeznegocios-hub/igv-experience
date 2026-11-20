@@ -85,20 +85,23 @@ type View =
   | { kind: 'input' }
   | { kind: 'working' }
   | { kind: 'coach'; answer: string; actions: (CoachAction & { undone?: boolean })[] }
-  | { kind: 'local'; result: DictationResult; noteId: string; reason: string | null; asOf: string; pending: boolean };
+  | { kind: 'local'; result: DictationResult; noteId: string; reason: string | null; asOf: string; pending: boolean; uncertain?: boolean };
 
 function CuentameSheet({ initial, onClose }: { initial: Opts; onClose: () => void }) {
   const { state, entities, events } = useGame();
   const coach = useCoachEnabled();
   const [text, setText] = useState(initial.text ?? '');
+  // Copia síncrona del texto: cada `setText` la actualiza en el mismo momento (ver el dictado y `save`).
   const textRef = useRef(text);
-  textRef.current = text;
   const [usedVoice, setUsedVoice] = useState(!!initial.listen);
   const [view, setView] = useState<View>({ kind: 'input' });
   const ctxToday = useVoiceContext();
   const voice = useDictation((t) => {
     setUsedVoice(true);
-    setText((prev) => appendSpeech(prev, t));
+    // El ref se actualiza aquí mismo (no hasta el siguiente render): `save()` lo lee justo después de `flush()`,
+    // y lo último que dijiste puede llegar en ese momento.
+    textRef.current = appendSpeech(textRef.current, t);
+    setText(textRef.current);
   }, shared);
   const supported = voiceSupported();
 
@@ -127,7 +130,11 @@ function CuentameSheet({ initial, onClose }: { initial: Opts; onClose: () => voi
           setView({ kind: 'coach', answer: `${err.message}\nLo de abajo sí quedó. Tu nota sigue en "Notas por procesar".`, actions: err.partial });
           return;
         }
-        setView({ kind: 'local', result: parseDictation(t, ctx), noteId: n.id, reason: `No pude hablar con el Coach (${err.message}). Te propongo esto:`, asOf: date, pending: true });
+        // Si no se pudo revisar qué alcanzó a hacer, se avisa y no se ofrece "Guardar todo" (para no duplicar).
+        const reason = err.uncertain
+          ? `No pude hablar con el Coach (${err.message}). Puede que ya haya registrado parte: revisa tu día antes de guardar. Esto entendí:`
+          : `No pude hablar con el Coach (${err.message}). Te propongo esto:`;
+        setView({ kind: 'local', result: parseDictation(t, ctx), noteId: n.id, reason, asOf: date, pending: true, uncertain: err.uncertain });
         return;
       }
     }
@@ -145,6 +152,7 @@ function CuentameSheet({ initial, onClose }: { initial: Opts; onClose: () => voi
   };
 
   const reset = () => {
+    textRef.current = '';
     setText('');
     setUsedVoice(false);
     setView({ kind: 'input' });
@@ -190,7 +198,10 @@ function CuentameSheet({ initial, onClose }: { initial: Opts; onClose: () => voi
             className="input vz-text-input"
             rows={4}
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => {
+              textRef.current = e.target.value;
+              setText(e.target.value);
+            }}
             placeholder="Ej.: “Fui al gym, gasté 200 en comida y hablé con mi mamá”"
             aria-label="Lo que dijiste (puedes corregirlo)"
             autoFocus={!supported}
@@ -261,7 +272,7 @@ function LocalResult({ view, onSaved, onMore, onClose }: { view: Extract<View, {
           <div className="eyebrow" style={{ marginBottom: 6 }}>
             Esto entendí · un toque para guardar
           </div>
-          <ProposalList proposals={result.proposals} onSaved={onSaved} />
+          <ProposalList proposals={result.proposals} onSaved={onSaved} saveAll={!view.uncertain} />
         </>
       ) : (
         <p className="small">No encontré nada que registrar.</p>

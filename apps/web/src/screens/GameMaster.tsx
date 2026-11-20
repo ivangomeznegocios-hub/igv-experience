@@ -103,7 +103,15 @@ function Registrar() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [res, setRes] = useState<GmParseResult | null>(null);
-  const voice = useVoiceInput((t) => setText((prev) => appendSpeech(prev, t)));
+  // Cada lectura monta una lista nueva: sus claves son posicionales (gm0, gm1…) y con el mismo número de
+  // propuestas la lista anterior se quedaría con sus tarjetas viejas.
+  const [parseId, setParseId] = useState(0);
+  // Copia síncrona del texto: lo último que dictaste llega durante `flush()`, antes del siguiente render.
+  const textRef = useRef(text);
+  const voice = useVoiceInput((t) => {
+    textRef.current = appendSpeech(textRef.current, t);
+    setText(textRef.current);
+  });
   const ctx = useVoiceContext();
   const proposals = useGmProposals(res?.proposals ?? null, ctx);
 
@@ -122,11 +130,13 @@ function Registrar() {
 
   const parse = async () => {
     if (voice.listening) await voice.flush();
-    if (!text.trim() || busy) return;
+    const t = textRef.current.trim();
+    if (!t || busy) return;
     setBusy(true);
     setErr(null);
     try {
-      setRes(await api.gmParse({ text: text.trim(), today: state.today, catalog: catalog() }));
+      setRes(await api.gmParse({ text: t, today: state.today, catalog: catalog() }));
+      setParseId((n) => n + 1);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Error');
     } finally {
@@ -140,7 +150,16 @@ function Registrar() {
         <p className="small muted" style={{ marginTop: 0 }}>
           Escríbelo o díctalo por voz: “Hoy fui al gym, cerré una venta de $5,000 con Grupo Norte y hablé con mi mamá”. Te propongo los registros y tú confirmas.
         </p>
-        <textarea className="input" rows={4} value={text} onChange={(e) => setText(e.target.value)} placeholder="¿Qué hiciste hoy?" />
+        <textarea
+          className="input"
+          rows={4}
+          value={text}
+          onChange={(e) => {
+            textRef.current = e.target.value;
+            setText(e.target.value);
+          }}
+          placeholder="¿Qué hiciste hoy?"
+        />
         {voice.interim && <div className="vz-interim">{voice.interim}…</div>}
         <div className="row" style={{ marginTop: 8, gap: 8 }}>
           {voice.supported && (
@@ -161,9 +180,13 @@ function Registrar() {
           </div>
           {proposals.length === 0 && <div className="small muted">No encontré nada que registrar.</div>}
           <ProposalList
+            key={parseId}
             proposals={proposals}
             onSaved={(n) => {
-              if (n > 0) setText('');
+              if (n > 0) {
+                textRef.current = '';
+                setText('');
+              }
             }}
           />
         </div>

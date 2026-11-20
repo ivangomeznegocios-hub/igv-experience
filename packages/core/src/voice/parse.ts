@@ -400,6 +400,10 @@ function standalone(fr: Fragment, prev: Fragment): boolean {
   // "…200 en comida y 150 de uber": un monto con concepto es otro registro.
   const num = readNumber(meaningful, 0);
   if (num && !num.bareOne && meaningful.length > num.end) return true;
+  // "ayer gasté 200 y hoy 300": un monto con su propio día también. ("el lunes 500" no: el día de la semana
+  // es ambiguo y solo, sin verbo, se leería como pendiente.)
+  const dated = DAY_WORDS.has(first.n) ? readNumber(meaningful, 1) : null;
+  if (dated && !dated.bareOne) return true;
   if (/\b(?:manana|pasado manana|descanso|tengo que|hay que|pendiente)\b/.test(fold(fr.text))) return true;
   return false;
 }
@@ -411,6 +415,7 @@ function standalone(fr: Fragment, prev: Fragment): boolean {
 type DateMarker = { kind: 'offset'; days: number; anoche?: boolean } | { kind: 'weekday'; wd: number };
 
 const WEEKDAYS: Record<string, number> = { lunes: 0, martes: 1, miercoles: 2, jueves: 3, viernes: 4, sabado: 5, domingo: 6 };
+const DAY_WORDS = new Set(['hoy', 'ayer', 'antier', 'anteayer', 'anoche']);
 const NUM_SMALL: Record<string, number> = { un: 1, uno: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10 };
 
 /** Encuentra "hoy", "ayer", "antier", "anoche", "mañana", "hace 3 días", "el lunes"… y los índices de esas palabras. */
@@ -569,6 +574,13 @@ function findPeople(tokens: Token[], people: VoicePerson[]): { hits: PersonHit[]
 const EXPENSE_RE = /\b(?:gaste|me gaste|pague|compre|me costo|costo|costaron|salio en|me salio|me cobraron|cobraron|se fue|se fueron|se me fue|se me fueron|done|di de)\b/;
 const INCOME_RE =
   /\b(?:cobre|me pagaron|pagaron|me depositaron|depositaron|me transfirieron|transfirieron|me cayeron|cayeron|vendi|facture|gane|me entraron|entraron|recibi|ingresaron|cerre (?:una venta|un trato|un contrato|un negocio|un cliente)|me dieron)\b/;
+/**
+ * Dinero que alguien te dio (regalo, préstamo, reembolso, "mi papá me pasó mil pesos"): es ingreso, no gasto.
+ * Va después de los verbos de gasto ("me dio hambre y gasté 100" es gasto).
+ */
+const INCOMING_RE =
+  /\b(?:me|nos) (?:regalaron|regalo|prestaron|presto|devolvieron|devolvio|reembolsaron|reembolso|dio|dieron|pasaron|mandaron|mando|enviaron|envio|deposito|transfirio)\b|(?<!\bse )\bme paso\b/;
+const INCOMING_VERBS = new Set('regalaron regalo prestaron presto devolvieron devolvio reembolsaron reembolso dio dieron paso pasaron mandaron mando enviaron envio deposito transfirio'.split(' '));
 const CURRENCY = new Set(['peso', 'pesos', 'varo', 'varos', 'baro', 'baros', 'mxn', 'mx', 'dolares', 'dolar', 'usd', 'lucas', 'luca']);
 const NOT_MONEY_UNITS = new Set(['hora', 'horas', 'hrs', 'hr', 'h', 'kilo', 'kilos', 'kg', 'km', 'kms', 'kilometros', 'minuto', 'minutos', 'min', 'mins', 'vez', 'veces', 'personas', 'dias', 'dia', 'paginas', 'pagina', 'litros', 'piezas', 'cajas', 'semanas', 'meses', 'anos', 'repeticiones', 'series']);
 const EDGE_WORDS = new Set(['en', 'de', 'del', 'para', 'por', 'la', 'el', 'los', 'las', 'un', 'una', 'mi', 'mis', 'a', 'al', 'que', 'como', 'y', 'me', 'se', 'le', 'lo', 'unos', 'unas', 'fue', 'fueron', 'son', 'total']);
@@ -702,13 +714,30 @@ export function cleanTitle(text: string): string {
 // Analizador
 // ---------------------------------------------------------------------------------------------
 
-const NEGATIVE_RE = /^(?:no|nunca|ni|tampoco)\b|\b(?:no pude|no fui|no hice|no alcance|no me dio tiempo|se me olvido|olvide)\b|\b(?:me fue mal|nos fue mal|salio mal|me equivoque|fracase|falle|la regue)\b/;
+const NEGATIVE_RE = new RegExp(
+  [
+    /^(?:no|nunca|ni|tampoco)\b/.source,
+    /\b(?:no pude|no fui|no hice|no alcance|no me dio tiempo|se me olvido|olvide)\b/.source,
+    /\b(?:me fue mal|nos fue mal|salio mal|me equivoque|fracase|falle|la regue)\b/.source,
+    // A media frase: "todavía no me pagan…", "el cliente no me pagó…", "me cancelaron la junta".
+    /\b(?:todavia|aun) no\b/.source,
+    /\bno (?:me |nos |le |les )?(?:pag\w*|deposit\w*|transfir\w*|cay\w*|lleg\w*|dio|dieron|entro|entraron)\b/.source,
+    /\b(?:me|nos) cancelaron\b|\bse cancelo\b/.source,
+    // Tiempo perdido no es algo que hiciste: "perdí 3 horas en redes", "perdí la tarde".
+    /\bperdi (?:(?:el|mucho|todo el|toda la|la) )?(?:tiempo|dia|manana|tarde|noche)\b|\bperdi (?:\S+ ){1,2}(?:horas?|hrs?|minutos?|min)\b/.source,
+  ].join('|'),
+);
 const TODO_RE =
   /^(?:(?:manana|pasado manana)\s+)?(?:tengo que|hay que|debo(?: de)?|necesito|me falta|voy a|vamos a|pendiente:?|recordar|recuerdame|recuerda|no olvidar|no se me olvide|no olvides|que no se me olvide|agendar|agendame|agenda|apunta|anota)\s+(?:que\s+|de\s+)?/;
 const REST_RE = /\bdia de descanso\b|\bme (?:tomo|tome) el dia\b|^(?:(?:hoy|ayer|antier) )?(?:fue |es |sera )?(?:mi |un )?(?:dia de )?descans(?:o|e|ando)(?: todo el dia| hoy| ayer)?$|^descanso(?: hoy)?$/;
 const SLEEP_WORDS = new Set(['dormi', 'dormido', 'dormimos', 'durmiendo']);
 const WEIGHT_WORDS = new Set(['peso', 'pese', 'pesaba', 'pesando', 'bascula']);
 const KG_WORDS = new Set(['kilos', 'kilo', 'kg', 'kgs', 'kilogramos']);
+/** Cargas en el gym ("sentadilla con 80 kilos", "levanté 100 kilos en press"): no son tu peso corporal. */
+const LIFT_RE =
+  /(?<!\b(?:me|nos) )\blevant\w*|\bcarg\w*|\bsentadilla\w*|\bpress\b|\bprensa\b|\bpeso muerto\b|\bbanca\b|\bmancuerna\w*|\bpesas\b|\bbarra\b|\bseries\b|\breps\b|\brepeticion\w*|\bjalon\w*|\bremo\b|\bcurl\b|\bdesplante\w*|\bzancada\w*/;
+/** Una siesta o un rato en la tarde no es tu noche de sueño (registrarla pisaría el check-in de la mañana). */
+const NAP_RE = /\bsiesta|\bpestan|\b(?:en|por) la tarde\b/;
 /** Palabras que no van en el concepto de un gasto o ingreso. */
 const MONEY_NOISE = new Set(['me', 'pague', 'gaste', 'cerre', 'cerramos', 'cobre']);
 const DEAL_RE = /\bcerr\w* (?:(?:una?|el|la) )?(?:venta|trato|contrato|negocio|cliente)\b/;
@@ -794,7 +823,9 @@ export function parseDictation(text: string, ctx: VoiceContext, opts: ParseOptio
         let hours = num.value;
         const fr = readFraction(body, num.end, ['horas', 'hora', 'hrs', 'hr', 'h']);
         if (fr) hours += fr.value;
-        if (hours >= 1 && hours <= 16) {
+        // "dormí una siesta de una hora", "me dormí una hora en la tarde": no es la noche.
+        const nap = hours < 4 && NAP_RE.test(f);
+        if (hours >= 1 && hours <= 16 && !nap) {
           proposals.push({ key: key(), kind: 'sleep', date: resolveDate(marker, ctx.today, 'sleep'), source: clause, hours: Math.round(hours * 100) / 100 });
           continue;
         }
@@ -807,7 +838,8 @@ export function parseDictation(text: string, ctx: VoiceContext, opts: ParseOptio
     const lead = body.findIndex((t) => !FILLERS.has(t.n) && t.n !== 'yo' && t.n !== 'me');
     const wi = body.findIndex((t, i) => WEIGHT_WORDS.has(t.n) && (i === lead || ['la', 'mi', 'ya', 'me'].includes(body[i - 1]?.n ?? '')));
     const kgIdx = body.findIndex((t, i) => KG_WORDS.has(t.n) && i > 0);
-    if (wi >= 0 || (kgIdx > 0 && !EXPENSE_RE.test(f) && !INCOME_RE.test(f))) {
+    // Una carga en el gym sigue de largo (es entrenamiento, no tu peso).
+    if (!LIFT_RE.test(f) && (wi >= 0 || (kgIdx > 0 && !EXPENSE_RE.test(f) && !INCOME_RE.test(f)))) {
       const num = wi >= 0 ? findNumber(body, wi + 1, Math.min(body.length, wi + 5)) : findNumber(body, Math.max(0, kgIdx - 6), kgIdx);
       if (num && !CURRENCY.has(body[num.end]?.n ?? '')) {
         let kg = num.value;
@@ -829,7 +861,9 @@ export function parseDictation(text: string, ctx: VoiceContext, opts: ParseOptio
     if (!money && amount) {
       const first = body.findIndex((t) => !FILLERS.has(t.n));
       const hasCurrency = amount.dollar || CURRENCY.has(body[amount.end]?.n ?? '');
-      if (lastMoney && amount.start === first) money = lastMoney;
+      // "me regalaron 500", "mi papá me pasó mil pesos": te lo dieron (con "me dio 2 consejos" no hay dinero).
+      if (INCOMING_RE.test(f) && (hasCurrency || amount.value >= 100)) money = 'income';
+      else if (lastMoney && amount.start === first) money = lastMoney;
       else if (hasCurrency) money = 'expense';
     }
     if (money && amount) {
@@ -837,7 +871,10 @@ export function parseDictation(text: string, ctx: VoiceContext, opts: ParseOptio
       for (let i = amount.start; i < amount.end; i++) drop.add(i);
       if (CURRENCY.has(body[amount.end]?.n ?? '')) drop.add(amount.end);
       const verbRe = money === 'income' ? INCOME_RE : EXPENSE_RE;
-      const conceptTokens = body.filter((t, i) => !drop.has(i) && !verbRe.test(t.n) && !FILLERS.has(t.n) && !CURRENCY.has(t.n) && !MONEY_NOISE.has(t.n));
+      // "me regalaron", "nos prestaron": el verbo no va en el concepto.
+      const incomingVerb = (t: Token, i: number) =>
+        money === 'income' && ((INCOMING_VERBS.has(t.n) && ['me', 'nos'].includes(body[i - 1]?.n ?? '')) || (t.n === 'nos' && INCOMING_VERBS.has(body[i + 1]?.n ?? '')));
+      const conceptTokens = body.filter((t, i) => !drop.has(i) && !verbRe.test(t.n) && !incomingVerb(t, i) && !FILLERS.has(t.n) && !CURRENCY.has(t.n) && !MONEY_NOISE.has(t.n));
       let words = conceptTokens.map((t) => t.raw);
       // "una venta de con Grupo Norte" → "venta con Grupo Norte"
       for (let i = 0; i < words.length - 1; i++) {

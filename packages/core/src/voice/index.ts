@@ -17,3 +17,4 @@ export {
   type VoiceProposal,
 } from './parse';
 export { parseSpanishNumber } from './text';
+export { voiceDuplicate } from './duplicates';

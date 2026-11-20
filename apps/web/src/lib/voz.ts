@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  REPEATABLE_KINDS,
   addDays,
   buildVoiceContext,
+  voiceDuplicate,
   type EventPayload,
   type GameEvent,
   type GameState,
   type VoiceContext,
   type VoiceProposal,
 } from '@igv/core';
-import { api, ApiError, type CoachAction } from '../data/api';
+import { api, ApiError, AuthError, type CoachAction } from '../data/api';
 import { addEvent, deleteEntity, getSyncInfo, sync, useGame, voidEvent } from '../data/store';
 import { complete, saveTodo, writeLesson } from './actions';
 import { uploadSnapshotNow } from './aiSnapshot';
@@ -76,17 +76,9 @@ export function undoApplied(a: Applied) {
   a.entities.forEach((id) => deleteEntity(id));
 }
 
-/** Si ya está registrado (para no duplicar), por qué. */
+/** Si ya está registrado (para no duplicar), por qué. La regla vive en @igv/core (`voiceDuplicate`). */
 export function duplicateReason(p: VoiceProposal, state: GameState, events: GameEvent[]): string | null {
-  if (p.kind === 'mission') {
-    const c = state.missions.completions[p.missionId];
-    if (!c) return null;
-    if (REPEATABLE_KINDS.has(p.missionKind)) return c.dates.includes(p.date) ? 'Ya estaba registrada ese día' : null;
-    return c.count > 0 ? 'Ya la habías completado' : null;
-  }
-  if (p.kind === 'rest') return events.some((e) => !e.voidedAt && e.type === 'rest_day.marked' && e.localDate === p.date) ? 'Ya estaba marcado' : null;
-  if (p.kind === 'person') return events.some((e) => !e.voidedAt && e.type === 'npc.interaction' && e.localDate === p.date && e.payload?.npcId === p.npcId) ? 'Ya estaba registrado ese día' : null;
-  return null;
+  return voiceDuplicate(p, state, events);
 }
 
 /** Datos mínimos para guardar la propuesta. */
@@ -174,8 +166,36 @@ export interface CoachDictationResult {
 }
 
 export class CoachUnavailable extends Error {
-  constructor(message: string, public readonly partial: CoachAction[] = []) {
+  /**
+   * `partial` = lo que el Coach alcanzó a registrar. `uncertain` = la respuesta se perdió y no se pudo revisar la
+   * bitácora: puede que el Coach sí haya registrado algo.
+   */
+  constructor(message: string, public readonly partial: CoachAction[] = [], public readonly uncertain = false) {
     super(message);
+  }
+}
+
+/** Acciones del Coach que esta app ya mostró (para no confundirlas con las de un dictado que se cortó). */
+const shownCoachActions = new Set<string>();
+/** Margen por si el reloj del teléfono y el del servidor no coinciden. */
+const CLOCK_MARGIN_MS = 120_000;
+
+/**
+ * La respuesta del Coach se perdió (sin conexión, la app pasó a segundo plano, error de Cloudflare), pero cada
+ * herramienta guarda en cuanto corre: lo que alcanzó a registrar se busca en la bitácora. null = no se pudo revisar.
+ */
+async function recoverCoachActions(since: number): Promise<CoachAction[] | null> {
+  try {
+    const { items } = await api.aiActivity();
+    const found = items
+      .filter((i) => i.source === 'Coach' && !i.undoneAt && i.at >= since - CLOCK_MARGIN_MS && !shownCoachActions.has(i.id))
+      .reverse() // la bitácora viene de lo más reciente a lo más viejo
+      .map((i) => ({ tool: i.tool, summary: i.summary, activityId: i.id }));
+    found.forEach((a) => shownCoachActions.add(a.activityId));
+    await sync();
+    return found;
+  } catch {
+    return null;
   }
 }
 
@@ -188,15 +208,30 @@ export async function sendDictationToCoach(text: string, ctx: VoiceContext, stat
     noteDate && noteDate !== state.today
       ? `(Nota del ${noteDate}: "hoy", "ayer" y similares son relativos a ese día, no a hoy.)\n${text}`
       : text;
+  const startedAt = Date.now();
   try {
     await uploadSnapshotNow(state, entities);
     const res = await api.gmAsk({ question: question.slice(0, 4000), history: [], mode: 'dictado', context: coachCatalog(ctx) });
-    if (res.actions?.length) await sync();
-    return { answer: res.answer, actions: res.actions ?? [] };
+    const actions = res.actions ?? [];
+    actions.forEach((a) => shownCoachActions.add(a.activityId));
+    if (actions.length) await sync();
+    return { answer: res.answer, actions };
   } catch (e) {
-    const partial = e instanceof ApiError ? ((e.body as { actions?: CoachAction[] } | undefined)?.actions ?? []) : [];
-    if (partial.length) await sync();
-    throw new CoachUnavailable(e instanceof Error ? e.message : 'No pude hablar con el Coach.', partial);
+    // fetch falla con TypeError ("Failed to fetch" / "Load failed") cuando se cae la conexión.
+    const network = e instanceof TypeError && /fetch|load failed|network/i.test(e.message);
+    const message = network ? 'Se cortó la conexión' : e instanceof Error ? e.message : 'No pude hablar con el Coach.';
+    // El servidor respondió con su lista de lo que alcanzó a registrar: esa es la buena.
+    const listed = e instanceof ApiError ? (e.body as { actions?: unknown } | undefined)?.actions : undefined;
+    if (Array.isArray(listed)) {
+      const partial = listed as CoachAction[];
+      partial.forEach((a) => shownCoachActions.add(a.activityId));
+      if (partial.length) await sync();
+      throw new CoachUnavailable(message, partial);
+    }
+    // Sin sesión de Access la petición ni llegó al Coach.
+    if (e instanceof AuthError) throw new CoachUnavailable(message);
+    const recovered = await recoverCoachActions(startedAt);
+    throw new CoachUnavailable(message, recovered ?? [], recovered === null);
   }
 }
 

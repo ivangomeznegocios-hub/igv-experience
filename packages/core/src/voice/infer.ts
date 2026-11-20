@@ -92,12 +92,14 @@ const BIG = [
   /\b(?:aprobe|pase) (?:(?:el|mi) )?examen/,
   /\b(?:consegui|firme) (?:(?:un|una|el|la) )?(?:cliente|contrato|trabajo|chamba|inversion)/,
 ];
-/** Esfuerzo real (~1 hora o más). */
+/**
+ * Esfuerzo real por la actividad o el resultado. Nunca por la duración: "2 horas" no hace media a una misión
+ * (regla de oro 3: XP por acciones y resultados, no por horas).
+ */
 const MEDIUM = [
   /\b(?:gym|gimnasio|clase|curso|junta|reunion|presentacion|propuesta|cotizacion|proyecto)\b/,
   /\bestudie\b/,
   /\blimpie (?:toda )?la casa\b/,
-  /\b(?:una|1) hora\b|\bhora y media\b|\b(?:[2-9]|dos|tres|cuatro|cinco) (?:horas|hrs)\b/,
   /\b(?:corri|trote|nade|camine|rode|pedalee) (?:(?:[5-9]|\d{2})|cinco|seis|siete|ocho|nueve|diez|quince|veinte) (?:km|kms|kilometros)\b/,
 ];
 

@@ -72,7 +72,18 @@ function describe(p: VoiceProposal, currency: string): { title: string; detail: 
 
 type Item = { p: VoiceProposal; status: 'pending' | 'saved' | 'removed'; applied?: Applied; open: boolean };
 
-export function ProposalList({ proposals, onSaved, autoSaveLabel = 'Guardar todo' }: { proposals: VoiceProposal[]; onSaved?: (count: number) => void; autoSaveLabel?: string }) {
+/** `saveAll: false` quita "Guardar todo" (cuando hay que revisar una por una, p. ej. si el Coach pudo haber registrado parte). */
+export function ProposalList({
+  proposals,
+  onSaved,
+  autoSaveLabel = 'Guardar todo',
+  saveAll: allowSaveAll = true,
+}: {
+  proposals: VoiceProposal[];
+  onSaved?: (count: number) => void;
+  autoSaveLabel?: string;
+  saveAll?: boolean;
+}) {
   const { state, events } = useGame();
   const today = state.today;
   const currency = state.settings.currency;
@@ -169,7 +180,7 @@ export function ProposalList({ proposals, onSaved, autoSaveLabel = 'Guardar todo
           </div>
         );
       })}
-      {pendingReady > 0 && (
+      {allowSaveAll && pendingReady > 0 && (
         <button type="button" className="btn primary block vz-saveall" onClick={saveAll}>
           <Icon name="check" /> {autoSaveLabel}
           {pendingReady > 1 ? ` (${pendingReady})` : ''}

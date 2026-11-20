@@ -11,6 +11,7 @@ import {
   runAssistantTool,
   splitDictation,
   validateEvent,
+  voiceDuplicate,
   type Entity,
   type VoiceContext,
   type VoiceProposal,
@@ -141,6 +142,15 @@ describe('inferMission: tamaño y atributo automáticos', () => {
   it('sin pistas: chica · Disciplina', () => {
     expect(inferMission('Algo raro')).toEqual({ size: 'chica', attribute: 'disciplina', source: 'defecto' });
   });
+
+  it('la duración nunca sube el tamaño (regla de oro 3: XP por acciones, no por horas)', () => {
+    expect(inferMission('Leí 2 horas').size).toBe(inferMission('Leí 20 minutos').size);
+    expect(inferMission('Jugué videojuegos 5 horas').size).toBe(inferMission('Jugué videojuegos 20 minutos').size);
+    for (const d of ['una hora', 'hora y media', '3 horas', 'cinco hrs']) {
+      // Solo una duración no es pista: sigue siendo "sin pistas" (y no basta para proponer una misión).
+      expect(inferMission(`Algo raro ${d}`)).toEqual({ size: 'chica', attribute: 'disciplina', source: 'defecto' });
+    }
+  });
 });
 
 describe('contexto del analizador', () => {
@@ -189,6 +199,15 @@ describe('parseDictation: lo que dices → propuestas', () => {
     ]);
   });
 
+  it('un segundo monto con su propio día no se pierde ("ayer gasté 200 y hoy 300")', () => {
+    const r = parse('ayer gasté 200 y hoy 300');
+    expect(only(r, 'expense').map((p) => [p.amount, p.date])).toEqual([
+      [200, '2026-11-18'],
+      [300, TODAY],
+    ]);
+    expect(r.unknown).toEqual([]);
+  });
+
   it('la categoría de un concepto que ya registró gana', () => {
     const events = [ev('expense.recorded', '2026-11-01', { amount: 90, concept: 'Tacos', category: 'Antojos' })];
     expect(only(parse('gasté 120 en tacos', ctx(events)), 'expense')[0].category).toBe('Antojos');
@@ -200,6 +219,16 @@ describe('parseDictation: lo que dices → propuestas', () => {
     expect(only(parse('vendí 2 mil de playeras'), 'income')[0]).toMatchObject({ amount: 2000 });
     expect(only(parse('facturé quince mil'), 'income')[0]).toMatchObject({ amount: 15000 });
     expect(only(parse('me cobraron 300 de comisión'), 'expense')[0]).toMatchObject({ amount: 300 });
+    // Dinero que alguien te dio: ingreso, no gasto.
+    for (const t of ['me regalaron 500 pesos', 'me prestaron 2 mil pesos', 'me reembolsaron 800 pesos', 'me devolvieron 300 pesos']) {
+      const r = parse(t);
+      expect(only(r, 'expense')).toEqual([]);
+      expect(only(r, 'income')).toHaveLength(1);
+    }
+    expect(only(parse('mi papá me pasó 1000 pesos'), 'income')[0]).toMatchObject({ amount: 1000, concept: 'Papá' });
+    expect(only(parse('me dio 200 pesos mi mamá'), 'income')[0]).toMatchObject({ amount: 200, concept: 'Mamá' });
+    // Si la frase dice que lo gastaste, es gasto.
+    expect(only(parse('me dio hambre y gasté 100 en tacos'), 'expense')[0]).toMatchObject({ amount: 100, concept: 'Tacos' });
     const deal = parse('Cerré una venta de 15 mil con Grupo Norte');
     expect(only(deal, 'income')[0]).toMatchObject({ amount: 15000, concept: 'Venta con Grupo Norte' });
     expect(only(deal, 'mission')[0]).toMatchObject({ title: 'Cerré una venta con Grupo Norte', size: 'grande', attribute: 'finanzas', missionKind: 'quick' });
@@ -212,6 +241,10 @@ describe('parseDictation: lo que dices → propuestas', () => {
     expect(only(parse('ayer dormí 8 horas'), 'sleep')[0]).toMatchObject({ hours: 8, date: '2026-11-18' });
     // "a las 12" es una hora del día, no horas de sueño.
     expect(only(parse('me dormí a las 12'), 'sleep')).toEqual([]);
+    // Una siesta no es la noche (pisaría el check-in de la mañana).
+    expect(only(parse('dormí una siesta de una hora'), 'sleep')).toEqual([]);
+    expect(only(parse('me dormí una hora en la tarde'), 'sleep')).toEqual([]);
+    expect(only(parse('anoche dormí 7 horas y en la tarde una siesta'), 'sleep')[0]).toMatchObject({ hours: 7 });
   });
 
   it('peso', () => {
@@ -220,6 +253,19 @@ describe('parseDictation: lo que dices → propuestas', () => {
     expect(only(parse('pesé ochenta y dos punto cinco kilos'), 'weight')[0]).toMatchObject({ kg: 82.5 });
     expect(only(parse('amanecí en 80 kilos y medio'), 'weight')[0]).toMatchObject({ kg: 80.5 });
     expect(only(parse('gasté 500 pesos'), 'weight')).toEqual([]);
+    // "Me levanté" no es una carga.
+    expect(only(parse('me levanté temprano y pesé 80 kilos'), 'weight')[0]).toMatchObject({ kg: 80 });
+  });
+
+  it('una carga en el gym no es tu peso: se propone el entrenamiento', () => {
+    for (const t of ['hice sentadilla con 80 kilos', 'levanté 100 kilos en press de banca', 'hice peso muerto con 120 kg']) {
+      const r = parse(t);
+      expect(only(r, 'weight')).toEqual([]);
+      expect(only(r, 'mission')).toHaveLength(1);
+    }
+    const gym = parse('fui al gym y cargué 60 kilos');
+    expect(only(gym, 'weight')).toEqual([]);
+    expect(only(gym, 'mission')[0]).toMatchObject({ missionId: 'daily-entrenar' });
   });
 
   it('día de descanso', () => {
@@ -297,6 +343,20 @@ describe('parseDictation: lo que dices → propuestas', () => {
     expect(parse('no fui al gym').unknown).toEqual(['no fui al gym']);
     expect(parse('bueno este pues nada').proposals).toEqual([]);
     expect(parse('fue un buen día').proposals).toEqual([]);
+    // Negaciones a media frase: ni gasto, ni ingreso, ni misión.
+    for (const t of ['el cliente no me pagó los 5 mil', 'todavía no me pagan los 5 mil pesos', 'me cancelaron la junta']) {
+      const r = parse(t);
+      expect(r.proposals).toEqual([]);
+      expect(r.unknown).toEqual([t]);
+    }
+    // Un "no" que no niega la acción no la borra.
+    expect(only(parse('fui al gym aunque no tenía ganas'), 'mission')).toHaveLength(1);
+  });
+
+  it('el tiempo no es una misión: ni las horas solas ni el tiempo perdido', () => {
+    expect(only(parse('vi la tele 3 horas'), 'mission')).toEqual([]);
+    expect(only(parse('perdí 3 horas en redes sociales'), 'mission')).toEqual([]);
+    expect(only(parse('jugué videojuegos 5 horas'), 'mission')[0]?.size).toBe(only(parse('jugué videojuegos 20 minutos'), 'mission')[0]?.size);
   });
 
   it('no duplica la misma misión del mismo día', () => {
@@ -307,6 +367,37 @@ describe('parseDictation: lo que dices → propuestas', () => {
   it('con otra fecha de referencia (notas viejas) todo es relativo a ese día', () => {
     const r = parse('ayer fui al gym', ctx([], '2026-11-10'));
     expect(r.proposals[0].date).toBe('2026-11-09');
+  });
+});
+
+describe('no duplicar lo que ya está registrado (voiceDuplicate)', () => {
+  const base = { key: 'v1', date: TODAY, source: '' };
+  const check = (p: VoiceProposal, events: ReturnType<typeof ev>[]) => voiceDuplicate(p, project({ events, entities: ENTITIES, today: TODAY }), events);
+
+  it('misiones, descanso y contacto (como antes)', () => {
+    const events = [done(TODAY, 'daily-leer'), ev('rest_day.marked', '2026-11-18'), ev('npc.interaction', TODAY, { npcId: 'npc-ana' })];
+    expect(check({ ...base, kind: 'mission', missionId: 'daily-leer', title: 'Leer', size: 'chica', attribute: 'inteligencia', missionKind: 'daily', matched: true }, events)).toBeTruthy();
+    expect(check({ ...base, kind: 'mission', missionId: 'daily-leer', title: 'Leer', size: 'chica', attribute: 'inteligencia', missionKind: 'daily', matched: true, date: '2026-11-18' }, events)).toBeNull();
+    expect(check({ ...base, kind: 'rest', date: '2026-11-18' }, events)).toBeTruthy();
+    expect(check({ ...base, kind: 'person', npcId: 'npc-ana', name: 'Ana', alternatives: [] }, events)).toBeTruthy();
+    expect(check({ ...base, kind: 'person', npcId: 'npc-mama', name: 'Mamá', alternatives: [] }, events)).toBeNull();
+  });
+
+  it('un gasto o una lección iguales del mismo día (p. ej. lo que el Coach alcanzó a registrar antes de cortarse)', () => {
+    const gasto = ev('expense.recorded', TODAY, { amount: 200, concept: 'Comida' });
+    const leccion = ev('lesson.written', TODAY, { text: 'Me fue mal en la junta y aprendí que debo planear mejor', missionId: null, attribute: 'inteligencia' });
+    const events = [gasto, leccion];
+    const expense = (amount: number, concept: string, date = TODAY): VoiceProposal => ({ ...base, kind: 'expense', amount, concept, date });
+    expect(check(expense(200, 'comida'), events)).toBeTruthy();
+    expect(check(expense(200, 'Uber'), events)).toBeNull();
+    expect(check(expense(300, 'Comida'), events)).toBeNull();
+    expect(check(expense(200, 'Comida', '2026-11-18'), events)).toBeNull();
+    expect(check({ ...base, kind: 'income', amount: 200, concept: 'Comida' }, events)).toBeNull();
+    expect(check({ ...base, kind: 'lesson', text: 'Me fue mal en la junta y aprendí que debo planear mejor' }, events)).toBeTruthy();
+    expect(check({ ...base, kind: 'lesson', text: 'Otra lección distinta' }, events)).toBeNull();
+    // Anulado ya no cuenta.
+    const voided = [{ ...gasto, voidedAt: `${TODAY}T20:00:00.000Z` }];
+    expect(check(expense(200, 'Comida'), voided)).toBeNull();
   });
 });
 
