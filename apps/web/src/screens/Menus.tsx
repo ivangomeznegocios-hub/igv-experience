@@ -60,7 +60,8 @@ function attentionItems(state: ReturnType<typeof useGame>['state'], name: (id: s
   for (const d of state.health.due.filter((x) => x.status === 'atrasado').slice(0, 1)) out.push({ to: '/salud', icon: 'salud-cross', text: `Ya te toca: ${d.name}` });
   for (const b of state.npcs.birthdays.filter((x) => x.inDays <= 3).slice(0, 1))
     out.push({ to: `/npcs/${b.npcId}`, icon: 'cake', text: b.inDays === 0 ? `Hoy cumple ${name(b.npcId)}` : `${name(b.npcId)} cumple en ${b.inDays} ${b.inDays === 1 ? 'día' : 'días'}` });
-  const npcMission = state.npcs.generatedMissions[0];
+  const doneToday = new Set(state.missions.completedToday);
+  const npcMission = state.npcs.generatedMissions.find((m) => !doneToday.has(m.id));
   if (npcMission) out.push({ to: `/npcs/${npcMission.npcId}`, icon: 'chat', text: npcMission.title });
   const weak = state.habits.routine.filter((h) => h.dueToday && !h.doneToday && h.verdict === 'flojo');
   if (weak.length) out.push({ to: '/habitos', icon: 'checklist', text: weak.length === 1 ? `Hábito flojo hoy: ${weak[0].title}` : `${weak.length} hábitos flojos te tocan hoy` });
@@ -80,7 +81,8 @@ export function Mas() {
   const h = state.health;
   const hs = state.habits.summary;
   const today = state.npcs.contactedToday.length;
-  const toAttend = state.npcs.generatedMissions.length;
+  const completedToday = new Set(state.missions.completedToday);
+  const toAttend = state.npcs.generatedMissions.filter((m) => !completedToday.has(m.id)).length;
   const learningTopics = list('learning', 'topic').length;
   const ms = state.map.summary;
   const weight = state.body.lastWeight;
