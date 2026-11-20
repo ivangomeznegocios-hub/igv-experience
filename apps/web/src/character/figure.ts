@@ -8,15 +8,18 @@ import {
   CylinderGeometry,
   DoubleSide,
   ExtrudeGeometry,
+  FrontSide,
   Group,
+  type Material,
   Mesh,
   MeshStandardMaterial,
   Shape,
+  ShaderMaterial,
   SphereGeometry,
   TubeGeometry,
   Vector3,
 } from 'three';
-import type { CharacterData, FaceTrait, Physique } from '@igv/core';
+import { MUSCLE_IDS, muscleRegionAt, type BodyPart, type CharacterData, type FaceTrait, type MuscleId, type Physique } from '@igv/core';
 import { clamp, frontZ, garment, gauss, gridGeometry, halfWidth, lerp, loft, pchip, profile, ringXZ, smoothstep, tube, type P3, type Ring, type RingFn, type RingKey } from './geom';
 
 /**
@@ -32,6 +35,19 @@ import { clamp, frontZ, garment, gauss, gridGeometry, halfWidth, lerp, loft, pch
 export interface FigureSpec {
   physique: Physique;
   character: CharacterData;
+  /**
+   * Modo músculos: sin ropa arriba y con un short de compresión neutro; la piel (y el short) llevan las zonas
+   * musculares (`muscleRegionAt` de core) para pintarlas con `Figure.paintMuscles`.
+   */
+  muscles?: boolean;
+  /** Silueta "antes": solo el cuerpo, dibujado como contorno translúcido encima de la figura actual. */
+  ghost?: { color: string };
+}
+
+/** Tinte de cada músculo (color hex e intensidad 0–1); los que no vienen quedan del color base. */
+export interface MusclePaintSpec {
+  tints: Partial<Record<MuscleId, { color: string; strength: number }>>;
+  selected: MuscleId | null;
 }
 
 export interface Figure {
@@ -40,10 +56,34 @@ export interface Figure {
   height: number;
   /** Altura del centro de la cara (para encuadrar el rostro). */
   faceY: number;
+  /** Mallas con zonas musculares (modo músculos), para saber qué músculo tocaste. */
+  muscleMeshes: Mesh[];
+  /** Músculo en un vértice de una de `muscleMeshes`. */
+  muscleAt(mesh: Mesh, vertex: number): MuscleId | null;
+  /** Pinta los músculos (solo en modo músculos; no reconstruye la figura). */
+  paintMuscles(spec: MusclePaintSpec): void;
   dispose(): void;
 }
 
+/** Contorno translúcido: se ve más donde la superficie da la vuelta (la silueta), y se dibuja encima de todo. */
+function ghostMaterial(color: string): ShaderMaterial {
+  return new ShaderMaterial({
+    uniforms: { color: { value: new Color(color) } },
+    vertexShader: `varying vec3 vN; varying vec3 vV;
+      void main() { vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `uniform vec3 color; varying vec3 vN; varying vec3 vV;
+      void main() { float f = 1.0 - abs(dot(normalize(vN), normalize(vV))); float a = 0.07 + 0.9 * smoothstep(0.55, 0.95, f); gl_FragColor = vec4(color, a); }`,
+    transparent: true,
+    depthWrite: false,
+    depthTest: false,
+    side: FrontSide,
+  });
+}
+
+
 const TAU = Math.PI * 2;
+/** Color de la prenda de abajo en la silueta (no se dibuja). */
+const SHORTS_COLOR = '#808080';
 const PI = Math.PI;
 
 const mix = (a: string, b: string, t: number) => `#${new Color(a).lerp(new Color(b), t).getHexString()}`;
@@ -55,10 +95,15 @@ const luminance = (hex: string) => {
 
 export function buildFigure(spec: FigureSpec): Figure {
   const { physique: p, character } = spec;
-  const { look, outfit } = character;
+  const { look } = character;
+  const muscleMode = !!spec.muscles && !spec.ghost;
+  const ghost = spec.ghost ?? null;
+  // En modo músculos el torso va descubierto y abajo hay un short de compresión neutro (como una lámina de anatomía).
+  const outfit = muscleMode || ghost ? { ...character.outfit, top: 'ninguna' as const, bottom: 'short' as const, bottomColor: SHORTS_COLOR, watch: false, cap: false } : character.outfit;
   const root = new Group();
   const geos: BufferGeometry[] = [];
   const mats = new Map<string, MeshStandardMaterial>();
+  const extraMats: Material[] = [];
 
   const mat = (color: string, roughness: number, o: { double?: boolean; metalness?: number; decal?: boolean; vertex?: boolean; alpha?: boolean; depthWrite?: boolean } = {}) => {
     const key = `${color}|${roughness}|${o.double ? 1 : 0}|${o.metalness ?? 0}|${o.decal ? 1 : 0}|${o.vertex ? 1 : 0}|${o.alpha ? 1 : 0}|${o.depthWrite === false ? 0 : 1}`;
@@ -80,7 +125,7 @@ export function buildFigure(spec: FigureSpec): Figure {
     }
     return m;
   };
-  const add = (parent: Group, geo: BufferGeometry, material: MeshStandardMaterial, shadow = true) => {
+  const add = (parent: Group, geo: BufferGeometry, material: Material, shadow = true) => {
     if (!geos.includes(geo)) geos.push(geo);
     const mesh = new Mesh(geo, material);
     mesh.castShadow = shadow;
@@ -112,7 +157,9 @@ export function buildFigure(spec: FigureSpec): Figure {
   /** Altura de la entrepierna (fracción de la estatura). */
   const cr = 0.47 + buildLegs * 0.015;
 
-  const skinMat = mat(look.skin, 0.58);
+  const ghostMat = ghost ? ghostMaterial(ghost.color) : null;
+  if (ghostMat) extraMats.push(ghostMat);
+  const skinMat: Material = ghostMat ?? mat(look.skin, 0.58);
 
   // Ropa: se decide desde aquí porque la piel que queda tapada no se dibuja (más ligero y sin
   // que la piel se asome por debajo de la tela).
@@ -163,6 +210,174 @@ export function buildFigure(spec: FigureSpec): Figure {
   const ws = k ** 0.45;
   const hh = 0.238 * ws * (1 + 0.045 * trait('faceLength'));
   const chinY = H - hh;
+
+  // ---------- Zonas musculares (modo músculos) ----------
+  type Zone = { geo: BufferGeometry; tags: Int8Array; base: Float32Array; border: Uint8Array; nbStart: Uint32Array; nb: Uint32Array };
+  const zoneList: Zone[] = [];
+  const muscleMeshes: Mesh[] = [];
+  const zoneMat = mat('#ffffff', 0.62, { vertex: true });
+  /** Pintor de una malla por zonas: guarda qué músculo hay en cada vértice (según `muscleRegionAt`). */
+  // Base del modo músculos: tu tono de piel un poco neutralizado (los tintes se leen limpios, sin verse lodosos)
+  // y un short de compresión gris pintado sobre la piel (sin malla aparte: no hace bultos).
+  const baseSkin = new Color(mix(look.skin, '#d9d5cf', 0.4));
+  const briefC = new Color('#8f8c87');
+  const briefEdge = new Color('#77746f');
+  const zoner = (part: BodyPart, coords: (pt: P3) => { v: number; xn?: number }) => {
+    const tags: number[] = [];
+    const base: number[] = [];
+    return {
+      tags,
+      base,
+      paint: (pt: P3, u: number, out: Float32Array, at: number) => {
+        const c = coords(pt);
+        const m = muscleRegionAt(part, c.v, u, c.xn ?? 0);
+        tags[at / 3] = m ? MUSCLE_IDS.indexOf(m) : -1;
+        // Short: de la cadera (un poco bajo el ombligo) a lo alto del muslo; el borde un poco más oscuro.
+        const top = 0.576;
+        const hem = 0.488 + 0.012 * Math.cos(u);
+        const inBrief = part === 'torso' ? c.v < top : part === 'pierna' && c.v > hem;
+        const edge = inBrief && (part === 'torso' ? top - c.v < 0.006 : c.v - hem < 0.006);
+        const col = inBrief ? (edge ? briefEdge : briefC) : baseSkin;
+        out[at] = col.r;
+        out[at + 1] = col.g;
+        out[at + 2] = col.b;
+        base[at] = col.r;
+        base[at + 1] = col.g;
+        base[at + 2] = col.b;
+      },
+    };
+  };
+  /** Agrega una malla pintada por zonas (en uno o varios grupos que comparten la geometría). */
+  const addZoned = (parents: Group[], geo: BufferGeometry, z: { tags: number[]; base: number[] }) => {
+    const n = (geo.getAttribute('position') as BufferAttribute).count;
+    const tags = new Int8Array(n).fill(-1);
+    for (let i = 0; i < Math.min(n, z.tags.length); i++) tags[i] = z.tags[i] ?? -1;
+    // Borde entre músculos: los vértices de un triángulo con zonas distintas (la línea de la lámina anatómica).
+    const border = new Uint8Array(n);
+    const idx = geo.index!.array;
+    const deg = new Uint32Array(n + 1);
+    for (let i = 0; i < idx.length; i += 3) {
+      const a = idx[i]!;
+      const b = idx[i + 1]!;
+      const c = idx[i + 2]!;
+      if (tags[a] !== tags[b] || tags[b] !== tags[c]) border[a] = border[b] = border[c] = 1;
+      deg[a]! += 2;
+      deg[b]! += 2;
+      deg[c]! += 2;
+    }
+    // Vecinos de cada vértice (con repetidos: da igual para promediar), para suavizar el borde del tinte.
+    const nbStart = new Uint32Array(n + 1);
+    for (let i = 0; i < n; i++) nbStart[i + 1] = nbStart[i]! + deg[i]!;
+    const fill = nbStart.slice(0, n);
+    const nb = new Uint32Array(nbStart[n]!);
+    for (let i = 0; i < idx.length; i += 3) {
+      const t = [idx[i]!, idx[i + 1]!, idx[i + 2]!];
+      for (let k2 = 0; k2 < 3; k2++) {
+        const v = t[k2]!;
+        nb[fill[v]!++] = t[(k2 + 1) % 3]!;
+        nb[fill[v]!++] = t[(k2 + 2) % 3]!;
+      }
+    }
+    const base = new Float32Array(n * 3);
+    for (let i = 0; i < Math.min(n * 3, z.base.length); i++) base[i] = z.base[i] ?? 0;
+    const zone: Zone = { geo, tags, base, border, nbStart, nb };
+    zoneList.push(zone);
+    for (const parent of parents) {
+      const mesh = add(parent, geo, zoneMat);
+      mesh.userData.zone = zone;
+      muscleMeshes.push(mesh);
+    }
+  };
+  const tintC = new Color();
+  const outC = new Color();
+  const whiteC = new Color('#ffffff');
+  /**
+   * Pinta los músculos: tinte suave sobre la piel (mezcla, no color plano), bordes difuminados entre zonas y
+   * una línea fina y tenue entre músculos. El seleccionado se marca y los demás se apagan un poco.
+   */
+  const paintMuscles = ({ tints, selected }: MusclePaintSpec) => {
+    const specs = MUSCLE_IDS.map((id) => tints[id]);
+    const colors = specs.map((t) => (t ? new Color(t.color) : null));
+    const sel = selected ? MUSCLE_IDS.indexOf(selected) : -1;
+    for (const z of zoneList) {
+      const n = z.tags.length;
+      // Tinte por vértice (RGB + cuánto) antes de suavizar.
+      // Canales: tinte RGB ya multiplicado, cuánto tinte y cuánto borde (la línea entre músculos).
+      const C = 5;
+      let w = new Float32Array(n * C);
+      for (let i = 0; i < n; i++) {
+        const t = z.tags[i]!;
+        if (t < 0) continue;
+        w[i * C + 4] = z.border[i]! * (t === sel ? 2.4 : 1);
+        const spec = specs[t];
+        const isSel = t === sel;
+        let a = 0;
+        if (spec && colors[t]) {
+          tintC.copy(colors[t]!);
+          a = 0.52 * spec.strength;
+          if (isSel) a = 0.78;
+          else if (sel >= 0) a *= 0.35;
+        } else if (isSel) {
+          tintC.copy(whiteC);
+          a = 0.32;
+        }
+        w[i * C] = tintC.r * a;
+        w[i * C + 1] = tintC.g * a;
+        w[i * C + 2] = tintC.b * a;
+        w[i * C + 3] = a;
+      }
+      // Dos pasadas de promedio con los vecinos: el borde del tinte se difumina unos milímetros.
+      for (let pass = 0; pass < 3; pass++) {
+        const next = new Float32Array(n * C);
+        for (let i = 0; i < n; i++) {
+          const s0 = z.nbStart[i]!;
+          const s1 = z.nbStart[i + 1]!;
+          const cnt = s1 - s0;
+          for (let c = 0; c < C; c++) {
+            let acc = w[i * C + c]! * cnt;
+            for (let j = s0; j < s1; j++) acc += w[z.nb[j]! * C + c]!;
+            next[i * C + c] = acc / (2 * Math.max(1, cnt));
+          }
+        }
+        w = next;
+      }
+      const attr = z.geo.getAttribute('color') as BufferAttribute;
+      const arr = attr.array as Float32Array;
+      for (let i = 0; i < n; i++) {
+        const a = w[i * C + 3]!;
+        outC.setRGB(z.base[i * 3]!, z.base[i * 3 + 1]!, z.base[i * 3 + 2]!).multiplyScalar(1 - a);
+        outC.r += w[i * C]!;
+        outC.g += w[i * C + 1]!;
+        outC.b += w[i * C + 2]!;
+        // Surco suave entre músculos (más marcado alrededor del seleccionado).
+        outC.multiplyScalar(1 - 0.2 * Math.min(1.6, w[i * C + 4]!));
+        arr[i * 3] = outC.r;
+        arr[i * 3 + 1] = outC.g;
+        arr[i * 3 + 2] = outC.b;
+      }
+      attr.needsUpdate = true;
+    }
+  };
+  const finish = (): Figure => {
+    if (zoneList.length) paintMuscles({ tints: {}, selected: null });
+    return {
+      group: root,
+      height: H,
+      faceY: chinY + 0.5 * hh,
+      muscleMeshes,
+      muscleAt(mesh, vertex) {
+        const z = mesh.userData.zone as Zone | undefined;
+        const t = z?.tags[vertex] ?? -1;
+        return t >= 0 ? MUSCLE_IDS[t]! : null;
+      },
+      paintMuscles,
+      dispose() {
+        for (const geo of geos) geo.dispose();
+        for (const m of mats.values()) m.dispose();
+        for (const m of extraMats) m.dispose();
+      },
+    };
+  };
 
   // ---------- Torso ----------
   const fW = dW * (1.08 + 0.2 * fat);
@@ -220,7 +435,11 @@ export function buildFigure(spec: FigureSpec): Figure {
 
   // Con playera solo se ve el cuello; sin ella, de la cintura para arriba (el resto va dentro del pantalón).
   const torsoSkinY = (top === 'ninguna' ? waistY : neckY) - 0.04 * k;
-  add(root, loft(tube(torso, torsoSkinY, neckTop, top === 'ninguna' ? 64 : 16), 104, { warp: 0.4, displace: torsoDisplace(1) }), skinMat);
+  if (ghost) add(root, loft(tube(torso, Y(cr), neckTop, 48, { bottom: 0.022 * k }), 64, { warp: 0.4, displace: torsoDisplace(1) }), skinMat, false);
+  else if (muscleMode) {
+    const z = zoner('torso', (pt) => ({ v: pt.y / H, xn: Math.abs(pt.x) / Math.max(0.01, torso(pt.y).w) }));
+    addZoned([root], loft(tube(torso, Y(cr), neckTop, 150, { bottom: 0.022 * k }), 168, { warp: 0.4, displace: torsoDisplace(1), paint: z.paint }), z);
+  } else add(root, loft(tube(torso, torsoSkinY, neckTop, top === 'ninguna' ? 64 : 16), 104, { warp: 0.4, displace: torsoDisplace(1) }), skinMat);
 
   // ---------- Piernas ----------
   const legTop = Y(cr + 0.065);
@@ -244,11 +463,16 @@ export function buildFigure(spec: FigureSpec): Figure {
   const right = new Group();
   right.scale.x = -1;
   root.add(left, right);
-  const both = (geo: BufferGeometry, material: MeshStandardMaterial) => {
+  const both = (geo: BufferGeometry, material: Material) => {
     add(left, geo, material);
     add(right, geo, material);
   };
-  both(loft(tube(leg, Y(0.025), pantsHemY + 0.04 * k, outfit.bottom === 'short' ? 44 : 8), 40), skinMat);
+  const legV = (pt: P3) => ({ v: pt.y / H });
+  if (ghost) both(loft(tube(leg, Y(0.025), legTop, 40), 32), skinMat);
+  else if (muscleMode) {
+    const z = zoner('pierna', legV);
+    addZoned([left, right], loft(tube(leg, Y(0.025), legTop, 110), 72, { paint: z.paint }), z);
+  } else both(loft(tube(leg, Y(0.025), pantsHemY + 0.04 * k, outfit.bottom === 'short' ? 44 : 8), 40), skinMat);
 
   // ---------- Brazos y manos ----------
   const Lu = 0.172 * H;
@@ -291,22 +515,28 @@ export function buildFigure(spec: FigureSpec): Figure {
   armR.rotation.z = -abduction;
   armR.scale.x = -1;
   root.add(armL, armR);
-  const arms = (geo: BufferGeometry, material: MeshStandardMaterial) => {
+  const arms = (geo: BufferGeometry, material: Material) => {
     add(armL, geo, material);
     add(armR, geo, material);
   };
   /** Hasta dónde llega la manga (null = sin mangas). */
   const sleeveEnd = top === 'ninguna' ? null : top === 'playera' ? -0.105 * H : yW + 0.03 * k;
   const handTip = yW - 0.178 * k;
-  arms(
-    sleeveEnd === null
-      ? loft(tube(arm, handTip, armTop, 96, { top: rD * 0.1, bottom: 0.012 * k }), 36)
-      : loft(tube(arm, handTip, sleeveEnd + 0.03 * k, top === 'playera' ? 64 : 30, { bottom: 0.012 * k }), 36),
-    skinMat,
-  );
+  /** Altura a lo largo del brazo: 0 = hombro, 0.5 = codo, 1 = muñeca. */
+  const armV = (pt: P3) => ({ v: pt.y >= yE ? (0.5 * (armTop - pt.y)) / (armTop - yE) : 0.5 + (0.5 * (yE - pt.y)) / (yE - yW) });
+  if (muscleMode) {
+    const z = zoner('brazo', armV);
+    addZoned([armL, armR], loft(tube(arm, handTip, armTop, 120, { top: rD * 0.1, bottom: 0.012 * k }), 48, { paint: z.paint }), z);
+  } else
+    arms(
+      sleeveEnd === null
+        ? loft(tube(arm, handTip, armTop, ghost ? 48 : 96, { top: rD * 0.1, bottom: 0.012 * k }), ghost ? 24 : 36)
+        : loft(tube(arm, handTip, sleeveEnd + 0.03 * k, top === 'playera' ? 64 : 30, { bottom: 0.012 * k }), 36),
+      skinMat,
+    );
   const thumbGeo = new CapsuleGeometry(0.0105 * k, 0.042 * k, 4, 10);
   for (const a of [armL, armR]) {
-    const th = add(a, thumbGeo, skinMat);
+    const th = add(a, thumbGeo, skinMat, !ghost);
     th.position.set(-0.004 * k, yW - 0.06 * k, bend + 0.046 * k);
     th.rotation.x = -0.45;
   }
@@ -353,6 +583,10 @@ export function buildFigure(spec: FigureSpec): Figure {
     84,
     { top: capH, bottom: 0.02 },
   );
+  if (ghost) {
+    add(root, loft({ ringAt: headT.ringAt, ys: headT.ys, top: headT.top, bottom: headT.bottom }, 48, { displace: (pt) => void (pt.y = chinY + pt.y * hh) }), skinMat, false);
+    return finish();
+  }
   // Los mismos anillos se piden miles de veces (cabello, barba, parches): se guardan por altura.
   const headRingCache = new Map<number, Ring>();
   const headRingRaw = headT.ringAt;
@@ -963,8 +1197,8 @@ export function buildFigure(spec: FigureSpec): Figure {
     arms(loft(tube(sleeve, sleeveEnd, armTop, long ? 70 : 28, { top: rD * 0.1 + sEase }), 36), cloth);
   }
 
-  // ---------- Ropa: parte de abajo ----------
-  {
+  // ---------- Ropa: parte de abajo (en modo músculos el short va pintado sobre la piel) ----------
+  if (!muscleMode) {
     const style = outfit.bottom;
     const cloth = mat(outfit.bottomColor, style === 'jeans' ? 0.82 : 0.92, { double: true });
     const cfg = bottomCfg;
@@ -1050,13 +1284,5 @@ export function buildFigure(spec: FigureSpec): Figure {
     dial.position.x += 0.0006;
   }
 
-  return {
-    group: root,
-    height: H,
-    faceY: headY(0.5),
-    dispose() {
-      for (const geo of geos) geo.dispose();
-      for (const m of mats.values()) m.dispose();
-    },
-  };
+  return finish();
 }

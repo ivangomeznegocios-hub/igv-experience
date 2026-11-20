@@ -4,7 +4,8 @@ import { MUSCLES, type MuscleId } from '@igv/core';
 /**
  * Mapa del cuerpo 2D (frente y espalda), dibujado a mano en SVG: cada zona es un grupo muscular de
  * `MUSCLE_IDS`. Se dibuja la mitad izquierda y se refleja. Las clases de color las decide quien lo usa
- * (volumen de la semana o recuperación; ver styles/entreno.css).
+ * (volumen de la semana o recuperación; ver styles/entreno.css) o, con `fills`, los mismos tonos del cuerpo 3D
+ * (ui/MuscleBody.tsx). Es el respaldo del cuerpo 3D cuando el dispositivo no puede dibujarlo.
  */
 
 type Part = { m?: MuscleId; d: string };
@@ -55,6 +56,8 @@ const BACK: Part[] = [
 export interface BodyMapProps {
   /** Clase de color por músculo (p. ej. `v3`, `rec2`, `ready`). */
   classes: Partial<Record<MuscleId, string>>;
+  /** Color de relleno por músculo (gana sobre la clase): los mismos tonos que el cuerpo 3D. */
+  fills?: Partial<Record<MuscleId, string>>;
   /** Texto del globo de cada músculo. */
   titles?: Partial<Record<MuscleId, string>>;
   selected?: MuscleId | null;
@@ -62,7 +65,7 @@ export interface BodyMapProps {
   height?: number;
 }
 
-function Figure({ parts, label, classes, titles, selected, onSelect, height }: BodyMapProps & { parts: Part[]; label: string }) {
+function Figure({ parts, label, classes, fills, titles, selected, onSelect, height }: BodyMapProps & { parts: Part[]; label: string }) {
   const half = (mirror: boolean) =>
     parts.map((p, i) => {
       if (!p.m) return <path key={i} className="bm-base" d={p.d} />;
@@ -77,7 +80,7 @@ function Figure({ parts, label, classes, titles, selected, onSelect, height }: B
           }
         : {};
       return (
-        <path key={i} className={`bm-m ${classes[m] ?? ''} ${selected === m ? 'sel' : ''}`} d={p.d} {...props}>
+        <path key={i} className={`bm-m ${classes[m] ?? ''} ${selected === m ? 'sel' : ''}`} d={p.d} style={fills?.[m] ? { fill: fills[m] } : undefined} {...props}>
           <title>{titles?.[m] ?? MUSCLES[m].name}</title>
         </path>
       );

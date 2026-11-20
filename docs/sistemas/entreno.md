@@ -2,8 +2,8 @@
 
 Registro de entrenamientos estilo app de fitness, con análisis basado en evidencia: qué hiciste, dónde, qué
 músculos trabajaste, cuáles te faltan esta semana, cuándo está recuperado cada uno y cuál es la siguiente sesión.
-Pantalla `/entreno` (Entrenamiento). Mapa del cuerpo 2D (frente y espalda) dibujado en SVG; los mismos datos
-quedan listos para pintar el personaje 3D más adelante (sin tocar `apps/web/src/character/`).
+Pantalla `/entreno` (Entrenamiento). Los músculos se pintan sobre **tu cuerpo 3D** (el mismo personaje de Perfil, con
+tu complexión real); el mapa 2D en SVG queda como respaldo ("Ver mapa plano", o si el dispositivo no puede con 3D).
 
 ## Eventos y entidades
 
@@ -82,7 +82,7 @@ vigente > músculos guardados en el registro (si borraste el ejercicio propio).
   `trainingMission`).
 - **Para el personaje 3D**: `muscleStatus(state.training.summary, nowIso)` devuelve por músculo `load` (0–1, volumen
   de la semana contra el objetivo), `fatigue` (0–1, 1 = recién entrenado fuerte), `volumeLevel` (0–4) y `state`;
-  `MUSCLES[id].anatomy` dice qué músculos anatómicos agrupa cada zona.
+  `MUSCLES[id].anatomy` dice qué músculos anatómicos agrupa cada zona. Se pinta con `engine/muscle-map.ts` (abajo).
 - IA: `assistant/tools-entreno.ts` → `registrar_entrenamiento` (ejercicios por nombre aproximado, series o atajo
   `n_series`/`reps`/`kg`, cardio con `minutos`/`km`, ejercicio nuevo con `musculos` → se crea `training/exercise`;
   todo o nada; crea entreno + misión como la app; avisa récords) y `ver_entrenamiento` (estado por músculo, te falta,
@@ -94,6 +94,44 @@ vigente > músculos guardados en el registro (si borraste el ejercicio propio).
   `lib/entreno.ts`), `lib/entreno.ts` (borradores: repetir último, rutina, sugerida; guardar/anular; borrador en
   `localStorage` por si cierras la hoja a medias), `styles/entreno.css`. Tarjeta en `screens/Cuerpo.tsx`.
 
+## Músculos en tu cuerpo 3D y "antes / ahora" (solo visualización, sin XP)
+
+- **Core, `engine/muscle-map.ts`** (puro, probado en `test/cuerpo-3d.test.ts`):
+  - `muscleRegionAt(part, v, angle, xn)`: qué grupo muscular hay en un punto de la superficie. `part` = `torso` /
+    `brazo` / `pierna`; `v` = altura (fracción de la estatura en torso y pierna; en el brazo 0 = hombro, 0.5 = codo,
+    1 = muñeca); `angle` = ángulo alrededor de la parte (0 = hacia afuera, π/2 = frente, −π/2 = atrás); `xn` = distancia
+    a la línea media del torso (0–1). Alturas de referencia en `BODY_LANDMARKS`. Frente: pecho, deltoides anterior,
+    bíceps, antebrazo, abdomen (más ancho arriba), oblicuos, cuádriceps, aductores, trapecio superior. Espalda: trapecio
+    (rombo), dorsales, deltoides posterior, tríceps, espalda baja (erectores), glúteos, isquios, pantorrillas. Hay
+    prueba de que cada `MuscleId` tiene zona y se ve desde las vistas que dice `MUSCLES[id].views`.
+  - `musclePaint(status, mode)` → `{ tone, strength }`. Modos: **Estado** (recuperando dentro de sus 48/72 h > en la meta
+    ≥ objetivo > trabajado ≥ mínimo > te falta, como "Te falta esta semana"), **Volumen** (`volumeLevel` 1–4) y
+    **Recuperación** (recuperando por fatiga · listo · sin trabajar 8+ días). `muscleLegend(mode)` arma la leyenda con
+    los números de `config.training`; `muscleDetail(status)` el texto al tocar un músculo (series de la semana vs. meta,
+    horas desde que lo entrenaste, horas de recuperación).
+- **Core, `engine/physique-compare.ts`** (puro, probado): `compareBodies(entries, desde, hasta, opts)` usa
+  `physiqueAsOf` en las dos fechas y da `deltas` por medida (peso, grasa, masa magra y los 9 contornos). Solo entran las
+  medidas que registraste alguna vez; una diferencia es exacta si está medida en las dos fechas, si no lleva
+  `estimated` (se muestra "≈", p. ej. una cintura vieja proyectada con el peso nuevo). `formatDelta` → "Brazo +1.5 cm",
+  "≈ Cintura −3 cm". `compareChoices(measureDates, hoy)` → opciones de "antes": Primer registro, Hace 1 año / 6 / 3 / 1
+  mes (el último registro de esa fecha, sin repetir ni caer en el último).
+- **Figura 3D** (`apps/web/src/character/figure.ts`): `FigureSpec.muscles = true` = modo músculos: torso descubierto y
+  un short de compresión gris **pintado** sobre la piel (sin malla aparte); torso, brazos y piernas guardan por vértice
+  su músculo (`muscleRegionAt`). `Figure.paintMuscles({ tints, selected })` solo cambia colores (no reconstruye): tinte
+  suave sobre la piel neutralizada (≈50 %), bordes difuminados (3 pasadas de promedio con los vecinos) y un surco tenue
+  entre músculos tipo lámina de anatomía; el seleccionado se marca y los demás se apagan. `FigureSpec.ghost` = silueta
+  "antes": solo el cuerpo, con un material de contorno (más visible en los bordes, encima de todo).
+- **Escenario** (`stage.ts`): `setMusclePaint`, `setGhost`, `turnTo(yaw)` (giro animado; Frente = 0, Espalda = π) y
+  `onPick` (tocar sin arrastrar → raycast → músculo). Sigue dibujando solo cuando algo cambia; three.js sigue en su
+  propio archivo (`CharacterView`, cargado con `lazy`).
+- **Web**: `ui/MuscleBody.tsx` (`MuscleBody` para Entrenamiento: modos Estado/Volumen/Recuperación guardados en
+  `localStorage`, botones Frente / Espalda, leyenda, tarjeta del músculo tocado con "Ver ejercicios y detalle" →
+  `MuscleSheet`; `MusclePanel` para Perfil; colores en `MUSCLE_TONE_COLORS`, los mismos en el mapa plano con
+  `BodyMap fills`). En Perfil (`ui/CharacterCard.tsx`) el selector del encuadre es Cuerpo · Músculos · Rostro; en
+  Evolución, "Antes / ahora": chips de fecha, silueta del cuerpo de esa fecha encima del actual (la figura se muestra
+  sin ropa para que se vea la forma) y las diferencias por medida desde esa fecha (o desde el primer registro) hasta la
+  fecha de la barra. Estilos en `styles/cuerpo3d.css`.
+
 ## Pruebas
 
 `packages/core/test/entreno.test.ts`: esquema y biblioteca, búsqueda aproximada, series por músculo y semana,
@@ -101,6 +139,9 @@ cardio, texto libre de Cuerpo, ejercicios propios, semanas seguidas, recuperaci�
 equilibrio, sesión sugerida (vacío, torso/pierna/empuje ayer, volumen cumplido, en casa), Epley y récords, XP por
 récord (primero no, uno por ejercicio por día, tope diario, registros atrasados, fotos pasadas), propiedad "agregar
 cualquier entrenamiento nunca baja XP ni atributos", misión ligada, y herramientas de IA con el almacén en memoria.
+`packages/core/test/cuerpo-3d.test.ts`: zonas musculares (todas existen y se ven desde frente/espalda como dice la
+biblioteca; puntos de referencia), color por estado/volumen/recuperación con `muscleStatus`, leyenda con la config,
+texto del músculo, y antes / ahora (exacto vs. ≈, medidas nunca tomadas fuera, orden de fechas, opciones de "antes").
 
 ## Pendiente para integrar
 

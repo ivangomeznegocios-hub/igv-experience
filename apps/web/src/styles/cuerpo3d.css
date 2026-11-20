@@ -1,0 +1,49 @@
+/* ---------- Tu cuerpo 3D: músculos y antes / ahora (ui/MuscleBody.tsx, ui/CharacterCard.tsx) ---------- */
+
+.mb3-stage {
+  position: relative;
+  height: clamp(340px, 62dvh, 460px);
+  margin: 0 -14px;
+  background:
+    radial-gradient(90% 60% at 50% 38%, color-mix(in srgb, var(--violet) 12%, transparent) 0%, transparent 70%),
+    linear-gradient(180deg, var(--card-2) 0%, var(--card) 75%);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.mb3-top { position: absolute; left: 0; right: 0; bottom: 10px; display: flex; justify-content: center; pointer-events: none; }
+.mb3-side { pointer-events: auto; }
+.character-stage .mb3-side { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); }
+
+.mb3-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 12px; font-size: 11.5px; color: var(--muted); margin: 10px 0 8px; }
+.mb3-legend span { display: inline-flex; align-items: center; }
+.mb3-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; }
+.mb3-legend i.none { background: color-mix(in srgb, var(--text) 14%, var(--card-2)); }
+
+.mb3-info { background: var(--card-2); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 12px; }
+.mb3-info.empty { text-align: center; }
+.mb3-info ul { margin: 6px 0 8px; padding-left: 16px; }
+.mb3-info li { margin: 2px 0; }
+.mb3-info .btn { margin-top: 2px; }
+
+.mb3-panel { margin-bottom: 14px; }
+.mb3-panel .chips { justify-content: center; }
+
+/* Antes / ahora */
+.cmp-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 12px 0 6px; }
+.cmp-chips { margin-bottom: 8px; }
+.cmp-chips .chip { font-size: 12px; }
+.cmp-key { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11.5px; color: var(--muted); margin-bottom: 8px; }
+.cmp-key span { display: inline-flex; align-items: center; }
+.cmp-key i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+.cmp-key i.before { border: 1.5px solid var(--text); opacity: 0.75; }
+.cmp-key i.now { background: var(--muted); }
+.cmp-deltas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.cmp-delta { background: var(--card-2); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 7px 10px; display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+.cmp-delta span { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmp-delta b { font-family: var(--font-mono); font-weight: 600; font-size: 13px; white-space: nowrap; }
+.cmp-delta.est b { color: var(--muted); }
+
+/* Con tres opciones (Cuerpo · Músculos · Rostro) el selector se compacta para no tapar la cabeza. */
+.character-top .character-views button { padding: 6px 8px; font-size: 11.5px; }
+.character-top > div:first-child { min-width: 0; }
+.character-top .small { white-space: nowrap; }

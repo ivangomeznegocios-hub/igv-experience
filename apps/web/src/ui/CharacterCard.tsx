@@ -9,9 +9,17 @@ import {
   SHOE_STYLES,
   TOP_STYLES,
   ageOn,
+  compareBodies,
+  compareChoices,
+  formatDelta,
   lerpPhysique,
+  muscleStatus,
   physiqueAsOf,
   resolveCharacter,
+  type CompareChoice,
+  type MeasureDelta,
+  type MuscleId,
+  type MusclePaintMode,
   type BeardStyle,
   type BodyMeasureKey,
   type BodyMeasures,
@@ -31,8 +39,11 @@ import { updateSettings } from '../lib/actions';
 import { fmtDate } from '../lib/time';
 import { Chips, DateChips, Field, Tabs, toast } from './kit';
 import { Icon } from './icons';
+import { FrontBack, MusclePanel, useMusclePaint, useNowIso } from './MuscleBody';
 
 const CharacterView = lazy(() => import('../character/CharacterView'));
+/** Al comparar antes / ahora la figura va sin ropa (la ropa holgada esconde la forma), sin pintar músculos. */
+const BARE = { tints: {}, selected: null };
 
 type Tab = 'resumen' | 'medidas' | 'apariencia' | 'ropa';
 
@@ -94,7 +105,6 @@ const num = (s: string) => {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 };
 const fix1 = (n: number) => (Math.round(n * 10) / 10).toString();
-const signed = (n: number, unit: string) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${fix1(Math.abs(n))} ${unit}`;
 
 /** Personaje 3D del perfil: toma su complexión de tus medidas y su aspecto de tus ajustes. */
 export function CharacterCard() {
@@ -102,6 +112,19 @@ export function CharacterCard() {
   const [tab, setTab] = useState<Tab>('resumen');
   const [view, setView] = useState<'body' | 'face'>('body');
   const [front, setFront] = useState(0);
+  // Modo músculos: la figura sin ropa arriba, con los músculos de la semana pintados.
+  const [musclesOn, setMusclesOn] = useState(false);
+  const [paintMode, setPaintMode] = useState<MusclePaintMode>('estado');
+  const [picked, setPicked] = useState<MuscleId | null>(null);
+  const [side, setSide] = useState<'frente' | 'espalda'>('frente');
+  const [turn, setTurn] = useState({ yaw: 0, n: 0 });
+  const nowIso = useNowIso();
+  const muscles = useMemo(() => muscleStatus(state.training.summary, nowIso), [state.training.summary, nowIso]);
+  const paint = useMusclePaint(muscles, paintMode, picked);
+  const turnTo = (s: 'frente' | 'espalda') => {
+    setSide(s);
+    setTurn((t) => ({ yaw: s === 'frente' ? 0 : Math.PI, n: t.n + 1 }));
+  };
 
   // --- Apariencia y ropa: borrador local que se guarda solo, medio segundo después del último cambio ---
   const saved = useMemo(() => resolveCharacter(state.settings.character), [state.settings.character]);
@@ -150,6 +173,15 @@ export function CharacterCard() {
   const evoIndex = evo === null ? dates.length - 1 : Math.min(evo, dates.length - 1);
   const first = useMemo(() => (dates.length ? physiqueAt(dates[0]!) : current), [entries, heightCm, age, current]);
 
+  // --- Antes / ahora: silueta de una fecha anterior encima de la figura, y cuánto cambió cada medida ---
+  const choices = useMemo(() => compareChoices(dates, state.today), [dates, state.today]);
+  const [cmp, setCmp] = useState<string | null>(null);
+  const shownDate = evo !== null && dates[evoIndex] ? dates[evoIndex]! : state.today;
+  const comparison = useMemo(
+    () => (dates.length >= 2 ? compareBodies(entries, cmp ?? dates[0]!, shownDate, { heightCm, age }) : null),
+    [entries, cmp, shownDate, dates, heightCm, age],
+  );
+
   const shown: Physique = useMemo(() => {
     if (tab === 'medidas' && typed) return physiqueAt(state.today, typed.measures, typed.heightCm ?? heightCm);
     if (play !== null) return lerpPhysique(first, current, play);
@@ -174,6 +206,7 @@ export function CharacterCard() {
   const selectTab = (t: Tab) => {
     setTab(t);
     setPlay(null);
+    setMusclesOn(false);
     setView(t === 'apariencia' ? 'face' : 'body');
     if (t === 'apariencia') setFront((n) => n + 1);
     if (t !== 'medidas') setTyped(null);
@@ -183,12 +216,40 @@ export function CharacterCard() {
   const est = shown.estimated;
   const approx = (flag: boolean, text: string) => (flag ? `≈${text}` : text);
   const [touched, setTouched] = useState(false);
+  const ghostOn = !musclesOn && tab === 'resumen' && play === null && cmp !== null && comparison !== null && comparison.from !== comparison.to;
+  const ghostColor = useMemo(() => getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || '#808080', [ghostOn, state.settings.equipped?.skin]);
+  const ghost = useMemo(() => (ghostOn && comparison ? { physique: comparison.before, color: ghostColor } : null), [ghostOn, comparison, ghostColor]);
+  const frame = musclesOn ? 'musculos' : view === 'face' ? 'rostro' : 'cuerpo';
+  const setFrame = (f: 'cuerpo' | 'musculos' | 'rostro') => {
+    if (f === 'musculos') {
+      if (tab !== 'resumen') selectTab('resumen');
+      setMusclesOn(true);
+      setView('body');
+      setSide('frente');
+      return;
+    }
+    setMusclesOn(false);
+    setPicked(null);
+    setView(f === 'rostro' ? 'face' : 'body');
+    if (f === 'rostro') setFront((n) => n + 1);
+  };
 
   return (
     <div className={`card character-card ${tab !== 'resumen' ? 'editing' : ''}`}>
       <div className="character-stage" onPointerDown={() => setTouched(true)}>
         <Suspense fallback={<div className="character-canvas character-loading small muted">Cargando tu personaje…</div>}>
-          <CharacterView physique={shown} character={character} progress={state.level.progress} ringColor={ringColor} view={view} frontSignal={front} />
+          <CharacterView
+            physique={shown}
+            character={character}
+            progress={state.level.progress}
+            ringColor={ringColor}
+            view={view}
+            frontSignal={front}
+            muscles={musclesOn ? paint : ghost ? BARE : null}
+            onPick={setPicked}
+            ghost={ghost}
+            turn={turn}
+          />
         </Suspense>
         <div className="character-top">
           <div>
@@ -198,15 +259,19 @@ export function CharacterCard() {
             </div>
           </div>
           <div className="character-views" role="group" aria-label="Encuadre">
-            <button className={view === 'body' ? 'on' : ''} onClick={() => setView('body')}>
+            <button className={frame === 'cuerpo' ? 'on' : ''} onClick={() => setFrame('cuerpo')}>
               Cuerpo
             </button>
-            <button className={view === 'face' ? 'on' : ''} onClick={() => (setView('face'), setFront((n) => n + 1))}>
+            <button className={frame === 'musculos' ? 'on' : ''} onClick={() => setFrame('musculos')}>
+              Músculos
+            </button>
+            <button className={frame === 'rostro' ? 'on' : ''} onClick={() => setFrame('rostro')}>
               Rostro
             </button>
           </div>
         </div>
-        {!touched && (
+        {musclesOn && <FrontBack side={side} onSide={turnTo} />}
+        {!touched && !musclesOn && (
           <div className="character-hint tiny muted" aria-hidden="true">
             Desliza para girar · pellizca para acercar
           </div>
@@ -219,6 +284,8 @@ export function CharacterCard() {
         <Stat label="Masa magra" value={approx(est.weight || est.bodyFat, fix1(shown.leanKg))} unit="kg" />
         <Stat label="IMC" value={approx(est.weight || est.height, fix1(shown.bmi))} />
       </div>
+
+      {musclesOn && <MusclePanel muscles={muscles} mode={paintMode} onMode={setPaintMode} selected={picked} onSelect={setPicked} />}
 
       <Tabs
         value={tab}
@@ -235,9 +302,12 @@ export function CharacterCard() {
         <Evolution
           dates={dates}
           index={evoIndex}
-          shown={shown}
-          first={first}
           playing={play !== null}
+          choices={choices}
+          cmp={cmp}
+          onCmp={setCmp}
+          deltas={comparison?.deltas ?? []}
+          compareFrom={comparison?.from ?? null}
           hasData={hasData}
           onIndex={(i) => (setPlay(null), setEvo(i >= dates.length - 1 ? null : i))}
           onPlay={() => (setEvo(null), setPlay(0))}
@@ -266,20 +336,27 @@ function Stat({ label, value, unit }: { label: string; value: string; unit?: str
 function Evolution({
   dates,
   index,
-  shown,
-  first,
   playing,
   hasData,
+  choices,
+  cmp,
+  onCmp,
+  deltas,
+  compareFrom,
   onIndex,
   onPlay,
   onMeasure,
 }: {
   dates: string[];
   index: number;
-  shown: Physique;
-  first: Physique;
   playing: boolean;
   hasData: boolean;
+  choices: CompareChoice[];
+  /** Fecha "antes" elegida (null = sin silueta; las diferencias se cuentan desde tu primer registro). */
+  cmp: string | null;
+  onCmp: (d: string | null) => void;
+  deltas: MeasureDelta[];
+  compareFrom: string | null;
   onIndex: (i: number) => void;
   onPlay: () => void;
   onMeasure: () => void;
@@ -297,16 +374,9 @@ function Evolution({
         </button>
       </div>
     );
-  // Solo se compara lo que está medido en los dos extremos (comparar contra una estimación engaña).
-  const measured = (p: Physique) => ({ weight: !p.estimated.weight, fat: !p.estimated.weight && !p.estimated.bodyFat, waist: !p.estimated.girths.includes('waist') });
-  const a = measured(first);
-  const b = measured(shown);
-  const deltas = [
-    a.weight && b.weight ? signed(shown.weightKg - first.weightKg, 'kg') : null,
-    a.fat && b.fat ? signed(shown.bodyFatPct - first.bodyFatPct, '% grasa') : null,
-    a.fat && b.fat ? signed(shown.leanKg - first.leanKg, 'kg magra') : null,
-    a.waist && b.waist ? signed(shown.girths.waist - first.girths.waist, 'cm cintura') : null,
-  ].filter(Boolean) as string[];
+  const atStart = compareFrom !== null && index <= dates.indexOf(compareFrom) && !playing;
+  const nowLabel = index >= dates.length - 1 ? 'hoy' : fmtDate(dates[index]!, true);
+  const anyEstimated = deltas.some((d) => d.estimated);
   return (
     <div>
       <div className="row between" style={{ marginBottom: 4 }}>
@@ -321,21 +391,62 @@ function Evolution({
         <span>{dates.length} registros</span>
         <span>Hoy</span>
       </div>
-      {index === 0 && !playing ? (
-        <div className="character-deltas tiny muted">Así empezaste. Mueve la barra para ver cómo has cambiado.</div>
-      ) : (
-        <div className="character-deltas tiny">
-          {deltas.length ? (
-            <>
-              <span className="muted">Desde tu primer registro:</span>
-              {deltas.map((d) => (
-                <b key={d}>{d}</b>
-              ))}
-            </>
-          ) : (
-            <span className="muted">Mide lo mismo dos veces (peso, % de grasa o cintura) para ver aquí cuánto cambiaste.</span>
-          )}
+
+      <div className="cmp-head">
+        <b className="small">Antes / ahora</b>
+        {cmp !== null && (
+          <button className="linklike tiny" onClick={() => onCmp(null)}>
+            Quitar silueta
+          </button>
+        )}
+      </div>
+      {choices.length > 0 && (
+        <div className="chips cmp-chips" role="radiogroup" aria-label="Comparar contra">
+          {choices.map((c) => (
+            <button key={c.id} type="button" role="radio" aria-checked={cmp === c.date} className={`chip ${cmp === c.date ? 'on' : ''}`} onClick={() => onCmp(cmp === c.date ? null : c.date)}>
+              {c.label}
+            </button>
+          ))}
         </div>
+      )}
+      {cmp !== null && (
+        <div className="cmp-key">
+          <span>
+            <i className="before" />
+            Contorno: antes ({fmtDate(cmp, true)})
+          </span>
+          <span>
+            <i className="now" />
+            Figura: ahora ({nowLabel})
+          </span>
+        </div>
+      )}
+      {atStart ? (
+        <div className="character-deltas tiny muted">Así empezaste. Mueve la barra para ver cómo has cambiado.</div>
+      ) : deltas.length ? (
+        <>
+          <div className="tiny muted" style={{ marginBottom: 6 }}>
+            {cmp === null ? 'Desde tu primer registro' : `Desde el ${fmtDate(cmp, true)}`} hasta {nowLabel}:
+          </div>
+          <div className="cmp-deltas">
+            {deltas.map((d) => {
+              const text = formatDelta(d);
+              const value = text.slice(text.indexOf(d.label) + d.label.length + 1);
+              return (
+                <div key={d.key} className={`cmp-delta ${d.estimated ? 'est' : ''}`} title={d.estimated ? 'Estimado: no lo mediste en las dos fechas' : `${d.from} → ${d.to} ${d.unit}`}>
+                  <span>{d.label}</span>
+                  <b>
+                    {d.estimated ? '≈ ' : ''}
+                    {value}
+                  </b>
+                </div>
+              );
+            })}
+          </div>
+          {anyEstimated && <div className="tiny faint" style={{ marginTop: 6 }}>≈ estimado: no lo mediste en las dos fechas (se proyecta con tu peso).</div>}
+        </>
+      ) : (
+        <div className="character-deltas tiny muted">Mide lo mismo dos veces (peso, % de grasa o contornos con cinta) para ver aquí cuánto cambiaste.</div>
       )}
     </div>
   );
