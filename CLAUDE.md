@@ -376,8 +376,10 @@ cd apps/api && pnpm dev:mcp   # servidor MCP en :8788 (misma D1 local)
   - **Tu cuerpo 3D: músculos y antes / ahora** (solo visualización, sin XP): `engine/muscle-map.ts` (core, con pruebas)
     dice qué grupo muscular hay en cada punto del cuerpo (`muscleRegionAt(parte, v, ángulo, xn)`) y de qué color va según
     `muscleStatus` y `config.training` (`musclePaint`: Estado = recuperando 48/72 h > en la meta > trabajado > te falta;
-    Volumen; Recuperación), con `muscleLegend` y `muscleDetail`. El personaje tiene modo músculos (`FigureSpec.muscles`:
-    tinte suave por vértice con bordes difuminados y surco entre músculos; `Figure.paintMuscles` solo repinta) y silueta
+    Volumen; Recuperación), con `muscleLegend` y `muscleDetail`. El personaje tiene modo músculos (`FigureSpec.muscles`;
+    `Figure.paintMuscles` solo repinta): cada músculo es una forma anatómica (`muscleFieldAt`: músculo, qué tan adentro,
+    vecino) con tinte que se desvanece hacia el borde, piel sin pintar entre músculos y surco tenue entre vecinos; lleva
+    short deportivo gris a medio muslo (los glúteos asoman como tono en la tela) y silueta
     "antes" (`FigureSpec.ghost`, contorno translúcido). `Stage`: `setMusclePaint`, `setGhost`, `turnTo` (Frente /
     Espalda) y `onPick` (tocar un músculo). Se ve en Entrenamiento (`ui/MuscleBody.tsx`, reemplaza al mapa 2D, que queda
     de respaldo si no hay WebGL) y en Perfil (encuadre Cuerpo · Músculos · Rostro). "Antes / ahora"
