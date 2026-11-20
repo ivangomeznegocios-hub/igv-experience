@@ -1,9 +1,10 @@
 import { GAME_CONFIG } from '../config/game';
 import { describeEvent, EVENT_TEXT, fmtMoney } from '../assistant/format';
-import { isInRoutine, type Entity, type GameEvent, type MissionData, type TodoData, type ViceData } from '../types';
+import { isInRoutine, type Entity, type GameEvent, type MissionData, type TodoData, type TrainingSettingsData, type ViceData } from '../types';
 import { toLocalDate, weekday } from '../util/dates';
 import type { GameState } from './project';
 import { quickMissionId } from './reports';
+import { linkedTrainingDailyId } from './training';
 
 /**
  * "¿Cómo fue tu día?": qué registraste un día (agrupado por área) y qué falta, con un % de día registrado.
@@ -345,7 +346,8 @@ export const DAY_CHECKS: DayCheck[] = [
   },
 
   // Sistemas integrados después: una entrada cada uno (ver docs/sistemas/habitos.md).
-  // Entrenamiento: solo pregunta si marcaste tu diaria de entreno (la ligada en Entrenamiento → Ajustes) sin anotar qué hiciste.
+  // Entrenamiento: solo pregunta si marcaste tu diaria de entreno (la ligada en Entrenamiento → Ajustes; por defecto
+  // "Entrenar 30 min") sin anotar qué hiciste.
   eventCheck({
     id: 'entreno',
     area: 'cuerpo',
@@ -354,7 +356,7 @@ export const DAY_CHECKS: DayCheck[] = [
     question: 'Marcaste tu entreno: ¿qué ejercicios y músculos trabajaste?',
     types: ['workout.logged'],
     applies: (c) => {
-      const linked = (c.list<{ missionId?: string | null }>('training', 'settings')[0]?.data.missionId ?? null) as string | null;
+      const linked = linkedTrainingDailyId(c.list<TrainingSettingsData>('training', 'settings')[0]?.data, c.list('missions', 'daily'));
       return !!linked && c.doneOn.has(linked);
     },
     skipLabel: 'No quiero anotar detalles',

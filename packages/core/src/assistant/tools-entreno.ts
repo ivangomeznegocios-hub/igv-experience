@@ -67,7 +67,7 @@ const registrarEntrenamiento = tool({
   title: 'Registrar entrenamiento',
   group: 'registrar',
   writes: true,
-  description: `Registra un entrenamiento que Iván HIZO: tipo, dónde, minutos, esfuerzo (RPE 1–10) y ejercicios con sus series. Los nombres se buscan en la biblioteca (~80 ejercicios) aunque no sean exactos. Igual que la app, también completa la misión de entrenar del día ("Entrenar", media · ${GAME_CONFIG.missionXp.media} XP, o la diaria que él eligió) si no estaba hecha: de ahí salen XP, racha y oro. Un récord personal nuevo da +${GAME_CONFIG.missionXp[GAME_CONFIG.training.record.size]} XP. Para algo sin ejercicios (fútbol, yoga) manda solo tipo y minutos.`,
+  description: `Registra un entrenamiento que Iván HIZO: tipo, dónde, minutos, esfuerzo (RPE 1–10) y ejercicios con sus series. Los nombres se buscan en la biblioteca (~80 ejercicios) aunque no sean exactos. Igual que la app, también completa la misión de entrenar del día (su diaria de entrenar —por defecto "Entrenar 30 min"— o, si eligió la misión rápida, "Entrenar", media · ${GAME_CONFIG.missionXp.media} XP) si no estaba hecha: de ahí salen XP, racha y oro. Un récord personal nuevo da +${GAME_CONFIG.missionXp[GAME_CONFIG.training.record.size]} XP. Para algo sin ejercicios (fútbol, yoga) manda solo tipo y minutos.`,
   input: z.object({
     tipo: z.enum(WORKOUT_KINDS).optional().describe('fuerza, cardio, movilidad, deporte, clase, caminata u otro. Por defecto: fuerza si hay ejercicios de fuerza, si no cardio.'),
     titulo: z.string().trim().max(120).optional().describe('Nombre corto ("Pecho y tríceps", "Fútbol con amigos").'),
@@ -175,11 +175,14 @@ const registrarEntrenamiento = tool({
   },
 });
 
-/** Líneas de entrenamiento para el panorama (ver_resumen y el Coach). */
-export function renderTrainingOverview(s: AssistantSnapshot): string[] {
+/**
+ * Líneas de entrenamiento para el panorama (ver_resumen y el Coach). La recuperación se calcula a la hora actual
+ * (`nowIso`), no a la de la foto: la foto en caché puede tener horas.
+ */
+export function renderTrainingOverview(s: AssistantSnapshot, nowIso: string = s.computedAt): string[] {
   const t = (s as { training?: TrainingSummary }).training;
   if (!t) return [];
-  const a = trainingAnalysis(t, s.computedAt);
+  const a = trainingAnalysis(t, nowIso);
   if (!t.lastWorkout && !a.sessions) return ['', '## Entrenamiento', 'Sin entrenamientos registrados todavía.'];
   return ['', '## Entrenamiento', ...analysisLines(a, t, false)];
 }

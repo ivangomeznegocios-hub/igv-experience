@@ -15,6 +15,7 @@ import {
 import { EXERCISE_LIBRARY, MUSCLES, type ExerciseDef, type MuscleGroup } from '../training/library';
 import { quickMissionId } from './reports';
 import { RECORD_METRIC, type ExerciseRecord, type ExerciseTop, type MuscleAggregate, type TrainingSummary } from './modules/training';
+import type { XpEntry } from './context';
 import { diffDays, weekday } from '../util/dates';
 
 /**
@@ -445,8 +446,17 @@ export function topOfSets(measure: ExerciseMeasure, sets: WorkoutSet[]): number 
   return Math.round(best * 100) / 100;
 }
 
-/** Ejercicios de un entrenamiento nuevo que superarían tu mejor marca (vista previa; el motor decide la XP). */
-export function wouldBeRecords(records: Record<string, ExerciseRecord>, exercises: { exerciseId: string; measure: ExerciseMeasure; sets: WorkoutSet[] }[]): string[] {
+/**
+ * Ejercicios de un entrenamiento nuevo que superarían tu mejor marca (vista previa; el motor decide la XP).
+ * Con `day` (fecha del registro y libro de XP) deja solo los que darían XP ese día, como el motor: uno por
+ * ejercicio por día y `record.maxPerDay` por día, contando los récords que ya dieron XP esa fecha.
+ */
+export function wouldBeRecords(
+  records: Record<string, ExerciseRecord>,
+  exercises: { exerciseId: string; measure: ExerciseMeasure; sets: WorkoutSet[] }[],
+  day?: { date: string; ledger: Pick<XpEntry, 'date' | 'source' | 'refId'>[] },
+  cfg: GameConfigInput = GAME_CONFIG as GameConfigInput,
+): string[] {
   const out: string[] = [];
   for (const x of exercises) {
     const r = records[x.exerciseId];
@@ -455,7 +465,24 @@ export function wouldBeRecords(records: Record<string, ExerciseRecord>, exercise
     const now = topOfSets(x.measure, x.sets);
     if (prev > 0 && now > prev + 1e-6 && !out.includes(x.exerciseId)) out.push(x.exerciseId);
   }
-  return out;
+  if (!day) return out;
+  const given = day.ledger.filter((e) => e.source === 'training_record' && e.date === day.date);
+  const taken = new Set(given.map((e) => e.refId));
+  return out.filter((id) => !taken.has(id)).slice(0, Math.max(0, cfg.training.record.maxPerDay - given.length));
+}
+
+// ---------------------------------------------------------------------------------------------
+// Ejercicios propios: músculos que caben en un registro
+// ---------------------------------------------------------------------------------------------
+
+/** Máximo de músculos por ejercicio en un registro `workout.logged` (lo mismo que acepta el esquema de events.ts). */
+export const MAX_EXERCISE_MUSCLES = { primary: 6, secondary: 8 } as const;
+
+/** Músculos de un ejercicio propio recortados a lo que acepta un registro: sin repetidos y con los topes. */
+export function capExerciseMuscles(primary: readonly MuscleId[], secondary: readonly MuscleId[] = []): { primary: MuscleId[]; secondary: MuscleId[] } {
+  const p = [...new Set(primary)].slice(0, MAX_EXERCISE_MUSCLES.primary);
+  const s = [...new Set(secondary)].filter((m) => !p.includes(m)).slice(0, MAX_EXERCISE_MUSCLES.secondary);
+  return { primary: p, secondary: s };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -471,13 +498,26 @@ export interface TrainingMission {
   mainQuestId: string | null;
 }
 
+/** Diaria de entrenar del catálogo inicial ("Entrenar 30 min"): la que cuenta El Sedentario y la rutina de Hoy. */
+export const DEFAULT_TRAINING_DAILY = 'daily-entrenar';
+
 /**
- * La misión que se completa al registrar un entrenamiento: la diaria elegida en Ajustes de entrenamiento (si existe)
- * o la misión rápida "Entrenar" (media · Fuerza física).
+ * Id de la diaria ligada al entrenamiento: la elegida en Ajustes de entrenamiento; si nunca eligió (`missionId`
+ * sin definir), la diaria de entrenar del catálogo inicial. `null` (eligió la misión rápida) o una diaria que ya no
+ * existe → sin diaria ligada.
+ */
+export function linkedTrainingDailyId(settings: TrainingSettingsData | null | undefined, entities: Entity[]): string | null {
+  const id = settings?.missionId === undefined ? DEFAULT_TRAINING_DAILY : settings.missionId;
+  return id && entities.some((e) => e.id === id && !e.deletedAt && e.module === 'missions' && e.kind === 'daily') ? id : null;
+}
+
+/**
+ * La misión que se completa al registrar un entrenamiento: la diaria ligada (`linkedTrainingDailyId`: la elegida en
+ * Ajustes de entrenamiento o, por defecto, "Entrenar 30 min") o la misión rápida "Entrenar" (media · Fuerza física).
  */
 export function trainingMission(settings: TrainingSettingsData | null | undefined, entities: Entity[], cfg: GameConfigInput = GAME_CONFIG as GameConfigInput): TrainingMission {
-  const id = settings?.missionId;
-  const ent = id ? entities.find((e) => e.id === id && !e.deletedAt && e.module === 'missions' && e.kind === 'daily') : undefined;
+  const id = linkedTrainingDailyId(settings, entities);
+  const ent = id ? entities.find((e) => e.id === id) : undefined;
   if (ent) {
     const d = ent.data as MissionData;
     return { missionId: ent.id, title: d.title, size: d.size, attribute: d.attribute, kind: 'daily', mainQuestId: d.mainQuestId ?? null };

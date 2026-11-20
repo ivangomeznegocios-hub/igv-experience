@@ -1,4 +1,4 @@
-import { quickMissionId, type AttributeId, type CompletionKind, type Entity, type GameEvent, type GeneratedMission, type MissionData, type MissionSize, type SettingsData, type TodoData } from '@igv/core';
+import { TRAINING_SETTINGS_ID, linkedTrainingDailyId, quickMissionId, type TrainingSettingsData, type AttributeId, type CompletionKind, type Entity, type GameEvent, type GeneratedMission, type MissionData, type MissionSize, type SettingsData, type TodoData } from '@igv/core';
 import { addEvent, getEntity, getEvents, restoreEvent, saveEntity, voidEvent } from '../data/store';
 import { toast, undoToast } from '../ui/kit';
 import { openWorkout } from './entreno';
@@ -14,12 +14,11 @@ export function complete(p: CompletionInput, date?: string, opts: { silent?: boo
 }
 
 /**
- * ¿Esta misión es tu entreno? Solo la diaria ligada en Entrenamiento → Ajustes: así, al anotar el entreno después,
- * no se crea otra misión "Entrenar" (la XP no se duplica).
+ * ¿Esta misión es tu entreno? Solo la diaria ligada en Entrenamiento → Ajustes (por defecto "Entrenar 30 min"): así,
+ * al anotar el entreno después, no se crea otra misión "Entrenar" (la XP no se duplica).
  */
 function isTrainingMission(m: Entity<MissionData>): boolean {
-  const linked = (getEntity('training-settings')?.data as { missionId?: string | null } | undefined)?.missionId;
-  return !!linked && linked === m.id;
+  return linkedTrainingDailyId(getEntity(TRAINING_SETTINGS_ID)?.data as TrainingSettingsData | undefined, [m]) === m.id;
 }
 
 export function completeMission(m: Entity<MissionData>, date?: string) {

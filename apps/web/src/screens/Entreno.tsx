@@ -698,7 +698,7 @@ function RoutinesTab() {
   const custom = list<ExerciseData>('training', 'exercise');
   const dailies = list<MissionData>('missions', 'daily');
   const settings = state.training.settings;
-  const mission = trainingMission(settings, list('missions', 'daily'));
+  const mission = trainingMission(settings, dailies);
   return (
     <>
       <div className="card">
@@ -725,7 +725,7 @@ function RoutinesTab() {
       <div className="card">
         <h2>Ajustes</h2>
         <Field label="Al guardar un entrenamiento, cuenta como">
-          <select className="input" value={settings.missionId ?? ''} onChange={(e) => saveTrainingSettings(settings, { missionId: e.target.value || null })}>
+          <select className="input" value={mission.kind === 'daily' ? mission.missionId : ''} onChange={(e) => saveTrainingSettings(settings, { missionId: e.target.value || null })}>
             <option value="">Entrenar (misión rápida · media · {GAME_CONFIG.missionXp.media} XP)</option>
             {dailies.map((d) => (
               <option key={d.id} value={d.id}>

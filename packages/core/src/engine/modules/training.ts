@@ -277,7 +277,8 @@ export function guessWorkoutKind(text: string): WorkoutKind {
 
 function minutesFromText(text: string): number | null {
   const h = /(\d+(?:[.,]\d+)?)\s*(?:h|hr|hrs|hora|horas)\b/i.exec(text);
-  const m = /(\d+)\s*(?:min|mins|minutos|m)\b/i.exec(text);
+  // Una "m" sola son metros ("Nadé 800 m"), no minutos.
+  const m = /(\d+)\s*(?:min|mins|minuto|minutos)\b/i.exec(text);
   const total = (h ? Number(h[1].replace(',', '.')) * 60 : 0) + (m ? Number(m[1]) : 0);
   return total > 0 && total <= 1440 ? Math.round(total) : null;
 }

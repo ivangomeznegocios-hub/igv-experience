@@ -2,10 +2,13 @@ import {
   EXERCISE_BY_ID,
   GAME_CONFIG,
   TRAINING_SETTINGS_ID,
+  capExerciseMuscles,
   customExerciseId,
   trainingMission,
+  validateEvent,
   wouldBeRecords,
   type Entity,
+  type EventPayload,
   type ExerciseData,
   type ExerciseDef,
   type ExerciseMeasure,
@@ -22,7 +25,7 @@ import {
   type WorkoutSet,
 } from '@igv/core';
 import { addEvent, getEvents, restoreEvent, saveEntity, voidEvent } from '../data/store';
-import { undoToast } from '../ui/kit';
+import { toast, undoToast } from '../ui/kit';
 import { sfx } from './sound';
 import { newId } from './time';
 
@@ -174,7 +177,9 @@ export function cleanSets(measure: ExerciseMeasure, sets: WorkoutSet[]): Workout
 
 export function draftExercisesClean(d: WorkoutDraft): WorkoutExercise[] {
   return d.exercises
-    .map((x) => ({ exerciseId: x.exerciseId, name: x.name.slice(0, 120), ...(x.primary?.length ? { primary: x.primary, secondary: x.secondary ?? [] } : {}), sets: cleanSets(x.measure, x.sets) }))
+    // Músculos recortados a lo que acepta el registro (6 principales, 8 secundarios): un ejercicio propio con más
+    // haría que el servidor rechazara el entrenamiento y su misión.
+    .map((x) => ({ exerciseId: x.exerciseId, name: x.name.slice(0, 120), ...(x.primary?.length ? capExerciseMuscles(x.primary, x.secondary) : {}), sets: cleanSets(x.measure, x.sets) }))
     .filter((x) => x.sets.length > 0)
     .slice(0, 40);
 }
@@ -192,33 +197,38 @@ export function missionFor(state: GameState, entities: Entity[], date: string) {
 
 /**
  * Registra el entrenamiento y, si no estaba, la misión de entrenar del día (de ahí salen XP, racha y oro).
- * "Deshacer" anula ambos.
+ * "Deshacer" anula ambos. Si el registro no pasaría la validación del servidor no guarda nada (devuelve null):
+ * así el servidor no rechaza el lote y no se pierde la misión que iba junto.
  */
 export function logWorkout(draft: WorkoutDraft, date: string, state: GameState, entities: Entity[]) {
   const exercises = draftExercisesClean(draft);
   const { mission, done } = missionFor(state, entities, date);
+  const payload: EventPayload<'workout.logged'> = {
+    kind: draft.kind,
+    title: draft.title.trim().slice(0, 120) || undefined,
+    where: draft.where ?? undefined,
+    minutes: draft.minutes && draft.minutes > 0 ? Math.min(1440, Math.round(draft.minutes)) : undefined,
+    rpe: draft.rpe ?? undefined,
+    note: draft.note.trim().slice(0, 2000) || undefined,
+    routineId: draft.routineId,
+    missionEventId: null,
+    exercises,
+  };
+  const check = validateEvent({ id: newId(), type: 'workout.logged', occurredAt: new Date().toISOString(), localDate: date, payload });
+  if (!check.ok) {
+    toast('No pude guardar el entrenamiento: revisa los ejercicios y las series.', 'error');
+    return null;
+  }
   const missionEv = done
     ? null
     : addEvent('mission.completed', { missionId: mission.missionId, title: mission.title, size: mission.size, attribute: mission.attribute, kind: mission.kind, mainQuestId: mission.mainQuestId, npcId: null }, { localDate: date });
+  // Vista previa de récords con las reglas del motor (uno por ejercicio por día y un máximo por día).
   const records = wouldBeRecords(
     state.training.records,
     draft.exercises.map((x) => ({ exerciseId: x.exerciseId, measure: x.measure, sets: cleanSets(x.measure, x.sets) })),
-  ).slice(0, GAME_CONFIG.training.record.maxPerDay);
-  const ev = addEvent(
-    'workout.logged',
-    {
-      kind: draft.kind,
-      title: draft.title.trim().slice(0, 120) || undefined,
-      where: draft.where ?? undefined,
-      minutes: draft.minutes && draft.minutes > 0 ? Math.min(1440, Math.round(draft.minutes)) : undefined,
-      rpe: draft.rpe ?? undefined,
-      note: draft.note.trim().slice(0, 2000) || undefined,
-      routineId: draft.routineId,
-      missionEventId: missionEv?.id ?? null,
-      exercises,
-    },
-    { localDate: date },
+    { date, ledger: state.xp.ledger },
   );
+  const ev = addEvent('workout.logged', { ...payload, missionEventId: missionEv?.id ?? null }, { localDate: date });
   const xp = (missionEv ? GAME_CONFIG.missionXp[mission.size] : 0) + records.length * GAME_CONFIG.missionXp[GAME_CONFIG.training.record.size];
   sfx.coin();
   const names = records.map((id) => draft.exercises.find((x) => x.exerciseId === id)?.name ?? id);
@@ -232,16 +242,29 @@ export function logWorkout(draft: WorkoutDraft, date: string, state: GameState, 
   return { eventId: ev.id, missionEventId: missionEv?.id ?? null, records };
 }
 
-/** Anula un entrenamiento y la misión que se registró con él (si no hay otro entrenamiento ese día). */
+/**
+ * Anula un entrenamiento. Si era el único que quedaba ese día, también anula la misión que se registró con él o con
+ * otro entrenamiento de ese día ya anulado (así no queda una misión "Entrenar" sin entrenamiento).
+ */
 export function voidWorkout(w: Workout, state: GameState) {
   if (w.source !== 'entreno') return;
   voidEvent(w.eventId);
   const voided = [w.eventId];
   const others = state.training.workouts.some((o) => o.eventId !== w.eventId && o.date === w.date);
-  const mission = w.missionEventId ? getEvents().find((e) => e.id === w.missionEventId && !e.voidedAt) : undefined;
-  if (mission && !others) {
-    voidEvent(mission.id);
-    voided.push(mission.id);
+  if (!others) {
+    const all = getEvents();
+    const paired = new Set(
+      all
+        .filter((e) => e.type === 'workout.logged' && e.localDate === w.date && (e.id === w.eventId || e.voidedAt))
+        .map((e) => (e.payload as { missionEventId?: string | null } | undefined)?.missionEventId)
+        .filter(Boolean),
+    );
+    if (w.missionEventId) paired.add(w.missionEventId);
+    for (const e of all)
+      if (paired.has(e.id) && !e.voidedAt && e.type === 'mission.completed') {
+        voidEvent(e.id);
+        voided.push(e.id);
+      }
   }
   undoToast(`Anulado: ${w.title}`, () => voided.forEach(restoreEvent));
 }
@@ -270,7 +293,7 @@ export function routineFromWorkout(name: string, w: Workout): RoutineData {
 export function saveCustomExercise(data: ExerciseData, existingIds: Set<string>): Entity<ExerciseData> {
   let id = customExerciseId(data.name);
   if (existingIds.has(id) || EXERCISE_BY_ID.has(id)) id = `${id}-${key().slice(0, 4)}`;
-  return saveEntity<ExerciseData>({ id, module: 'training', kind: 'exercise', data });
+  return saveEntity<ExerciseData>({ id, module: 'training', kind: 'exercise', data: { ...data, ...capExerciseMuscles(data.primary, data.secondary) } });
 }
 
 export function saveTrainingSettings(prev: TrainingSettingsData, patch: Partial<TrainingSettingsData>) {

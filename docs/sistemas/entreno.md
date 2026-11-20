@@ -62,10 +62,12 @@ vigente > músculos guardados en el registro (si borraste el ejercicio propio).
 ## XP (reglas de oro intactas)
 
 - Un entrenamiento **no da XP por sí solo**. La app (y la IA) registran junto una `mission.completed`: la diaria
-  elegida en Ajustes de entrenamiento o, por defecto, la misión rápida "Entrenar" (`quickMissionId('Entrenar')`,
-  media · Fuerza física, `config.training.mission`). De ahí salen XP, racha, oro y atributos. Si esa misión ya contó
-  ese día no se registra otra. "Deshacer" anula ambos; anular un entrenamiento desde el historial anula su misión solo
-  si no hay otro entrenamiento ese día.
+  ligada (`linkedTrainingDailyId`: la elegida en Ajustes de entrenamiento o, si nunca eligió, `daily-entrenar`
+  "Entrenar 30 min", la que cuenta El Sedentario) o, si eligió la misión rápida (`missionId: null`) o la diaria ya no
+  existe, "Entrenar" (`quickMissionId('Entrenar')`, media · Fuerza física, `config.training.mission`). De ahí salen
+  XP, racha, oro y atributos. Si esa misión ya contó ese día no se registra otra. "Deshacer" anula ambos; anular el
+  último entrenamiento que quedaba de un día desde el historial anula la misión registrada con los entrenamientos de
+  ese día.
 - **Récord personal** (fuente `training_record`, `config.training.record`): misión chica (10 XP, Fuerza física) cuando
   un registro supera la mejor marca (1RM estimado, reps, segundos o km según el ejercicio) de los registros
   **anteriores por orden de registro** con fecha igual o anterior, y ya había al menos uno. Máximo uno por ejercicio
