@@ -69,13 +69,15 @@ const Salud = lazy(() => import('./screens/Salud'));
 
 // [[habitos]]
 const Habitos = lazy(() => import('./screens/Habitos'));
+// [[ciudad]]
+const Ciudad = lazy(() => import('./screens/Ciudad'));
 const Dia = lazy(() => import('./screens/Dia'));
 
 
 const PROGRESS = ['/progreso', '/jefes', '/logros', '/temporadas', '/metas', '/estadisticas', '/reporte', '/anual', '/tienda', '/historial', '/retos', '/records'];
 const WORLD = [
   '/mas', '/inventario', '/npcs', '/mapa', '/vida', '/ajustes', '/game-master', '/conectar-ia', '/enemigos', '/biblioteca', '/cuerpo', '/buscar',
-  '/habilidades', '/tiempo', '/aprendizaje', '/salud', '/habitos', '/entreno',
+  '/habilidades', '/tiempo', '/aprendizaje', '/salud', '/habitos', '/entreno', '/ciudad',
 ];
 const TODAY = ['/dia'];
 
@@ -281,6 +283,7 @@ export default function App() {
 
                 {/* [[habitos]] */}
                 <Route path="/habitos" element={<Habitos />} />
+                <Route path="/ciudad" element={<Ciudad />} />
                 <Route path="/dia" element={<Dia />} />
 
                 <Route path="*" element={<Hoy />} />

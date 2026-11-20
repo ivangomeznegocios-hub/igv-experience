@@ -41,12 +41,13 @@ import { openDayDeck } from '../ui/DayDeck';
 import { openDayResult } from '../ui/DayResult';
 import { NextPlayCard } from '../ui/NextPlay';
 import { TodayTiles } from '../ui/TodayTiles';
+import { CityCard } from '../ui/CityCard';
 import { WeekPaceCard } from '../ui/WeekPace';
 import { WeekShareCard } from '../ui/WeekShare';
 import { DayReviewRow } from '../ui/DayReview';
 import { HabitsHighlight } from '../ui/HabitBits';
 
-type MesaTab = 'hoy' | 'semana' | 'todo';
+type MesaTab = 'hoy' | 'ciudad' | 'semana' | 'todo';
 
 function useWide(query = '(min-width: 1100px)') {
   const [wide, setWide] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.(query).matches);
@@ -147,6 +148,7 @@ export default function Hoy() {
             {dayExtras}
           </div>
           <div className="mesa-col">
+            <CityCard />
             <TodayTiles />
             {all}
           </div>
@@ -166,12 +168,14 @@ export default function Hoy() {
               onChange={setTab}
               options={[
                 { value: 'hoy', label: 'Hoy' },
+                ...(state.city.start ? [{ value: 'ciudad' as const, label: 'Ciudad' }] : []),
                 { value: 'semana', label: 'Semana' },
                 { value: 'todo', label: 'Todo' },
               ]}
             />
           </div>
           {tab === 'hoy' && dayExtras}
+          {tab === 'ciudad' && <CityCard />}
           {tab === 'semana' && week}
           {tab === 'todo' && all}
         </>

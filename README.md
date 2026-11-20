@@ -26,6 +26,7 @@ Mecánicas de juego, lenguaje y estética sobrios de app de rendimiento personal
 | 8. Personaje 3D | **Tu personaje** en Perfil: figura 3D que giras con el dedo y que toma tu complexión de tus medidas reales (estatura, peso, % de grasa y contornos), con **línea de tiempo** para ver cómo cambia tu cuerpo, apariencia afinada a tu cara a partir de una foto y editable (tono de piel, cabello, barba, ojos, lentes y 19 rasgos del rostro a detalle) y **ropa** (playera, manga larga, camisa, sudadera, jeans, pantalón, pants, short, tenis, zapatos, reloj, gorra) |
 | 9. Conectar IA | **Servidor MCP** para usar tu app desde Claude (web, escritorio, celular y Claude Code), ChatGPT, Codex, Antigravity o Cursor: ve tu progreso y registra, planea y organiza por ti desde el chat. Conexión con inicio de sesión (OAuth, apruebas en la app) o con llaves, modo solo lectura, **bitácora de lo que hizo la IA con "Deshacer"**, y el **Coach de la app ahora también actúa** (registra por ti) |
 | 10. Tu vida completa | **Háblale a tu app**: botón de micrófono en cualquier pantalla ("Cuéntame"); el Coach registra todo solo con "Deshacer" y, sin conexión, un lector local te propone los registros con un toque; nada de lo que dices se pierde; y micrófono chico en **todos los campos de texto** (en inglés donde practicas inglés). Misiones que se clasifican solas (tamaño y atributo). **Entrenamiento** con tu cuerpo 3D pintado por músculo (trabajado, te falta, recuperándose; frente y espalda), series por músculo, recuperación de 48–72 h, qué te falta, sesión sugerida y récords. **Mi gente** para toda la vida: familia arriba, círculos, roles, de dónde conoces a cada quien, niveles de cercanía que suben con convivencias reales, temperatura y cumpleaños. **Mapa** de Guadalajara por desbloquear (solo, en pareja, en familia, con amigos), colecciones y capa **Mi empresa**. **Habilidades** por categoría, **Tu tiempo** con cronómetro y **Biblioteca** con lo que aprendiste. **Aprendizaje** (inglés) con tarjetas, tests con IA, errores que repites y práctica en voz alta. **Salud**: chequeos que ya te tocan, mediciones y ficha médica. **Hábitos** que se arman solos y **¿Cómo fue tu día?** con lo que registraste y lo que faltó |
+| 11. Juego (en curso) | Plan en [`docs/plan-juego.md`](docs/plan-juego.md). **La mesa**: Hoy con el anillo del día (puntaje 0–100 de cómo te fue; con 70 ganas el día), la siguiente jugada, mosaicos de un toque, registro en tarjetas y resultado al cerrar; los días que no juegas son pausa, no derrota. **Tu ciudad**: lo que haces da materiales a su distrito; construyes, esperas la obra, la inauguras y recoges lo que produce, en una maqueta 3D |
 
 Los números del juego están en [`packages/core/src/config/game.ts`](packages/core/src/config/game.ts).
 Las reglas y decisiones técnicas están en [`CLAUDE.md`](CLAUDE.md).
@@ -112,7 +113,9 @@ está listo por si algún día las quieres; se activan pidiéndoselo a Claude Co
 
 ## Uso diario
 
-1. **En la mañana**: check-in de sueño (energía). Tu **rutina** de diarias ya aparece como lista de checks.
+0. **Primera vez**: en Hoy toca **Empezar desde hoy** (arranca tu marcador y tu ciudad).
+1. **En la mañana**: la tarjeta **Ahora** te dice qué sigue (sueño, tus 3, recoger, inaugurar…). Tu **rutina** está
+   en **Hoy te toca**: un toque marca, otro desmarca.
 2. **Durante el día**: toca el check (o desliza →) al completar. ¿Algo que no está en el catálogo? Botón
    **+ → Hice algo**. Ingresos, gastos, personas, entrenos, tiempo, lugares, salud y metas también van por el **+**.
    **¿Prefieres hablar?** Toca el micrófono (arriba del **+**) y cuéntale tu día: "gasté 200 en comida, comí con

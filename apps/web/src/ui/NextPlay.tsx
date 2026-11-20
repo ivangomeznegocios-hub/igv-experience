@@ -4,6 +4,7 @@ import { nextPlay, type Entity, type MissionData } from '@igv/core';
 import { addEvent, getEntity, useGame, voidEvent } from '../data/store';
 import { localHour } from '../lib/narrator';
 import { completePending } from '../lib/play';
+import { collect, inaugurate, startBuild } from '../lib/city';
 import { startScore } from './DayRing';
 import { openDayDeck } from './DayDeck';
 import { openPlanSheet } from './DayPlan';
@@ -40,6 +41,20 @@ export function NextPlayCard() {
       main = { label: 'Hecho', run: () => completePending(game, a.missionId) };
       const ent = getEntity(a.missionId);
       if (ent?.module === 'missions') extra = { label: 'Empezar', icon: 'play', run: () => startMissionQuest(ent as Entity<MissionData>) };
+      break;
+    }
+    case 'inaugurate': {
+      const d = state.city.districts[a.districtId as keyof typeof state.city.districts];
+      main = { label: 'Inaugurar', run: () => inaugurate(d) };
+      break;
+    }
+    case 'collect':
+      main = { label: 'Recoger', run: () => collect(state) };
+      break;
+    case 'build': {
+      const d = state.city.districts[a.districtId as keyof typeof state.city.districts];
+      main = { label: d.level === 0 ? 'Fundar' : 'Construir', run: () => startBuild(d) };
+      extra = { label: 'Ver ciudad', icon: 'building', run: () => navigate('/ciudad') };
       break;
     }
     case 'log':
