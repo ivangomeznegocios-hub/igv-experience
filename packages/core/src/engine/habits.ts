@@ -10,7 +10,8 @@ import { dayNum, fromDayNum, toLocalDate } from '../util/dates';
  * Hábitos: análisis de tu rutina (diarias con `routine !== false`) a partir de lo que registras.
  * Es solo lectura: no da ni quita XP. Todo sale de los eventos y del catálogo (nada se guarda).
  *
- * - Un día cuenta solo si le tocaba (`days`), si el hábito ya existía y si no fue día de descanso.
+ * - Un día cuenta solo si le tocaba (`days`), si el hábito ya existía y si no fue día de descanso
+ *   (`restDays`: los descansos válidos de la racha y los días marcados de descanso en que además registraste algo).
  * - Hoy nunca cuenta en contra (como la racha).
  * - Lo registrado como "Hice algo" con el mismo título que una diaria cuenta para esa diaria.
  */
@@ -110,6 +111,8 @@ export interface HabitSuggestion {
 export interface HabitsState {
   /** Un registro por diaria de la rutina, en el orden del catálogo. */
   routine: HabitStats[];
+  /** Días de descanso para los hábitos y "¿Cómo fue tu día?" (ver `habitRestDays`). */
+  restDays: Set<string>;
   suggestions: HabitSuggestion[];
   summary: {
     bien: number;
@@ -150,10 +153,22 @@ function doneDays(missions: MissionsState, m: Entity<MissionData>): Set<number> 
   return out;
 }
 
+/**
+ * Días de descanso para los hábitos: los válidos de la racha más los días marcados de descanso en que también
+ * completaste algo. La racha no los cuenta como descanso (ese día ya suma y no gasta cupo), pero sí los marcaste
+ * para descansar: registrar algo más ese día no debe volver "fallado" lo que no hiciste de tu rutina.
+ */
+export function habitRestDays(ctx: Ctx, deps: { missions: MissionsState; streak: StreakState }): Set<string> {
+  const out = new Set(deps.streak.restDays);
+  for (const ev of ofType(ctx, 'rest_day.marked')) if (deps.missions.activeDays.has(ev.localDate)) out.add(ev.localDate);
+  return out;
+}
+
 export function reduceHabits(ctx: Ctx, deps: { missions: MissionsState; streak: StreakState }): HabitsState {
   const t = dayNum(ctx.today);
   const appStart = ctx.events[0]?.localDate ?? ctx.today;
-  const rest = new Set([...deps.streak.restDays].map(dayNum));
+  const restDays = habitRestDays(ctx, deps);
+  const rest = new Set([...restDays].map(dayNum));
   const dailies = entitiesOf<MissionData>(ctx, 'missions', 'daily').sort((a, b) => a.sort - b.sort);
   const inRoutine = dailies.filter((m) => m.data.routine !== false);
 
@@ -168,6 +183,7 @@ export function reduceHabits(ctx: Ctx, deps: { missions: MissionsState; streak: 
 
   return {
     routine,
+    restDays,
     suggestions: habitSuggestions(ctx, inRoutine, dailies, t),
     summary: { bien: count('bien'), medias: count('medias'), flojo: count('flojo'), nuevo: count('nuevo'), last7: sum((h) => h.last7), last30: sum((h) => h.last30) },
   };
@@ -299,6 +315,8 @@ function habitSuggestions(ctx: Ctx, inRoutine: Entity<MissionData>[], dailies: E
   const wFrom = t - Math.max(28, lookback) + 1;
   const routineKeys = new Set(inRoutine.map((m) => quickMissionId(m.data.title)));
   const offRoutine = new Set(dailies.filter((m) => m.data.routine === false).map((m) => m.id));
+  // Diaria fuera de la rutina por título: si lo registraste como "Hice algo", basta con meter esa diaria a la rutina.
+  const offRoutineByKey = new Map(dailies.filter((m) => m.data.routine === false).map((m) => [quickMissionId(m.data.title), m.id] as const));
 
   type Group = { key: string; title: string; size: MissionSize; attribute: AttributeId; last: string; days: Set<number>; dailyId: string | null };
   const groups = new Map<string, Group>();
@@ -332,7 +350,7 @@ function habitSuggestions(ctx: Ctx, inRoutine: Entity<MissionData>[], dailies: E
       windowDays: lookback,
       days: usual.length >= 1 && usual.length <= 4 ? usual : [],
       lastDate: g.last,
-      dailyId: g.dailyId,
+      dailyId: g.dailyId ?? offRoutineByKey.get(g.key) ?? null,
     });
   }
   return out.sort((a, b) => b.times - a.times || (a.lastDate < b.lastDate ? 1 : -1)).slice(0, 6);

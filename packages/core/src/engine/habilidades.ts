@@ -1,6 +1,7 @@
 import { GAME_CONFIG } from '../config/game';
 import {
   SKILL_CATEGORIES,
+  SKILL_CATEGORY_ATTRIBUTE,
   TIME_AREAS,
   TIME_AREA_GROUP,
   TIME_AREA_NAMES,
@@ -54,6 +55,16 @@ export function guessSkillCategory(name: string, attribute?: AttributeId | null)
   const n = strip(name);
   for (const [cat, re] of CATEGORY_HINTS) if (re.test(n)) return cat;
   return (attribute && ATTRIBUTE_CATEGORY[attribute]) || 'otro';
+}
+
+/**
+ * Al escribir el nombre de una habilidad nueva: deduce la categoría si no la elegiste y, con ella, el atributo si
+ * tampoco lo elegiste. Lo que elegiste a mano nunca se pisa (el atributo decide a dónde va la XP de sus rangos).
+ */
+export function skillNameEdit(name: string, picked: { category: boolean; attribute: boolean }): Partial<Pick<SkillData, 'name' | 'category' | 'attribute'>> {
+  if (picked.category) return { name };
+  const category = guessSkillCategory(name);
+  return picked.attribute ? { name, category } : { name, category, attribute: SKILL_CATEGORY_ATTRIBUTE[category] };
 }
 
 /** Categoría de una habilidad: la guardada gana; las habilidades viejas (sin categoría) se deducen. */

@@ -4,6 +4,7 @@ import {
   addDays,
   dayReviewInputFromState,
   eventCheck,
+  isDailyDone,
   memoryAssistantStore,
   reviewDay,
   runAssistantTool,
@@ -100,6 +101,34 @@ describe('hábitos: cumplimiento respetando el horario', () => {
     expect(s.habits.summary.nuevo).toBe(1);
   });
 
+  it('un día marcado de descanso sigue siendo descanso aunque ese día registres otra cosa', () => {
+    const gym2 = daily('daily-gym', { title: 'Gym' }, '2026-11-01');
+    const evs = [ev('checkin.morning', '2026-10-01', { sleepHours: 7 }), ...range('2026-11-11', '2026-11-17').map((d) => done(d, 'daily-gym')), ev('rest_day.marked', '2026-11-18')];
+    const ents = [...base, gym2];
+    const before = run(evs, TODAY, { entities: ents });
+    const withQuick = [...evs, quick('2026-11-18', 'Cociné')];
+    const after = run(withQuick, TODAY, { entities: ents });
+    const a = before.habits.routine[0];
+    const b = after.habits.routine[0];
+    // La racha general sí suma ese día (tuvo misión) y ya no lo cuenta como descanso…
+    expect(after.streak.restDays.has('2026-11-18')).toBe(false);
+    // …pero para los hábitos sigue siendo el descanso que marcaste: nada baja.
+    expect(after.habits.restDays.has('2026-11-18')).toBe(true);
+    expect(b.strip[28]).toBe('rest');
+    expect(b.streak).toBe(a.streak);
+    expect(b.streak).toBe(7);
+    expect(b.last7).toEqual(a.last7);
+    // Y "¿Cómo fue tu día?" no te pide la rutina ni el trabajo ese día.
+    const r = reviewDay(dayReviewInputFromState(after, withQuick, ents, '2026-11-18'));
+    expect(r.restDay).toBe(true);
+    expect(r.checks.map((c) => c.id)).not.toContain('rutina');
+    expect(r.checks.map((c) => c.id)).not.toContain('tiempo');
+    // Si ese día sí hiciste la diaria, cuenta como hecha.
+    const did = run([...evs, done('2026-11-18', 'daily-gym')], TODAY, { entities: ents }).habits.routine[0];
+    expect(did.strip[28]).toBe('done');
+    expect(did.streak).toBe(8);
+  });
+
   it('completarla antes de crearla (registro de días pasados) adelanta su inicio', () => {
     const late = daily('daily-late', { title: 'Late' }, '2026-11-15');
     const s = run([ev('checkin.morning', '2026-10-01', { sleepHours: 7 }), done('2026-11-10', 'daily-late')], TODAY, { entities: [...base, late] });
@@ -171,6 +200,25 @@ describe('hábitos que se arman solos ("Hazlo hábito")', () => {
     const off = daily('daily-off', { title: 'Caminar', routine: false });
     const s = run([start, ...['2026-11-14', '2026-11-16', '2026-11-18'].map((d) => done(d, 'daily-off', 'chica', 'fuerza'))], TODAY, { entities: [...base, off] });
     expect(s.habits.suggestions[0]).toMatchObject({ title: 'daily-off', dailyId: 'daily-off', times: 3 });
+  });
+
+  it('si esa diaria fuera de la rutina la registraste como "Hice algo", sugiere meter la misma (no crear otra)', () => {
+    const off = daily('daily-leer', { title: 'Leer', routine: false });
+    const s = run([start, quick('2026-11-10', 'Leer'), quick('2026-11-13', 'Leer'), quick('2026-11-17', 'Leer')], TODAY, { entities: [...base, off] });
+    expect(s.habits.suggestions[0]).toMatchObject({ key: 'quick-leer', dailyId: 'daily-leer', times: 3 });
+  });
+
+  it('tras "Hazlo hábito", Hoy (isDailyDone con lo completado hoy) y Hábitos coinciden: lo de hoy como "Hice algo" ya cuenta', () => {
+    const correr = daily('daily-correr', { title: 'Correr' }, TODAY);
+    const evs = [start, quick('2026-11-12', 'Correr'), quick('2026-11-17', 'Correr'), quick(TODAY, 'Correr')];
+    const s = run(evs, TODAY, { entities: [...base, correr] });
+    const h = s.habits.routine.find((x) => x.id === 'daily-correr')!;
+    expect(h.doneToday).toBe(true);
+    // La tarjeta "Rutina de hoy" usa este mismo criterio: no ofrece marcarla otra vez (contaría doble).
+    expect(isDailyDone({ doneOn: new Set(s.missions.completedToday) }, correr)).toBe(true);
+    expect(s.missions.completedToday).not.toContain('daily-correr');
+    const r = reviewDay(dayReviewInputFromState(s, evs, [...base, correr], TODAY));
+    expect(r.checks.find((c) => c.id === 'rutina')).toMatchObject({ status: 'done', detail: '1/1' });
   });
 });
 
@@ -248,6 +296,19 @@ describe('"¿Cómo fue tu día?": revisiones del día', () => {
     const y = review([ev('checkin.morning', '2026-10-01', { sleepHours: 7 })], '2026-11-18', ents);
     expect(y.isToday).toBe(false);
     expect(y.checks.find((c) => c.id === 'rutina')!.pending).toEqual(['Leer']);
+  });
+
+  it('"Tiempo" pregunta cuánto trabajaste: el tiempo con tu gente o de ocio no lo responde', () => {
+    // TODAY es jueves (día hábil).
+    const fam = [ev('time.logged', TODAY, { minutes: 120, area: 'familia' }), ev('time.logged', TODAY, { minutes: 30, area: 'ocio' })];
+    const r = review(fam);
+    const t = r.checks.find((c) => c.id === 'tiempo')!;
+    expect(t.status).toBe('missing');
+    expect(t.detail).toBeNull();
+    expect(t.skipLabel).toBe('No trabajé');
+    // Solo suma los minutos de trabajo (oficina o proyecto propio).
+    const work = review([...fam, ev('time.logged', TODAY, { minutes: 90, area: 'trabajo' }), ev('time.logged', TODAY, { minutes: 45, area: 'proyecto' })]);
+    expect(work.checks.find((c) => c.id === 'tiempo')).toMatchObject({ status: 'done', detail: '2 h 15 min' });
   });
 
   it('un día de descanso no pide misiones ni rutina', () => {

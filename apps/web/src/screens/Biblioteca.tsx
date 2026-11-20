@@ -354,9 +354,14 @@ function ProgressSheet({ book, onClose }: { book: Entity<BookData>; onClose: () 
             const patch: Partial<BookData> = {};
             if (mode === 'page' && newPages !== (book.data.pages ?? null)) patch.pages = newPages;
             if (book.data.status === 'pendiente') patch.status = 'leyendo';
-            if (Object.keys(patch).length) saveEntity({ ...book, data: { ...book.data, ...patch } });
+            const patched = Object.keys(patch).length > 0;
+            if (patched) saveEntity({ ...book, data: { ...book.data, ...patch } });
             const ev = addEvent('library.progress', mode === 'page' ? { bookId: book.id, page: pageN } : { bookId: book.id, percent: pctN });
-            undoToast(`Avance guardado${preview !== null ? `: ${preview}%` : ''}`, () => voidEvent(ev.id));
+            undoToast(`Avance guardado${preview !== null ? `: ${preview}%` : ''}`, () => {
+              voidEvent(ev.id);
+              // También regresa el estado y el total de páginas que tenía el libro.
+              if (patched) saveEntity({ ...book, data: book.data });
+            });
             onClose();
           }}
         >

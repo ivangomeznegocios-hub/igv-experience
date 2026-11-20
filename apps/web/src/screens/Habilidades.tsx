@@ -14,6 +14,7 @@ import {
   groupSkillsByCategory,
   guessSkillCategory,
   skillCategory,
+  skillNameEdit,
   topAreas,
   type BookData,
   type Entity,
@@ -172,12 +173,13 @@ function QuickSkill({ skills }: { skills: Entity<SkillData>[] }) {
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
     if (!t) return;
-    const twin = skills.find((s) => norm(s.data.name) === norm(t));
+    const clean = t.replace(/^s[eé] hacer\s+/i, '');
+    // Se compara con el nombre que se guardaría ("Sé hacer ventas" → "Ventas").
+    const twin = skills.find((s) => norm(s.data.name) === norm(clean));
     if (twin) {
       toast(`Ya la tienes: ${twin.data.name}`);
       return;
     }
-    const clean = t.replace(/^s[eé] hacer\s+/i, '');
     const display = clean.charAt(0).toUpperCase() + clean.slice(1);
     const ent = saveEntity<SkillData>({
       id: `skill-${newId().slice(0, 8)}`,
@@ -487,6 +489,8 @@ function SkillForm({ initial, onClose, onDeleted }: { initial?: Entity<SkillData
       : { name: '', attribute: SKILL_CATEGORY_ATTRIBUTE.otro, category: 'otro', ranks: [...SKILL_DEFAULT_RANKS], livelihood: false },
   );
   const [touchedCat, setTouchedCat] = useState(!!initial);
+  // El atributo que elijas a mano no se cambia al corregir el nombre.
+  const [touchedAttr, setTouchedAttr] = useState(!!initial);
   const up = (p: Partial<SkillData>) => setD((x) => ({ ...x, ...p }));
   const valid = d.name.trim() && d.ranks.every((r) => r.trim());
   return (
@@ -518,13 +522,7 @@ function SkillForm({ initial, onClose, onDeleted }: { initial?: Entity<SkillData
         <input
           className="input"
           value={d.name}
-          onChange={(e) => {
-            const name = e.target.value;
-            if (!touchedCat) {
-              const c = guessSkillCategory(name);
-              up({ name, category: c, attribute: SKILL_CATEGORY_ATTRIBUTE[c] });
-            } else up({ name });
-          }}
+          onChange={(e) => up(skillNameEdit(e.target.value, { category: touchedCat, attribute: touchedAttr }))}
         />
       </Field>
       <Field label="Categoría">
@@ -535,7 +533,7 @@ function SkillForm({ initial, onClose, onDeleted }: { initial?: Entity<SkillData
         />
       </Field>
       <Field label="Atributo al que suma (sus rangos)">
-        <AttrSelect value={d.attribute} onChange={(attribute) => up({ attribute })} />
+        <AttrSelect value={d.attribute} onChange={(attribute) => (setTouchedAttr(true), up({ attribute }))} />
       </Field>
       <label className="checkbox">
         <input type="checkbox" checked={!!d.livelihood} onChange={(e) => up({ livelihood: e.target.checked })} />
