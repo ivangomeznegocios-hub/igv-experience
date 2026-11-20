@@ -3,7 +3,7 @@ import { monthKey, type Entity, type ItemData, type SavingsData } from '@igv/cor
 import { addEvent, deleteEntity, saveEntity, useGame, voidEvent } from '../data/store';
 import { updateSettings } from '../lib/actions';
 import { fmtDate, fmtMoney, fmtMonth, newId } from '../lib/time';
-import { Bar, Chips, Empty, Field, PageHeader, Sheet, Tabs, confirmAction, undoToast } from '../ui/kit';
+import { Bar, Chips, Empty, Field, PageHeader, Sheet, Tabs, confirmAction, undoToast, TextInput, TextArea } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { MoneySheet } from './Hoy';
 
@@ -211,10 +211,10 @@ function ItemForm({ kind, initial, onClose }: { kind: 'tool' | 'knowledge'; init
       }
     >
       <Field label="Nombre">
-        <input className="input" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} />
+        <TextInput className="input" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} />
       </Field>
       <Field label="Notas">
-        <textarea className="input" value={d.notes ?? ''} onChange={(e) => setD({ ...d, notes: e.target.value })} />
+        <TextArea className="input" value={d.notes ?? ''} onChange={(e) => setD({ ...d, notes: e.target.value })} />
       </Field>
       <Field label="Enlace">
         <input className="input" type="url" value={d.link ?? ''} onChange={(e) => setD({ ...d, link: e.target.value })} />
@@ -323,7 +323,7 @@ function BudgetSheet({ onClose }: { onClose: () => void }) {
       </p>
       {rows.map((r, i) => (
         <div key={i} className="row" style={{ gap: 6, marginBottom: 8 }}>
-          <input className="input" value={r.cat} placeholder="Categoría" onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, cat: e.target.value } : x)))} />
+          <TextInput className="input" value={r.cat} placeholder="Categoría" onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, cat: e.target.value } : x)))} />
           <input className="input" style={{ width: 130 }} type="number" inputMode="decimal" value={r.amount} placeholder="Monto" onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))} />
           <button className="btn icon ghost danger" aria-label="Quitar" onClick={() => setRows(rows.filter((_, j) => j !== i))}>
             <Icon name="x" />
@@ -450,7 +450,7 @@ function SavingsSheet({ initial, onClose }: { initial: Entity<SavingsData> | nul
       }
     >
       <Field label="Nombre">
-        <input className="input" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} placeholder="Fondo de emergencia" />
+        <TextInput className="input" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} placeholder="Fondo de emergencia" />
       </Field>
       <Field label="Objetivo">
         <input className="input" type="number" value={d.target} onChange={(e) => setD({ ...d, target: Number(e.target.value) })} />

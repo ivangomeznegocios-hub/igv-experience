@@ -15,7 +15,7 @@ import {
 import { useGame } from '../data/store';
 import { savePlan, togglePlanItem } from '../lib/plan';
 import { fmtWeekday } from '../lib/time';
-import { AttrChips, Badge, Field, Sheet, SizeChips } from './kit';
+import { AttrChips, Badge, Field, Sheet, SizeChips, TextInput } from './kit';
 import { Icon } from './icons';
 import '../life.css';
 
@@ -196,7 +196,7 @@ export function PlanSheet() {
       )}
       <Field label="Algo nuevo">
         <div className="row" style={{ gap: 6 }}>
-          <input className="input grow" value={free} placeholder="Ej. Llamar a 5 clientes" onChange={(e) => setFree(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addFree()} />
+          <TextInput className="input grow" value={free} placeholder="Ej. Llamar a 5 clientes" onChange={(e) => setFree(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addFree()} />
           <button className="btn" disabled={!free.trim() || picked.length >= 3} onClick={addFree}>
             <Icon name="plus" />
           </button>

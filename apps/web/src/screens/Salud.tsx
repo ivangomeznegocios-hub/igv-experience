@@ -25,7 +25,7 @@ import {
 import { deleteEntity, saveEntity, useGame, voidEvent } from '../data/store';
 import { CATEGORY_ICON, activateMany, activateSuggestion, checkupSizeOf, checkupXpOf, saveCheckup, saveHealthCard } from '../lib/health';
 import { fmtDate, fmtNum } from '../lib/time';
-import { Badge, Chips, Collapse, Empty, Field, PageHeader, Sheet, SizeChips, confirmAction, undoToast } from '../ui/kit';
+import { Badge, Chips, Collapse, Empty, Field, PageHeader, Sheet, SizeChips, confirmAction, undoToast, TextInput, TextArea } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { CheckupDoneForm, HealthQuick, MetricForm } from '../ui/quick/HealthQuick';
 import '../styles/salud.css';
@@ -458,7 +458,7 @@ function CheckupSheet({ checkup, onClose }: { checkup?: Entity<CheckupData>; onC
         </div>
       )}
       <Field label="Nombre">
-        <input className="input" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} placeholder="Ej. Consulta con el cardiólogo" maxLength={200} />
+        <TextInput className="input" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} placeholder="Ej. Consulta con el cardiólogo" maxLength={200} />
       </Field>
       <Field label="Tipo">
         <Chips value={d.category} onChange={(category) => setD({ ...d, category })} options={CHECKUP_CATEGORIES.map((c) => ({ value: c, label: CHECKUP_CATEGORY_NAMES[c] }))} />
@@ -495,7 +495,7 @@ function CheckupSheet({ checkup, onClose }: { checkup?: Entity<CheckupData>; onC
         {d.lastDone && d.everyMonths > 0 && <div className="tiny muted" style={{ marginTop: 4 }}>Con esa fecha te tocaría el {fmtDate(addMonthsClamped(d.lastDone, d.everyMonths), true)}. Un registro más reciente gana.</div>}
       </Field>
       <Field label="Notas">
-        <textarea className="input" value={d.notes ?? ''} onChange={(e) => setD({ ...d, notes: e.target.value })} placeholder="Con quién, dónde, qué pedir…" maxLength={2000} />
+        <TextArea className="input" value={d.notes ?? ''} onChange={(e) => setD({ ...d, notes: e.target.value })} placeholder="Con quién, dónde, qué pedir…" maxLength={2000} />
       </Field>
       {checkup && (
         <label className="row" style={{ gap: 8, marginBottom: 12 }}>
@@ -909,36 +909,36 @@ function CardSheet({ onClose }: { onClose: () => void }) {
         <Chips value={d.bloodType ?? null} onChange={(bloodType) => setD({ ...d, bloodType: d.bloodType === bloodType ? '' : bloodType })} options={BLOOD_TYPES.map((b) => ({ value: b, label: b }))} />
       </Field>
       <Field label="Alergias">
-        <input className="input" value={d.allergies ?? ''} onChange={set('allergies')} placeholder="Medicamentos, alimentos… (vacío = ninguna)" maxLength={1000} />
+        <TextInput className="input" value={d.allergies ?? ''} onChange={set('allergies')} placeholder="Medicamentos, alimentos… (vacío = ninguna)" maxLength={1000} />
       </Field>
       <Field label="Padecimientos">
-        <input className="input" value={d.conditions ?? ''} onChange={set('conditions')} placeholder="Asma, hipertensión…" maxLength={1000} />
+        <TextInput className="input" value={d.conditions ?? ''} onChange={set('conditions')} placeholder="Asma, hipertensión…" maxLength={1000} />
       </Field>
       <Field label="Medicamentos que tomas">
-        <input className="input" value={d.medications ?? ''} onChange={set('medications')} placeholder="Nombre y dosis" maxLength={1000} />
+        <TextInput className="input" value={d.medications ?? ''} onChange={set('medications')} placeholder="Nombre y dosis" maxLength={1000} />
       </Field>
       <div className="grid2" style={{ gap: 10 }}>
         <Field label="Médico">
-          <input className="input" value={d.doctorName ?? ''} onChange={set('doctorName')} maxLength={200} />
+          <TextInput className="input" value={d.doctorName ?? ''} onChange={set('doctorName')} maxLength={200} />
         </Field>
         <Field label="Teléfono">
           <input className="input" type="tel" inputMode="tel" value={d.doctorPhone ?? ''} onChange={set('doctorPhone')} maxLength={40} />
         </Field>
         <Field label="Contacto de emergencia">
-          <input className="input" value={d.emergencyName ?? ''} onChange={set('emergencyName')} maxLength={200} />
+          <TextInput className="input" value={d.emergencyName ?? ''} onChange={set('emergencyName')} maxLength={200} />
         </Field>
         <Field label="Teléfono">
           <input className="input" type="tel" inputMode="tel" value={d.emergencyPhone ?? ''} onChange={set('emergencyPhone')} maxLength={40} />
         </Field>
         <Field label="Aseguradora">
-          <input className="input" value={d.insurer ?? ''} onChange={set('insurer')} maxLength={200} />
+          <TextInput className="input" value={d.insurer ?? ''} onChange={set('insurer')} maxLength={200} />
         </Field>
         <Field label="Póliza">
           <input className="input" value={d.policyNumber ?? ''} onChange={set('policyNumber')} maxLength={100} />
         </Field>
       </div>
       <Field label="Notas">
-        <textarea className="input" value={d.notes ?? ''} onChange={set('notes')} placeholder="Cirugías, donador de órganos, lo que deban saber…" maxLength={2000} />
+        <TextArea className="input" value={d.notes ?? ''} onChange={set('notes')} placeholder="Cirugías, donador de órganos, lo que deban saber…" maxLength={2000} />
       </Field>
     </Sheet>
   );

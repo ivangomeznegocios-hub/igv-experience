@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { GAME_CONFIG, addDays, diffDays, weekStart, type Entity, type MainQuestData, type SeasonData } from '@igv/core';
 import { addEvent, saveEntity, deleteEntity, useGame } from '../data/store';
 import { fmtDate, newId, todayLocal } from '../lib/time';
-import { Badge, Bar, Empty, Field, PageHeader, Sheet, Tabs, confirmAction } from '../ui/kit';
+import { Badge, Bar, Empty, Field, PageHeader, Sheet, Tabs, confirmAction, TextArea, TextInput } from '../ui/kit';
 import { Icon } from '../ui/icons';
 
 export default function Temporadas() {
@@ -135,7 +135,7 @@ function ReviewSheet({ season, phase, onClose }: { season: Entity<SeasonData>; p
         </button>
       }
     >
-      <textarea className="input" rows={12} value={text} onChange={(e) => setText(e.target.value)} />
+      <TextArea className="input" rows={12} value={text} onChange={(e) => setText(e.target.value)} />
     </Sheet>
   );
 }
@@ -185,7 +185,7 @@ function SeasonForm({ initial, seasons, onClose }: { initial?: Entity<SeasonData
           <input className="input" type="number" value={d.number} onChange={(e) => up({ number: Number(e.target.value) })} />
         </Field>
         <Field label="Nombre">
-          <input className="input" value={d.name} onChange={(e) => up({ name: e.target.value })} />
+          <TextInput className="input" value={d.name} onChange={(e) => up({ name: e.target.value })} />
         </Field>
         <Field label="Inicio">
           <input className="input" type="date" value={d.startDate} onChange={(e) => up({ startDate: e.target.value, endDate: addDays(e.target.value, GAME_CONFIG.season.weeks * 7 - 1) })} />
@@ -283,13 +283,13 @@ function JournalSheet({ weekStart: ws, onClose }: { weekStart: string; onClose: 
       }
     >
       <Field label="Qué pasó">
-        <input className="input" value={happened} onChange={(e) => setH(e.target.value)} />
+        <TextInput className="input" value={happened} onChange={(e) => setH(e.target.value)} />
       </Field>
       <Field label="Qué aprendí">
-        <input className="input" value={learned} onChange={(e) => setL(e.target.value)} />
+        <TextInput className="input" value={learned} onChange={(e) => setL(e.target.value)} />
       </Field>
       <Field label="Qué sigue">
-        <input className="input" value={next} onChange={(e) => setN(e.target.value)} />
+        <TextInput className="input" value={next} onChange={(e) => setN(e.target.value)} />
       </Field>
     </Sheet>
   );

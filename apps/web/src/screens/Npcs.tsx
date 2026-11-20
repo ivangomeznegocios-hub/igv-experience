@@ -15,7 +15,7 @@ import {
 import { deleteEntity, saveEntity, useGame } from '../data/store';
 import { fmtDate, newId } from '../lib/time';
 import { BarChart } from '../ui/charts';
-import { Badge, Bar, Collapse, Empty, Field, PageHeader, Sheet, Tabs, confirmAction } from '../ui/kit';
+import { Badge, Bar, Collapse, Empty, Field, PageHeader, Sheet, Tabs, confirmAction, TextInput, TextArea } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { FamilyBuilder, LogSheet, PeopleTodayCard, PersonAvatar, PersonRow, PersonSheet, TempDot, byCloseness, lastContactLabel } from '../ui/people';
 
@@ -117,7 +117,7 @@ function People({ onLog, onNew }: { onLog: (ids: string[]) => void; onNew: () =>
     <>
       {!query && <PeopleTodayCard onLog={() => onLog([])} />}
       {all.length >= 6 && (
-        <input className="input" style={{ marginBottom: 12 }} value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Buscar entre ${all.length} personas`} aria-label="Buscar persona" />
+        <TextInput className="input" style={{ marginBottom: 12 }} value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Buscar entre ${all.length} personas`} aria-label="Buscar persona" />
       )}
 
       {!query && attention.length > 0 && (
@@ -521,10 +521,10 @@ function GuildForm({ initial, onClose }: { initial?: Entity<GuildData>; onClose:
       }
     >
       <Field label="Nombre">
-        <input className="input" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} placeholder="Generación prepa, equipo de fut…" />
+        <TextInput className="input" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} placeholder="Generación prepa, equipo de fut…" />
       </Field>
       <Field label="Descripción">
-        <textarea className="input" value={d.description ?? ''} onChange={(e) => setD({ ...d, description: e.target.value })} />
+        <TextArea className="input" value={d.description ?? ''} onChange={(e) => setD({ ...d, description: e.target.value })} />
       </Field>
     </Sheet>
   );

@@ -5,10 +5,10 @@ import { api, ApiError, type CoachAction, type GmParseResult } from '../data/api
 import { sync, useGame } from '../data/store';
 import { uploadSnapshotNow } from '../lib/aiSnapshot';
 import { saveTodo } from '../lib/actions';
-import { appendSpeech, useVoiceInput } from '../lib/voice';
+import { flushActiveDictation } from '../lib/voice';
 import { useVoiceContext } from '../lib/voz';
 import { Icon } from '../ui/icons';
-import { AttrBadge, PageHeader, SizeBadge, Tabs, toast } from '../ui/kit';
+import { AttrBadge, PageHeader, SizeBadge, Tabs, TextArea, TextInput, toast } from '../ui/kit';
 import { CoachActionList, ProposalList, useGmProposals } from '../ui/Proposals';
 import { startQuest } from '../ui/QuestMode';
 
@@ -106,12 +106,8 @@ function Registrar() {
   // Cada lectura monta una lista nueva: sus claves son posicionales (gm0, gm1…) y con el mismo número de
   // propuestas la lista anterior se quedaría con sus tarjetas viejas.
   const [parseId, setParseId] = useState(0);
-  // Copia síncrona del texto: lo último que dictaste llega durante `flush()`, antes del siguiente render.
+  // Copia síncrona del texto: lo último que dictaste llega durante `flushActiveDictation()`, antes del siguiente render.
   const textRef = useRef(text);
-  const voice = useVoiceInput((t) => {
-    textRef.current = appendSpeech(textRef.current, t);
-    setText(textRef.current);
-  });
   const ctx = useVoiceContext();
   const proposals = useGmProposals(res?.proposals ?? null, ctx);
 
@@ -129,7 +125,7 @@ function Registrar() {
     ].join('\n');
 
   const parse = async () => {
-    if (voice.listening) await voice.flush();
+    await flushActiveDictation();
     const t = textRef.current.trim();
     if (!t || busy) return;
     setBusy(true);
@@ -150,8 +146,7 @@ function Registrar() {
         <p className="small muted" style={{ marginTop: 0 }}>
           Escríbelo o díctalo por voz: “Hoy fui al gym, cerré una venta de $5,000 con Grupo Norte y hablé con mi mamá”. Te propongo los registros y tú confirmas.
         </p>
-        <textarea
-          className="input"
+        <TextArea
           rows={4}
           value={text}
           onChange={(e) => {
@@ -160,18 +155,12 @@ function Registrar() {
           }}
           placeholder="¿Qué hiciste hoy?"
         />
-        {voice.interim && <div className="vz-interim">{voice.interim}…</div>}
         <div className="row" style={{ marginTop: 8, gap: 8 }}>
-          {voice.supported && (
-            <button type="button" className={`btn ${voice.listening ? 'danger' : ''}`} onClick={voice.toggle} aria-label="Dictar por voz" aria-pressed={voice.listening}>
-              <Icon name={voice.listening ? 'stop' : 'mic'} /> {voice.listening ? 'Terminar' : 'Dictar'}
-            </button>
-          )}
           <button className="btn primary grow" disabled={busy || !text.trim()} onClick={parse}>
             <Icon name="sparkles" /> {busy ? 'Leyendo…' : 'Proponer registros'}
           </button>
         </div>
-        {(err || voice.error) && <p className="small red">{err || voice.error}</p>}
+        {err && <p className="small red">{err}</p>}
       </div>
       {res && (
         <div className="card">
@@ -203,14 +192,14 @@ function Chat() {
   const [err, setErr] = useState<string | null>(null);
   const [accepted, setAccepted] = useState<Set<string>>(new Set());
   const end = useRef<HTMLDivElement>(null);
-  const voice = useVoiceInput((t) => setQ((prev) => appendSpeech(prev, t)));
+  const input = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     end.current?.scrollIntoView({ behavior: 'smooth' });
   }, [msgs, busy]);
 
   const ask = async (question: string) => {
-    if (voice.listening) voice.stop();
+    void flushActiveDictation();
     if (!question.trim() || busy) return;
     setErr(null);
     const history = msgs.slice(-10).map(({ role, content }) => ({ role, content }));
@@ -320,17 +309,14 @@ function Chat() {
       </div>
       <form
         className="row"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
-          ask(q);
+          // Si estabas dictando, espera las últimas palabras (llegan al campo) antes de preguntar.
+          await flushActiveDictation();
+          ask(input.current?.value ?? q);
         }}
       >
-        {voice.supported && (
-          <button type="button" className={`btn icon ${voice.listening ? 'danger' : ''}`} onClick={voice.toggle} aria-label={voice.listening ? 'Terminar dictado' : 'Dictar pregunta'} aria-pressed={voice.listening}>
-            <Icon name={voice.listening ? 'stop' : 'mic'} />
-          </button>
-        )}
-        <input className="input" placeholder={voice.interim ? `${voice.interim}…` : voice.listening ? 'Te escucho…' : 'Pregúntale al Coach…'} value={q} onChange={(e) => setQ(e.target.value)} />
+        <TextInput ref={input} placeholder="Pregúntale al Coach…" value={q} onChange={(e) => setQ(e.target.value)} voiceLabel="Dictar pregunta" />
         <button className="btn primary" disabled={busy || !q.trim()} aria-label="Enviar">
           <Icon name="sparkles" />
         </button>

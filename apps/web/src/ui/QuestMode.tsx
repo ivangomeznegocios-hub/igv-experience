@@ -15,7 +15,7 @@ import { findLinkedBoss, guessQuestMinutes } from '../lib/narrator';
 import { haptic, setAmbientSound, sfx, stopAmbient, type AmbientMode } from '../lib/sound';
 import { BossArt, BossHpBar } from './BossArt';
 import { Icon } from './icons';
-import { AttrBadge, Badge } from './kit';
+import { AttrBadge, Badge, TextInput } from './kit';
 
 export interface ActiveQuestPayload {
   kind: 'mission' | 'todo' | 'quick';
@@ -376,9 +376,9 @@ export function QuestMode() {
               addStep();
             }}
           >
-            <input
+            <TextInput
               className="input"
-              style={{ minHeight: 36, padding: '6px 10px' }}
+              style={{ minHeight: 36, padding: '6px 38px 6px 10px' }}
               placeholder="Agregar paso rápido…"
               value={stepInput}
               onChange={(e) => setStepInput(e.target.value)}

@@ -25,7 +25,7 @@ import {
 import { deleteEntity, saveEntity, useGame } from '../../data/store';
 import { newId } from '../../lib/time';
 import { Icon } from '../icons';
-import { Chips, DateChips, Field, Sheet, confirmAction, toast, undoToast, useAutoFocus } from '../kit';
+import { Chips, DateChips, Field, Sheet, confirmAction, toast, undoToast, useAutoFocus, TextInput, TextArea } from '../kit';
 import { GDL_CENTER, MapView, type MapViewState } from './MapView';
 import { CITY_SUGGESTIONS, getMapaPrefs, getPosition, hasCoords, registerVisit, sortPeopleFor, whereText, type VisitTarget } from './model';
 import '../../styles/mapa.css';
@@ -92,7 +92,7 @@ function PlacePicker({ onPick }: { onPick: (t: VisitTarget) => void }) {
     <div className="mapa-picker">
       <div className="search-box">
         <Icon name="search" width={18} />
-        <input ref={ref} className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="¿A dónde fuiste? Restaurante, parque, ciudad…" />
+        <TextInput ref={ref} className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="¿A dónde fuiste? Restaurante, parque, ciudad…" />
       </div>
       <div className="mapa-picker-list">
         {hits.map((p) => (
@@ -215,7 +215,7 @@ export function VisitForm({
                 </option>
               ))}
             </select>
-            <input className="input" list={CITY_LIST_ID} value={extra.city ?? ''} onChange={(e) => setExtra({ ...extra, city: e.target.value })} placeholder="Ciudad" aria-label="Ciudad" />
+            <TextInput className="input" list={CITY_LIST_ID} value={extra.city ?? ''} onChange={(e) => setExtra({ ...extra, city: e.target.value })} placeholder="Ciudad" aria-label="Ciudad" />
             <CityDatalist extra={[]} />
           </div>
           <button type="button" className="btn sm ghost" onClick={locate} disabled={locating}>
@@ -241,7 +241,7 @@ export function VisitForm({
         <Stars value={rating} onChange={setRating} />
       </Field>
       <Field label="Nota (opcional)">
-        <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Qué hicieron, qué pidieron…" />
+        <TextInput className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Qué hicieron, qué pidieron…" />
       </Field>
       <Field label="¿Cuándo?">
         <DateChips value={date} onChange={setDate} today={today} />
@@ -354,7 +354,7 @@ export function PlaceForm({ initial, layer, onClose, onSaved }: { initial?: Enti
       }
     >
       <Field label="Nombre">
-        <input className="input" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} placeholder={lay === 'empresa' ? 'Oficina, cliente, bodega…' : 'Tacos, parque, museo, ciudad…'} />
+        <TextInput className="input" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} placeholder={lay === 'empresa' ? 'Oficina, cliente, bodega…' : 'Tacos, parque, museo, ciudad…'} />
       </Field>
       {catHits.length > 0 && (
         <div className="mapa-catalog-hits">
@@ -406,10 +406,10 @@ export function PlaceForm({ initial, layer, onClose, onSaved }: { initial?: Enti
       </Field>
       <div className="grid2" style={{ gap: 8 }}>
         <Field label="Ciudad">
-          <input className="input" list={CITY_LIST_ID} value={d.city ?? ''} onChange={(e) => setD({ ...d, city: e.target.value })} placeholder="Guadalajara" />
+          <TextInput className="input" list={CITY_LIST_ID} value={d.city ?? ''} onChange={(e) => setD({ ...d, city: e.target.value })} placeholder="Guadalajara" />
         </Field>
         <Field label="Colonia o zona">
-          <input className="input" value={d.zone ?? ''} onChange={(e) => setD({ ...d, zone: e.target.value })} placeholder="Centro, Americana…" />
+          <TextInput className="input" value={d.zone ?? ''} onChange={(e) => setD({ ...d, zone: e.target.value })} placeholder="Centro, Americana…" />
         </Field>
       </div>
       <CityDatalist extra={mine.map((p) => p.data.city ?? '')} />
@@ -478,7 +478,7 @@ export function PlaceForm({ initial, layer, onClose, onSaved }: { initial?: Enti
         </>
       )}
       <Field label="Notas">
-        <textarea className="input" value={d.notes ?? ''} onChange={(e) => setD({ ...d, notes: e.target.value })} />
+        <TextArea className="input" value={d.notes ?? ''} onChange={(e) => setD({ ...d, notes: e.target.value })} />
       </Field>
       {initial && <p className="tiny muted">Capa: {PLACE_LAYER_NAMES[lay]}</p>}
     </Sheet>

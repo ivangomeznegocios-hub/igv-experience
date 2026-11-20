@@ -25,7 +25,7 @@ import { addEvent, deleteEntity, saveEntity, useGame } from '../data/store';
 import { startTimer, useTimer } from '../lib/timeTimer';
 import { daysAgo, fmtDate, newId } from '../lib/time';
 import { Icon } from '../ui/icons';
-import { AttrSelect, Badge, Chips, Empty, Field, PageHeader, Sheet, confirmAction, toast, undoToast } from '../ui/kit';
+import { AttrSelect, Badge, Chips, Empty, Field, PageHeader, Sheet, confirmAction, toast, undoToast, TextInput, TextArea } from '../ui/kit';
 import { HubNav, areaForSkill } from '../ui/habilidades/shared';
 import '../styles/habilidades.css';
 
@@ -195,7 +195,7 @@ function QuickSkill({ skills }: { skills: Entity<SkillData>[] }) {
   return (
     <div className="card hab-quick">
       <form className="row" style={{ gap: 8 }} onSubmit={submit}>
-        <input className="input grow" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} placeholder="Sé hacer…" aria-label="Algo que sabes hacer" />
+        <TextInput className="input grow" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} placeholder="Sé hacer…" aria-label="Algo que sabes hacer" />
         <button className="btn primary" type="submit" disabled={!t}>
           Agregar
         </button>
@@ -370,7 +370,7 @@ function SkillSheet({
       )}
 
       <Field label="Lo que sé de esto (métodos, recursos, cómo lo aprendí)">
-        <textarea className="input" rows={4} value={notes} maxLength={4000} onChange={(e) => setNotes(e.target.value)} placeholder="Ej. Cierro mejor cuando pregunto antes de presentar…" />
+        <TextArea className="input" rows={4} value={notes} maxLength={4000} onChange={(e) => setNotes(e.target.value)} placeholder="Ej. Cierro mejor cuando pregunto antes de presentar…" />
       </Field>
       {notes !== (skill.data.notes ?? '') && (
         <button className="btn sm" style={{ marginTop: -6, marginBottom: 12 }} onClick={() => (saveEntity({ ...skill, data: { ...skill.data, notes: notes.trim() || undefined } }), toast('Guardado'))}>
@@ -476,7 +476,7 @@ function UnlockSheet({ skill, rank, onClose }: { skill: Entity<SkillData>; rank:
       </p>
       <p className="tiny muted">Un rango solo se desbloquea con evidencia escrita: describe qué hiciste o pega un enlace.</p>
       <Field label="Evidencia">
-        <textarea className="input" rows={4} value={evidence} onChange={(e) => setEvidence(e.target.value)} />
+        <TextArea className="input" rows={4} value={evidence} onChange={(e) => setEvidence(e.target.value)} />
       </Field>
     </Sheet>
   );
@@ -519,7 +519,7 @@ function SkillForm({ initial, onClose, onDeleted }: { initial?: Entity<SkillData
       }
     >
       <Field label="Nombre">
-        <input
+        <TextInput
           className="input"
           value={d.name}
           onChange={(e) => up(skillNameEdit(e.target.value, { category: touchedCat, attribute: touchedAttr }))}
@@ -541,11 +541,11 @@ function SkillForm({ initial, onClose, onDeleted }: { initial?: Entity<SkillData
       </label>
       {SKILL_RANK_NAMES.map((n, i) => (
         <Field key={n} label={`Requisito para ${n}`}>
-          <input className="input" value={d.ranks[i]} onChange={(e) => up({ ranks: d.ranks.map((r, j) => (j === i ? e.target.value : r)) as SkillData['ranks'] })} />
+          <TextInput className="input" value={d.ranks[i]} onChange={(e) => up({ ranks: d.ranks.map((r, j) => (j === i ? e.target.value : r)) as SkillData['ranks'] })} />
         </Field>
       ))}
       <Field label="Lo que sé de esto (opcional)">
-        <textarea className="input" rows={3} value={d.notes ?? ''} maxLength={4000} onChange={(e) => up({ notes: e.target.value })} />
+        <TextArea className="input" rows={3} value={d.notes ?? ''} maxLength={4000} onChange={(e) => up({ notes: e.target.value })} />
       </Field>
     </Sheet>
   );

@@ -3,7 +3,7 @@ import { addDays, challengeDayNumber, GAME_CONFIG, type ChallengeData, type Enti
 import { addEvent, saveEntity, useGame, voidEvent } from '../data/store';
 import { sfx } from '../lib/sound';
 import { fmtDate, fmtNum, newId } from '../lib/time';
-import { AttrChips, Badge, Chips, Empty, Field, PageHeader, Sheet, SizeChips, Tabs, confirmAction, undoToast } from '../ui/kit';
+import { AttrChips, Badge, Chips, Empty, Field, PageHeader, Sheet, SizeChips, Tabs, confirmAction, undoToast, TextInput } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import '../life.css';
 
@@ -167,7 +167,7 @@ function ChallengeSheet({ onClose }: { onClose: () => void }) {
       }
     >
       <Field label="¿Qué vas a hacer todos los días?">
-        <input className="input" value={d.title} placeholder="Ej. Leer 20 minutos" onChange={(e) => setD({ ...d, title: e.target.value })} />
+        <TextInput className="input" value={d.title} placeholder="Ej. Leer 20 minutos" onChange={(e) => setD({ ...d, title: e.target.value })} />
       </Field>
       <div className="chips" style={{ marginTop: -4, marginBottom: 12 }}>
         {IDEAS.map((i) => (
@@ -304,7 +304,7 @@ function PledgeSheet({ onClose }: { onClose: () => void }) {
       }
     >
       <Field label="¿Qué te comprometes a lograr?">
-        <input className="input" value={title} placeholder="Ej. Ir 4 veces al gym esta semana" onChange={(e) => setTitle(e.target.value)} />
+        <TextInput className="input" value={title} placeholder="Ej. Ir 4 veces al gym esta semana" onChange={(e) => setTitle(e.target.value)} />
       </Field>
       <Field label="Oro en juego">
         <Chips value={stake} onChange={setStake} options={[5, 10, 20, 50, 100].map((n) => ({ value: n, label: String(n) }))} />

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { EVENT_LABELS, type EventType } from '@igv/core';
 import { useGame } from '../data/store';
 import { fmtDate } from '../lib/time';
-import { Empty, PageHeader, useAutoFocus } from '../ui/kit';
+import { Empty, PageHeader, useAutoFocus, TextInput } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { DaySheet, describeEvent } from '../ui/DaySheet';
 
@@ -67,7 +67,7 @@ export default function Buscar() {
       <PageHeader title="Buscar" />
       <div className="search-box">
         <Icon name="compass" width={18} />
-        <input ref={ref} className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Misiones, personas, lecciones, gastos, notas…" />
+        <TextInput ref={ref} className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Misiones, personas, lecciones, gastos, notas…" />
       </div>
       {needle.length >= 2 && results.ents.length === 0 && results.evs.length === 0 && <Empty>Sin resultados para “{q}”.</Empty>}
       {results.ents.length > 0 && (

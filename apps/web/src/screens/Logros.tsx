@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { GAME_CONFIG, type AchievementCondition, type AchievementData, type Entity } from '@igv/core';
 import { addEvent, deleteEntity, saveEntity, useGame } from '../data/store';
 import { fmtDate, newId } from '../lib/time';
-import { Bar, Field, PageHeader, Sheet, confirmAction } from '../ui/kit';
+import { Bar, Field, PageHeader, Sheet, confirmAction, TextInput } from '../ui/kit';
 import { Icon } from '../ui/icons';
 
 const ICONS = ['star', 'step', 'flame', 'bolt', 'handshake', 'chat', 'target', 'scroll', 'heart', 'globe', 'coin', 'compass', 'crown', 'trophy', 'shield', 'book'];
@@ -143,10 +143,10 @@ function AchievementForm({ initial, onClose }: { initial?: Entity<AchievementDat
       }
     >
       <Field label="Nombre">
-        <input className="input" value={d.name} onChange={(e) => up({ name: e.target.value })} />
+        <TextInput className="input" value={d.name} onChange={(e) => up({ name: e.target.value })} />
       </Field>
       <Field label="Descripción">
-        <input className="input" value={d.description} onChange={(e) => up({ description: e.target.value })} />
+        <TextInput className="input" value={d.description} onChange={(e) => up({ description: e.target.value })} />
       </Field>
       <Field label="Ícono">
         <div className="row wrap" style={{ gap: 6 }}>

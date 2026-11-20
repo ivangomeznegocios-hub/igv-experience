@@ -6,7 +6,7 @@ import { THEMES, getTheme, ownedThemeIds, retiredPurchases, type ThemeItem } fro
 import { sfx } from '../lib/sound';
 import { fmtDate, fmtNum, newId } from '../lib/time';
 import { Icon } from '../ui/icons';
-import { Badge, Chips, Empty, Field, PageHeader, Sheet, Tabs, confirmAction, toast, undoToast } from '../ui/kit';
+import { Badge, Chips, Empty, Field, PageHeader, Sheet, Tabs, confirmAction, toast, undoToast, TextInput } from '../ui/kit';
 
 const ICONS = ['star', 'heart', 'coin', 'globe', 'book', 'moon', 'crown', 'sparkles'];
 const IDEAS: ShopRewardData[] = [
@@ -254,7 +254,7 @@ function RewardSheet({ initial, onClose }: { initial: Entity<ShopRewardData> | n
       }
     >
       <Field label="Premio">
-        <input className="input" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} />
+        <TextInput className="input" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} />
       </Field>
       <Field label="Costo (oro)">
         <input className="input" type="number" min={1} value={d.cost} onChange={(e) => setD({ ...d, cost: Number(e.target.value) })} />

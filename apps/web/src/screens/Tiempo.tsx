@@ -25,7 +25,7 @@ import {
 import { useGame, voidEvent, restoreEvent } from '../data/store';
 import { clearTimer, fmtClock, logTimeSpan, needsReview, startTimer, updateTimer, useNow, useTimer, type RunningTimer } from '../lib/timeTimer';
 import { fmtDate, fmtWeekday } from '../lib/time';
-import { confirmAction, DateChips, Empty, Field, PageHeader, Sheet, Tabs, toast, undoToast } from '../ui/kit';
+import { confirmAction, DateChips, Empty, Field, PageHeader, Sheet, Tabs, toast, undoToast, TextInput } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { AREA_COLOR, AREA_HINT, AreaChips, AreaDot, HBar, HubNav } from '../ui/habilidades/shared';
 import { TimeQuick } from '../ui/quick/TimeQuick';
@@ -148,7 +148,7 @@ function TimerCard() {
               </Field>
             )}
             <Field label="Nota (opcional)">
-              <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder={area ? AREA_HINT[area] : ''} />
+              <TextInput className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder={area ? AREA_HINT[area] : ''} />
             </Field>
             <button
               className="btn primary block"
@@ -222,7 +222,7 @@ function TimerEdit({ timer, onDone }: { timer: RunningTimer; onDone: () => void 
         </Field>
       )}
       <Field label="Nota">
-        <input className="input" value={timer.note} onChange={(e) => updateTimer({ note: e.target.value })} placeholder={AREA_HINT[timer.area]} />
+        <TextInput className="input" value={timer.note} onChange={(e) => updateTimer({ note: e.target.value })} placeholder={AREA_HINT[timer.area]} />
       </Field>
       <button className="btn block" onClick={onDone}>
         Listo
@@ -292,7 +292,7 @@ function StopSheet({ timer, onClose }: { timer: RunningTimer; onClose: () => voi
       </div>
       {tooLong && <p className="tiny red">No puede ser más de lo que lleva corriendo ({fmtHoursMinutes(elapsed)}).</p>}
       <Field label="Nota">
-        <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder={AREA_HINT[timer.area]} />
+        <TextInput className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder={AREA_HINT[timer.area]} />
       </Field>
       {chunks.length > 1 && (
         <p className="tiny muted">

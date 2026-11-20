@@ -22,7 +22,7 @@ import { deleteEntity, saveEntity, useGame } from '../data/store';
 import { sfx } from '../lib/sound';
 import { fmtDate, newId } from '../lib/time';
 import { speak, speakSupported } from '../lib/vozIdioma';
-import { AttrChips, Badge, Bar, Collapse, Field, PageHeader, Sheet, Tabs, confirmAction, toast, undoToast } from '../ui/kit';
+import { AttrChips, Badge, Bar, Collapse, Field, PageHeader, Sheet, Tabs, confirmAction, toast, undoToast, TextInput } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { TarjetasSession, TestSession, VozSession, isLanguage, langName, newLeftToday, voiceLang, type SessionKind } from './aprendizaje/Sesiones';
 import '../styles/aprendizaje.css';
@@ -320,9 +320,10 @@ function QuickAdd({ topic, items, onNeedsMeaning }: { topic: Entity<LearningTopi
           add();
         }}
       >
-        <input
+        <TextInput
           className="input"
           value={line}
+          lang={voiceLang(topic)}
           onChange={(e) => setLine(e.target.value)}
           placeholder={isLanguage(topic) ? 'Frase = significado' : 'Concepto = qué es'}
           aria-label="Agregar en una línea"
@@ -575,14 +576,14 @@ function ItemSheet({ topic, value, items, onClose }: { topic: Entity<LearningTop
         </p>
       )}
       <Field label={lang ? `En ${langName(topic)}` : 'Concepto'}>
-        <input className="input" value={d.text} maxLength={300} lang={lang ? voiceLang(topic) : 'es'} autoCapitalize="off" onChange={(e) => setD({ ...d, text: e.target.value })} />
+        <TextInput className="input" value={d.text} maxLength={300} lang={lang ? voiceLang(topic) : 'es-MX'} autoCapitalize="off" onChange={(e) => setD({ ...d, text: e.target.value })} />
       </Field>
       {dup && <p className="small" style={{ color: 'var(--flame)', marginTop: -6 }}>Ya la tienes: "{dup.data.text}".</p>}
       <Field label={lang ? 'Qué significa (español)' : 'Qué es / cómo lo explicarías'}>
-        <input className="input" value={d.meaning} onChange={(e) => setD({ ...d, meaning: e.target.value })} />
+        <TextInput className="input" value={d.meaning} onChange={(e) => setD({ ...d, meaning: e.target.value })} />
       </Field>
       <Field label="Ejemplo (opcional)">
-        <input className="input" value={d.example ?? ''} lang={lang ? voiceLang(topic) : 'es'} onChange={(e) => setD({ ...d, example: e.target.value })} />
+        <TextInput className="input" value={d.example ?? ''} lang={lang ? voiceLang(topic) : 'es-MX'} onChange={(e) => setD({ ...d, example: e.target.value })} />
       </Field>
       <Field label="Tipo">
         <div className="chips">
@@ -651,7 +652,7 @@ function TopicSheet({ topic, existing, onClose, onSaved }: { topic: Entity<Learn
       }
     >
       <Field label="Nombre">
-        <input className="input" value={d.name} maxLength={80} placeholder="Ej. Inglés, Francés, Finanzas corporativas" onChange={(e) => setD({ ...d, name: e.target.value })} />
+        <TextInput className="input" value={d.name} maxLength={80} placeholder="Ej. Inglés, Francés, Finanzas corporativas" onChange={(e) => setD({ ...d, name: e.target.value })} />
       </Field>
       {dup && <p className="small" style={{ color: 'var(--flame)', marginTop: -6 }}>Ya tienes un tema con ese nombre.</p>}
       <Field label="Tipo">
@@ -673,7 +674,7 @@ function TopicSheet({ topic, existing, onClose, onSaved }: { topic: Entity<Learn
             ))}
           </div>
         ) : (
-          <input className="input" value={d.level ?? ''} maxLength={12} placeholder="Básico, intermedio…" onChange={(e) => setD({ ...d, level: e.target.value })} />
+          <TextInput className="input" value={d.level ?? ''} maxLength={12} placeholder="Básico, intermedio…" onChange={(e) => setD({ ...d, level: e.target.value })} />
         )}
       </Field>
       {d.topicKind === 'idioma' && (
@@ -688,7 +689,7 @@ function TopicSheet({ topic, existing, onClose, onSaved }: { topic: Entity<Learn
         </Field>
       )}
       <Field label="¿Para qué lo aprendes?">
-        <input className="input" value={d.goal ?? ''} maxLength={300} placeholder="Ej. Negociar y presentar en inglés" onChange={(e) => setD({ ...d, goal: e.target.value })} />
+        <TextInput className="input" value={d.goal ?? ''} maxLength={300} placeholder="Ej. Negociar y presentar en inglés" onChange={(e) => setD({ ...d, goal: e.target.value })} />
       </Field>
       <Field label="La XP de practicar suma a">
         <AttrChips value={d.attribute ?? (L.attribute as 'inteligencia')} onChange={(attribute) => setD({ ...d, attribute })} />

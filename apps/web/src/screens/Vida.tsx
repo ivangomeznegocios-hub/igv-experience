@@ -22,7 +22,7 @@ import {
 import { deleteEntity, saveEntity, useGame } from '../data/store';
 import { updateSettings } from '../lib/actions';
 import { fmtDate, fmtNum, fmtWeekday, newId } from '../lib/time';
-import { Badge, Chips, Field, PageHeader, Sheet, Tabs, confirmAction } from '../ui/kit';
+import { Badge, Chips, Field, PageHeader, Sheet, Tabs, confirmAction, TextInput } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { DaySheet } from '../ui/DaySheet';
 
@@ -555,7 +555,7 @@ function MilestoneSheet({ initial, onClose }: { initial: Entity<MilestoneData> |
       }
     >
       <Field label="¿Qué pasó?">
-        <input className="input" value={d.title} onChange={(e) => setD({ ...d, title: e.target.value })} placeholder="Fundé mi empresa, me mudé a…" />
+        <TextInput className="input" value={d.title} onChange={(e) => setD({ ...d, title: e.target.value })} placeholder="Fundé mi empresa, me mudé a…" />
       </Field>
       <Field label="Fecha">
         <input className="input" type="date" value={d.date} onChange={(e) => setD({ ...d, date: e.target.value })} />

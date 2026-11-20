@@ -4,7 +4,7 @@ import { describeAssistantTools, type ToolGroup } from '@igv/core';
 import { api, type AiAccess, type AiActivityItem, type AiStatus } from '../data/api';
 import { sync } from '../data/store';
 import { Icon } from '../ui/icons';
-import { Badge, Collapse, Empty, PageHeader, Tabs, confirmAction, toast } from '../ui/kit';
+import { Badge, Collapse, Empty, PageHeader, Tabs, confirmAction, toast, TextInput } from '../ui/kit';
 
 type Client = 'claude' | 'claude-code' | 'codex' | 'antigravity' | 'otros';
 
@@ -318,7 +318,7 @@ export default function ConectarIA() {
             </div>
           ))}
           <div className="row" style={{ marginTop: 10 }}>
-            <input className="input" placeholder="Nombre (p. ej. Codex en mi laptop)" value={keyName} maxLength={60} onChange={(e) => setKeyName(e.target.value)} />
+            <TextInput className="input" placeholder="Nombre (p. ej. Codex en mi laptop)" value={keyName} maxLength={60} onChange={(e) => setKeyName(e.target.value)} />
             <button className="btn primary" disabled={busy} onClick={createKey}>
               <Icon name="plus" /> Crear
             </button>

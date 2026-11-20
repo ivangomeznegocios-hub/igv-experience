@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { ATTRIBUTE_NAMES, BOOK_TYPES, GAME_CONFIG, bookPercent, diffDays, type BookData, type BookStatus, type Entity, type SkillData } from '@igv/core';
 import { addEvent, deleteEntity, restoreEvent, saveEntity, useGame, voidEvent } from '../data/store';
 import { daysAgo, fmtDate, newId } from '../lib/time';
-import { AttrChips, Badge, Chips, Empty, Field, PageHeader, Sheet, SizeChips, Tabs, confirmAction, undoToast } from '../ui/kit';
+import { AttrChips, Badge, Chips, Empty, Field, PageHeader, Sheet, SizeChips, Tabs, confirmAction, undoToast, TextInput, TextArea } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { HBar, HubNav, Stars } from '../ui/habilidades/shared';
 import '../styles/habilidades.css';
@@ -211,7 +211,7 @@ function Learned({ onOpen }: { onOpen: (bookId: string) => void }) {
     );
   return (
     <>
-      <input className="input" style={{ marginBottom: 12 }} value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Buscar en ${items.length} ideas…`} aria-label="Buscar en lo aprendido" />
+      <TextInput className="input" style={{ marginBottom: 12 }} value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Buscar en ${items.length} ideas…`} aria-label="Buscar en lo aprendido" />
       {!shown.length && <Empty>Nada con «{q}».</Empty>}
       {shown.map((x) => (
         <div key={x.key} className="card hab-note">
@@ -427,7 +427,7 @@ function NoteSheet({ book, onClose }: { book: Entity<BookData>; onClose: () => v
       }
     >
       <Field label="Una idea, en tus palabras">
-        <textarea className="input" rows={5} value={text} maxLength={4000} onChange={(e) => setText(e.target.value)} placeholder="Lo que me sirve, lo que voy a aplicar…" autoFocus />
+        <TextArea className="input" rows={5} value={text} maxLength={4000} onChange={(e) => setText(e.target.value)} placeholder="Lo que me sirve, lo que voy a aplicar…" autoFocus />
       </Field>
       <Field label="Página (opcional)">
         <input className="input" type="number" inputMode="numeric" min={0} value={page} onChange={(e) => setPage(e.target.value)} />
@@ -470,7 +470,7 @@ function FinishSheet({ book, onClose }: { book: Entity<BookData>; onClose: () =>
         <Stars value={rating} onChange={setRating} size={22} />
       </div>
       <Field label="La idea que me llevo (opcional)">
-        <textarea className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Lo más valioso, lo que voy a aplicar…" />
+        <TextArea className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Lo más valioso, lo que voy a aplicar…" />
       </Field>
     </Sheet>
   );
@@ -519,10 +519,10 @@ function BookSheet({ initial, onClose, onDeleted }: { initial: Entity<BookData> 
       }
     >
       <Field label="Título">
-        <input className="input" value={d.title} onChange={(e) => setD({ ...d, title: e.target.value })} />
+        <TextInput className="input" value={d.title} onChange={(e) => setD({ ...d, title: e.target.value })} />
       </Field>
       <Field label="Autor / plataforma">
-        <input className="input" value={d.author ?? ''} onChange={(e) => setD({ ...d, author: e.target.value })} />
+        <TextInput className="input" value={d.author ?? ''} onChange={(e) => setD({ ...d, author: e.target.value })} />
       </Field>
       <Field label="Tipo">
         <Chips value={d.bookType} onChange={(bookType) => setD({ ...d, bookType })} options={BOOK_TYPES.map((t) => ({ value: t, label: TYPE_LABEL[t] }))} />

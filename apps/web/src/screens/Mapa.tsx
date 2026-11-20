@@ -26,7 +26,7 @@ import {
 import { addEvent, restoreEvent, useGame, voidEvent } from '../data/store';
 import { daysAgo, fmtDate } from '../lib/time';
 import { Icon } from '../ui/icons';
-import { Badge, Bar, Empty, PageHeader, Tabs, toast, undoToast } from '../ui/kit';
+import { Badge, Bar, Empty, PageHeader, Tabs, toast, undoToast, TextInput } from '../ui/kit';
 import { MapView, corePoints, type MapMarker } from '../ui/mapa/MapView';
 import { PlaceForm, VisitSheet } from '../ui/mapa/forms';
 import { STATUS_TONE, getMapaPrefs, getPosition, hasCoords, markerKind, pendingCatalog, saveWish, setMapaPrefs, statusOf, whereText, type VisitTarget } from '../ui/mapa/model';
@@ -614,7 +614,7 @@ function VidaSections({
           {places.length > 6 && (
             <div className="search-box">
               <Icon name="search" width={18} />
-              <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar lugar, colonia o ciudad" />
+              <TextInput className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar lugar, colonia o ciudad" />
             </div>
           )}
           {(['dominado', 'descubierto', 'inexplorado'] as PlaceStatus[]).map((s) => {

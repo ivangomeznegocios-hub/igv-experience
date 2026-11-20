@@ -15,7 +15,7 @@ import {
 } from '@igv/core';
 import { useGame } from '../../data/store';
 import { activateSuggestion, checkupXpOf, logMetric, markCheckupDone, saveCheckup, type MetricInput } from '../../lib/health';
-import { Chips, DateChips, Field } from '../kit';
+import { Chips, DateChips, Field, TextInput } from '../kit';
 import { Icon } from '../icons';
 import '../../styles/salud.css';
 
@@ -114,7 +114,7 @@ function CheckupQuickForm({ date, setDate, today, onDone }: DateProps & { onDone
       {pick?.type === 'new' && (
         <>
           <Field label="Nombre">
-            <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Consulta con el nutriólogo" maxLength={200} />
+            <TextInput className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Consulta con el nutriólogo" maxLength={200} />
           </Field>
           {sameName && <p className="tiny muted" style={{ marginTop: -6 }}>Ya lo tienes en tus chequeos: se registra en ese.</p>}
           <Field label="Tipo">
@@ -126,7 +126,7 @@ function CheckupQuickForm({ date, setDate, today, onDone }: DateProps & { onDone
         </>
       )}
       <Field label="Resultado (opcional)">
-        <input className="input" value={result} onChange={(e) => setResult(e.target.value)} placeholder="Todo bien, una caries, subir lentes…" maxLength={2000} />
+        <TextInput className="input" value={result} onChange={(e) => setResult(e.target.value)} placeholder="Todo bien, una caries, subir lentes…" maxLength={2000} />
       </Field>
       <Field label="¿Cuándo?">
         <DateChips value={date} onChange={setDate} today={today} />
@@ -157,10 +157,10 @@ export function CheckupDoneForm({ checkup, today, onDone }: { checkup: Entity<Ch
         <DateChips value={date} onChange={setDate} today={today} />
       </Field>
       <Field label="Resultado (opcional)">
-        <input className="input" value={result} onChange={(e) => setResult(e.target.value)} placeholder="Todo bien, una caries, subir lentes…" maxLength={2000} />
+        <TextInput className="input" value={result} onChange={(e) => setResult(e.target.value)} placeholder="Todo bien, una caries, subir lentes…" maxLength={2000} />
       </Field>
       <Field label="Nota (opcional)">
-        <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Doctor, lugar, costo…" maxLength={2000} />
+        <TextInput className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Doctor, lugar, costo…" maxLength={2000} />
       </Field>
       <button
         className="btn primary block"
@@ -241,7 +241,7 @@ export function MetricForm({ date, setDate, today, onDone, initialKind }: DatePr
         <>
           <div className="grid2" style={{ gap: 10 }}>
             <Field label="Nombre">
-              <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Triglicéridos" maxLength={80} />
+              <TextInput className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Triglicéridos" maxLength={80} />
             </Field>
             <Field label="Unidad">
               <input className="input" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="mg/dL" maxLength={20} />
@@ -287,7 +287,7 @@ export function MetricForm({ date, setDate, today, onDone, initialKind }: DatePr
         kind !== 'otro' && <div className="salud-reading tiny muted">{info.reference}</div>
       )}
       <Field label="Nota (opcional)">
-        <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder={kind === 'glucosa' ? 'En ayunas, después de comer…' : 'Dónde, cómo te sentías…'} maxLength={2000} />
+        <TextInput className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder={kind === 'glucosa' ? 'En ayunas, después de comer…' : 'Dónde, cómo te sentías…'} maxLength={2000} />
       </Field>
       <Field label="¿Cuándo?">
         <DateChips value={date} onChange={setDate} today={today} />
