@@ -339,6 +339,35 @@ export const GAME_CONFIG = {
     ],
   },
 
+  // [[ciudad]]
+  /**
+   * Tu ciudad: materiales = 1 por cada XP del atributo del distrito (desde que empezaste) + lo que producen tus
+   * edificios. Nunca da XP ni oro. `levels[n-1]` = costo en materiales y días de obra para llegar al nivel n.
+   */
+  city: {
+    levels: [
+      { cost: 50, days: 1 },
+      { cost: 120, days: 1 },
+      { cost: 220, days: 2 },
+      { cost: 360, days: 2 },
+      { cost: 540, days: 3 },
+      { cost: 780, days: 3 },
+      { cost: 1080, days: 4 },
+      { cost: 1450, days: 5 },
+      { cost: 1900, days: 6 },
+      { cost: 2500, days: 7 },
+    ],
+    /** Distrito con el que empiezas (nivel 1, sin obra). */
+    startDistrict: 'disciplina',
+    /** Materiales por día que produce cada nivel del edificio de un distrito. */
+    productionPerLevel: 4,
+    /** El almacén de cada distrito guarda hasta N días de producción (luego se llena y deja de juntar). */
+    storageDays: 3,
+    /** Equipos de obra: uno al inicio y otro más desde este nivel de jugador. */
+    crews: 1,
+    extraCrewAtLevel: 7,
+  },
+
   /** Meta mensual inicial del Dragón Financiero (MXN). Editable en la app. */
   defaultMonthlyGoal: 100_000,
 } as const;

@@ -8,7 +8,7 @@ function rng(seed: number) {
 }
 
 function randomEvent(r: () => number, date: string) {
-  const k = Math.floor(r() * 21);
+  const k = Math.floor(r() * 24);
   switch (k) {
     case 0: return done(date, ['daily-leer', 'daily-entrenar', 'daily-hijo'][Math.floor(r() * 3)], 'chica', 'fuerza');
     case 1: return ev('rest_day.marked', date);
@@ -30,6 +30,9 @@ function randomEvent(r: () => number, date: string) {
     case 18: return ev('plan.set', date, { forDate: date, items: [{ missionId: 'daily-leer', title: 'Leer', size: 'chica', attribute: 'fuerza', kind: 'daily' }] });
     case 19: return ev('pledge.made', date, { pledgeId: `p${Math.floor(r() * 3)}`, title: 'x', stake: Math.floor(r() * 20) + 1, deadline: addDays(date, 7) });
     case 20: return ev('pledge.resolved', date, { pledgeId: `p${Math.floor(r() * 3)}`, kept: r() < 0.5 });
+    case 21: return ev('city.build_started', date, { districtId: ['fuerza', 'disciplina', 'finanzas'][Math.floor(r() * 3)], level: 1 + Math.floor(r() * 3) });
+    case 22: return ev('city.inaugurated', date, { districtId: ['fuerza', 'disciplina', 'finanzas'][Math.floor(r() * 3)], level: 1 + Math.floor(r() * 3) });
+    case 23: return ev('city.collected', date, {});
     default: return ev('boss.phase_completed', date, { bossId: 'boss-torre', phaseIndex: Math.floor(r() * 3) });
   }
 }
@@ -39,7 +42,9 @@ describe('reglas de oro', () => {
     for (let seedN = 1; seedN <= 15; seedN++) {
       const r = rng(seedN);
       const events: any[] = [];
-      const ents = [...seed, { id: 'ch-1', module: 'challenges', kind: 'challenge', sort: 0, data: { title: 'Reto', days: 3, attribute: 'fuerza', size: 'media' } }];
+      // Con marcador y ciudad activos (scoreStart) para que sus registros también se pongan a prueba.
+      const base = seed.map((e) => (e.id === 'settings' ? { ...e, data: { ...(e.data as object), scoreStart: '2026-11-23' } } : e));
+      const ents = [...base, { id: 'ch-1', module: 'challenges', kind: 'challenge', sort: 0, data: { title: 'Reto', days: 3, attribute: 'fuerza', size: 'media' } }];
       let prev = run([], '2027-03-31', { entities: ents });
       for (let i = 0; i < 60; i++) {
         const date = addDays('2026-11-23', Math.floor(r() * 120));

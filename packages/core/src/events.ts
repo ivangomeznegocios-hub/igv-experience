@@ -292,6 +292,14 @@ export const EVENT_SCHEMAS = {
   /** "¿Cómo fue tu día?": no había nada que registrar en una revisión (p. ej., "No gasté nada"). No da XP. */
   'day.check_skipped': z.object({ checkId: id, label: z.string().max(100).optional() }),
 
+  // [[ciudad]]
+  /** Empezar la obra del siguiente nivel de un distrito (descuenta materiales si alcanzaban). */
+  'city.build_started': z.object({ districtId: attr, level: z.number().int().min(1).max(50) }),
+  /** Inaugurar una obra terminada: el edificio sube de nivel y el equipo queda libre. */
+  'city.inaugurated': z.object({ districtId: attr, level: z.number().int().min(1).max(50) }),
+  /** Recoger lo que produjeron los edificios. */
+  'city.collected': z.object({}).passthrough(),
+
 } as const;
 
 export type EventType = keyof typeof EVENT_SCHEMAS;
@@ -356,6 +364,11 @@ export const EVENT_LABELS: Record<EventType, string> = {
 
   // [[habitos]]
   'day.check_skipped': 'Nada que registrar',
+
+  // [[ciudad]]
+  'city.build_started': 'Obra iniciada',
+  'city.inaugurated': 'Obra inaugurada',
+  'city.collected': 'Producción recogida',
 
 };
 

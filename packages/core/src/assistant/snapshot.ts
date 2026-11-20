@@ -32,7 +32,7 @@ import { addDays, weekStart, weekday } from '../util/dates';
  * calcula el estado) o el servidor cuando la que tiene quedó vieja.
  * Si cambias su forma, sube SNAPSHOT_SCHEMA para que se descarten las fotos guardadas.
  */
-export const SNAPSHOT_SCHEMA = 3;
+export const SNAPSHOT_SCHEMA = 4;
 
 /**
  * Huella de los números del juego (config/game.ts). Si se despliega otra configuración, las fotos viejas
@@ -273,6 +273,41 @@ export interface AssistantSnapshot {
       everyDays: number | null;
     }[];
   };
+
+  // [[marcador]]
+  /** Puntaje del día de hoy, días ganados e impulso (engine/modules/days.ts). Null si no ha empezado. */
+  score?: {
+    score: number;
+    status: import('../engine/modules/days').DayStatus;
+    threshold: number;
+    toWin: number;
+    parts: { id: string; done: number; due: number }[];
+    pending: { missionId: string; title: string; points: number }[];
+    weekWon: number;
+    totalWon: number;
+    currentRun: number;
+    momentumPct: number;
+    comeback: boolean;
+  } | null;
+
+  // [[ciudad]]
+  /** Tu ciudad (engine/modules/city.ts). Null si no ha empezado. */
+  city?: {
+    size: number;
+    crews: { total: number; busy: number };
+    stored: number;
+    districts: {
+      id: string;
+      name: string;
+      building: string;
+      level: number;
+      materials: number;
+      stored: number;
+      next: { level: number; cost: number; days: number } | null;
+      work: { level: number; readyOn: string; ready: boolean } | null;
+      blocked: string | null;
+    }[];
+  } | null;
 
 }
 
@@ -744,6 +779,46 @@ export function buildSnapshot(
         };
       }),
     },
+
+    // [[marcador]]
+    score: state.days.today
+      ? {
+          score: state.days.today.score,
+          status: state.days.today.status,
+          threshold: state.days.threshold,
+          toWin: state.days.today.toWin,
+          parts: state.days.today.parts.map((p) => ({ id: p.id, done: p.done, due: p.due })),
+          pending: state.days.today.pending.map((p) => ({ missionId: p.missionId, title: p.title, points: p.points })),
+          weekWon: state.days.week.won,
+          totalWon: state.days.totals.won,
+          currentRun: state.days.totals.currentRun,
+          momentumPct: state.days.momentum.pct,
+          comeback: !!state.days.comeback && !state.days.comeback.done,
+        }
+      : null,
+
+    // [[ciudad]]
+    city: state.city.start
+      ? {
+          size: state.city.size,
+          crews: state.city.crews,
+          stored: state.city.stored,
+          districts: state.city.order.map((a) => {
+            const d = state.city.districts[a];
+            return {
+              id: d.id,
+              name: d.name,
+              building: d.building,
+              level: d.level,
+              materials: d.materials,
+              stored: d.stored,
+              next: d.next,
+              work: d.work ? { level: d.work.level, readyOn: d.work.readyOn, ready: d.work.ready } : null,
+              blocked: d.blocked,
+            };
+          }),
+        }
+      : null,
 
   };
 }

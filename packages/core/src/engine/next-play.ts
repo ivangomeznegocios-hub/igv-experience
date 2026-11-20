@@ -10,6 +10,12 @@ export type NextPlayAction =
   | { kind: 'comeback' }
   /** Activar el marcador (aún no hay `scoreStart`). */
   | { kind: 'start' }
+  /** Inaugurar una obra terminada de tu ciudad. */
+  | { kind: 'inaugurate'; districtId: string; level: number }
+  /** Recoger lo que produjo tu ciudad. */
+  | { kind: 'collect' }
+  /** Empezar una obra (hay equipo libre y te alcanza). */
+  | { kind: 'build'; districtId: string; level: number }
   /** Resolver un compromiso que ya venció. */
   | { kind: 'pledge'; pledgeId: string }
   | { kind: 'sleep' }
@@ -51,6 +57,29 @@ export function nextPlay(state: GameState, opts: { hour: number }): NextPlay {
     };
   }
 
+  const city = state.city;
+  if (city.start) {
+    const ready = city.ready[0];
+    if (ready) {
+      const d = city.districts[ready.districtId];
+      return {
+        id: `inaugurate-${ready.districtId}-${ready.level}`,
+        title: `Inaugura: ${d.building} nivel ${ready.level}`,
+        sub: `La obra en ${d.name} ya terminó. Inaugúrala y tu equipo queda libre.`,
+        action: { kind: 'inaugurate', districtId: ready.districtId, level: ready.level },
+      };
+    }
+    const full = city.order.some((a) => city.districts[a].storageFull);
+    if (city.stored > 0 && (full || hour >= 18 || city.stored >= 20)) {
+      return {
+        id: 'collect',
+        title: `Recoge ${city.stored} materiales`,
+        sub: full ? 'Un almacén ya se llenó: si no recoges, deja de juntar.' : 'Lo que produjo tu ciudad desde la última vez.',
+        action: { kind: 'collect' },
+      };
+    }
+  }
+
   const overdue = state.gold.pledges.find((p) => p.valid && p.status === 'open' && p.deadline < state.today);
   if (overdue) {
     return { id: `pledge-${overdue.pledgeId}`, title: `¿Cumpliste “${overdue.title}”?`, sub: 'Tu compromiso ya venció. Resuélvelo para liberar tu oro.', action: { kind: 'pledge', pledgeId: overdue.pledgeId } };
@@ -58,6 +87,21 @@ export function nextPlay(state: GameState, opts: { hour: number }): NextPlay {
 
   if (hour < 12 && state.energy.value === null) {
     return { id: 'sleep', title: '¿Cuánto dormiste?', sub: 'Un toque y sabes con cuánta energía arrancas.', action: { kind: 'sleep' } };
+  }
+
+  if (city.start && city.crews.busy < city.crews.total) {
+    // Lo que puedes construir ya: primero el distrito más atrasado (la ciudad crece pareja).
+    const can = city.order.map((a) => city.districts[a]).filter((d) => d.canBuild && d.next);
+    can.sort((a, b) => a.level - b.level || b.materials - a.materials);
+    const d = can[0];
+    if (d && d.next) {
+      return {
+        id: `build-${d.id}-${d.next.level}`,
+        title: d.level === 0 ? `Funda ${d.name}` : `Construye: ${d.building} nivel ${d.next.level}`,
+        sub: `Cuesta ${d.next.cost} de ${d.name} (tienes ${d.materials}) y tarda ${d.next.days} ${d.next.days === 1 ? 'día' : 'días'}.`,
+        action: { kind: 'build', districtId: d.id, level: d.next.level },
+      };
+    }
   }
 
   if (!state.plans[state.today]?.items.length && hour < 15 && t.status !== 'won') {

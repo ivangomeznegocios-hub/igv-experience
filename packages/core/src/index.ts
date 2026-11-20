@@ -88,3 +88,7 @@ export * from './engine/day-review';
 // [[marcador]]
 export type { DaysState, DayResult, DayStatus, DayPart, DayPartId, PendingItem, TodayResult, MomentumState } from './engine/modules/days';
 export * from './engine/next-play';
+
+// [[ciudad]]
+export * from './engine/city-catalog';
+export type { CityState, CityDistrictState, CityWork, CityInauguration } from './engine/modules/city';
