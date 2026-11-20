@@ -11,7 +11,7 @@
 }
 .vz-fab:active { transform: scale(0.94); }
 .vz-fab svg { width: 24px; height: 24px; stroke-width: 2.1; }
-@media (min-width: 1000px) { .vz-fab { bottom: 98px; right: calc(50% - 434px + 113px); } }
+@media (min-width: 1000px) { .vz-fab { bottom: 90px; left: 22px; right: auto; } }
 
 /* Hoja "Cuéntame" */
 .vz-mic-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 2px 0 14px; }

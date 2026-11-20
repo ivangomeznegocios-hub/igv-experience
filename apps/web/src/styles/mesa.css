@@ -1,0 +1,154 @@
+/* La mesa (pantalla Hoy): anillo del día, siguiente jugada, mosaicos, baraja y resultado. */
+
+/* ---------- Anillo del día ---------- */
+.dial { position: relative; flex: none; display: grid; place-items: center; }
+.dial svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.dial-track { stroke: var(--card-2); }
+.dial-fill { stroke: var(--gold); transition: stroke-dasharray 0.9s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.dial-fill.part-plan { stroke: var(--gold-2); }
+.dial-fill.part-log { stroke: color-mix(in srgb, var(--gold) 70%, var(--text)); }
+.dial-fill.part-close { stroke: var(--flame); }
+.dial.won .dial-fill { stroke: var(--green); }
+.dial-tick { stroke: var(--text); stroke-width: 2; stroke-linecap: round; opacity: 0.55; }
+.dial-center { position: relative; display: flex; flex-direction: column; align-items: center; line-height: 1; }
+.dial-score { font-size: 3.1em; font-weight: 800; letter-spacing: -0.04em; }
+.dial-of { margin-top: 6px; font-size: 12px; color: var(--muted); }
+.dial { font-size: 16px; }
+@media (prefers-reduced-motion: reduce) { .dial-fill { transition: none; } }
+
+.dial-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.dial-legend li { display: grid; grid-template-columns: 10px 1fr auto; align-items: center; gap: 8px; font-size: 13px; }
+.dial-legend i { width: 10px; height: 10px; border-radius: 3px; background: var(--gold); }
+.dial-legend i.part-plan { background: var(--gold-2); }
+.dial-legend i.part-log { background: color-mix(in srgb, var(--gold) 70%, var(--text)); }
+.dial-legend i.part-close { background: var(--flame); }
+.dial-legend b { font-weight: 700; color: var(--muted); }
+.dial-legend li.full b { color: var(--green); }
+
+/* ---------- Tarjeta del día ---------- */
+.day-card { padding: 16px; }
+.day-card-main { display: flex; align-items: center; gap: 18px; }
+.day-card-side { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.day-verdict { font-family: var(--font-display); font-weight: 800; font-size: 19px; letter-spacing: -0.02em; line-height: 1.15; }
+.day-card.is-won .day-verdict { color: var(--green); }
+.day-log-btn { align-self: flex-start; }
+.day-card-empty h2 { margin: 0 0 6px; }
+.day-card-empty p { margin: 0 0 12px; max-width: 52ch; }
+.dial-level {
+  display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 10px;
+  margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line);
+  color: inherit; text-decoration: none; font-size: 12.5px;
+}
+.dial-level-bar { height: 6px; border-radius: 99px; background: var(--card-2); overflow: hidden; }
+.dial-level-bar i { display: block; height: 100%; background: var(--gold); border-radius: inherit; }
+.dial-gold { display: inline-flex; align-items: center; gap: 4px; }
+@media (max-width: 420px) {
+  .day-card-main { gap: 14px; }
+  .day-card .dial { width: 150px !important; height: 150px !important; font-size: 13px; }
+  .dial-level { grid-template-columns: auto 1fr auto; }
+  .dial-level .muted { display: none; }
+}
+
+.week-dots { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; max-width: 240px; }
+.wd { aspect-ratio: 1; border-radius: 6px; display: grid; place-items: center; font-size: 10px; font-weight: 700; color: var(--muted); background: var(--card-2); border: 1px solid transparent; }
+.wd.won { background: var(--green); color: #06140c; }
+.wd.saved { background: color-mix(in srgb, var(--teal) 30%, var(--card-2)); color: var(--text); }
+.wd.lost { background: color-mix(in srgb, var(--red) 28%, var(--card-2)); color: var(--text); }
+.wd.rest, .wd.free, .wd.pause { background: transparent; border: 1px dashed var(--line); }
+.wd.pending { background: transparent; border: 1.5px solid var(--gold); color: var(--text); }
+.wd.none { opacity: 0.45; }
+.wd.today { box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 35%, transparent); }
+
+/* ---------- Siguiente jugada ---------- */
+.next-play { border-color: color-mix(in srgb, var(--gold) 45%, var(--line)); background: linear-gradient(180deg, color-mix(in srgb, var(--gold) 7%, var(--card)), var(--card)); }
+.np-head { display: flex; align-items: center; justify-content: space-between; }
+.np-label { font-size: 12px; font-weight: 700; color: var(--gold); }
+.np-points { font-size: 12px; font-weight: 800; color: var(--gold); }
+.np-title { margin: 4px 0 2px; font-size: 20px; letter-spacing: -0.02em; }
+.np-sub { margin: 0 0 12px; color: var(--muted); font-size: 13.5px; max-width: 60ch; }
+.np-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.next-play.np-comeback { border-color: color-mix(in srgb, var(--teal) 55%, var(--line)); background: linear-gradient(180deg, color-mix(in srgb, var(--teal) 9%, var(--card)), var(--card)); }
+.next-play.np-comeback .np-label { color: var(--teal); }
+.next-play.np-done { border-color: var(--line); background: var(--card); }
+
+/* ---------- Mosaicos "Hoy te toca" ---------- */
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (min-width: 560px) { .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.tile { position: relative; border-radius: 14px; border: 1px solid var(--line); background: var(--card-2); min-height: 104px; transition: border-color 0.15s ease, background 0.15s ease; }
+.tile.dim { opacity: 0.55; }
+.tile-main {
+  width: 100%; height: 100%; min-height: 104px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+  padding: 10px 12px; background: none; border: 0; color: inherit; text-align: left; cursor: pointer; border-radius: inherit; font: inherit;
+}
+.tile-main:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.tile-main:active { transform: scale(0.98); }
+.tile-top { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 22px; }
+.tile-slot { width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; font-size: 12px; font-weight: 800; background: var(--gold); color: #1a1205; }
+.tile-check { width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; border: 1.5px solid var(--line); color: transparent; }
+.tile-check svg { width: 14px; height: 14px; stroke-width: 3; }
+.tile-pts { font-size: 12px; font-weight: 800; color: var(--gold); margin-right: 26px; }
+.tile-state { font-size: 12px; font-weight: 700; color: var(--green); }
+.tile-title { font-weight: 700; font-size: 14px; line-height: 1.25; }
+.tile-meta { font-size: 11.5px; color: var(--muted); margin-top: auto; }
+.tile-meta em { font-style: normal; color: var(--flame); }
+.tile-play {
+  position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center;
+  border: 1px solid var(--line); background: var(--card); color: var(--gold); cursor: pointer;
+}
+.tile-play svg { width: 13px; height: 13px; }
+.tile.done { background: color-mix(in srgb, var(--green) 14%, var(--card-2)); border-color: color-mix(in srgb, var(--green) 45%, var(--line)); }
+.tile.done .tile-check { background: var(--green); border-color: var(--green); color: #06140c; }
+.tile.done .tile-title { color: var(--muted); }
+.tile.done .tile-slot { background: var(--green); color: #06140c; }
+
+/* ---------- Pestañas de la mesa ---------- */
+.mesa-tabs { position: sticky; top: 0; z-index: 5; padding: 6px 0; margin: 4px 0 10px; background: var(--bg); }
+
+/* ---------- Computadora: tres columnas ---------- */
+@media (min-width: 1100px) {
+  .main.wide { max-width: 1340px; }
+  .mesa { display: grid; grid-template-columns: minmax(330px, 380px) minmax(0, 1fr) minmax(300px, 360px); gap: 16px; align-items: start; }
+  .mesa-col { min-width: 0; }
+  .mesa-col.left { position: sticky; top: 12px; }
+  .mesa .day-card-main { flex-direction: column; align-items: stretch; }
+  .mesa .day-card .dial { margin: 0 auto; }
+  .mesa-col-title { font-size: 13px; font-weight: 700; color: var(--muted); margin: 2px 0 10px; }
+}
+
+/* ---------- Baraja del día ---------- */
+.deck-progress { display: flex; gap: 4px; margin: -4px 0 14px; }
+.deck-progress i { flex: 1; height: 4px; border-radius: 99px; background: var(--card-2); }
+.deck-progress i.done { background: var(--gold); }
+.deck-progress i.now { background: color-mix(in srgb, var(--gold) 55%, var(--card-2)); }
+.deck-card { display: flex; flex-direction: column; gap: 12px; }
+.deck-card-head { display: flex; gap: 12px; align-items: flex-start; }
+.deck-card-head h3 { margin: 0 0 2px; font-size: 18px; }
+.deck-card-head p { margin: 0; }
+.deck-icon { width: 40px; height: 40px; flex: none; border-radius: 12px; display: grid; place-items: center; background: var(--card-2); color: var(--gold); }
+.deck-icon svg { width: 20px; height: 20px; }
+.deck-card.is-done .deck-icon { background: var(--green); color: #06140c; }
+.deck-foot { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+
+/* ---------- Resultado del día ---------- */
+.result-overlay {
+  position: fixed; inset: 0; z-index: 94; overflow-y: auto; display: grid; place-items: center; padding: 24px 16px;
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); animation: fade 0.2s ease;
+}
+.result-box { width: min(420px, 100%); display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; }
+.result-date { color: var(--muted); font-size: 13px; text-transform: capitalize; }
+.result-verdict { font-family: var(--font-display); font-weight: 800; font-size: 26px; letter-spacing: -0.03em; }
+.result-verdict.won { color: var(--green); }
+.result-verdict.saved { color: var(--teal); }
+.result-box .dial-legend { width: 100%; max-width: 280px; text-align: left; }
+.result-earned { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
+.result-earned > div { padding: 12px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
+.result-earned b { font-size: 22px; font-weight: 800; }
+.result-earned span { font-size: 12px; color: var(--muted); }
+.result-left { width: 100%; text-align: left; padding: 12px; border-radius: 14px; border: 1px dashed var(--line); }
+.result-left ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.result-left li { display: flex; justify-content: space-between; gap: 10px; font-size: 13.5px; }
+.result-left b { color: var(--gold); }
+.result-week { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; }
+.result-week .week-dots { width: 100%; max-width: 280px; }
+.result-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 4px; }

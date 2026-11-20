@@ -206,7 +206,9 @@ export async function undoActivity(d1: D1Database, id: string): Promise<{ ok: bo
   const ownEvents = (await Promise.all(refs.events.map((evId) => store.getEvent(evId)))).filter((e): e is GameEvent => !!e && !e.voidedAt);
   const keep = await protectedChallengeEvents(store, ownEvents, own);
   kept += keep.challenges;
-  for (const ev of ownEvents) if (!keep.ids.has(ev.id)) await store.voidEvent(ev.id);
+  const keepCity = await protectedCityEvents(store, ownEvents, own);
+  kept += keepCity.size;
+  for (const ev of ownEvents) if (!keep.ids.has(ev.id) && !keepCity.has(ev.id)) await store.voidEvent(ev.id);
   for (const evId of refs.voided ?? []) await store.restoreEvent(evId);
 
   // Elementos de esta acción que aún no se revisan (no cuentan como "de Iván" al ver si otro depende de ellos).
@@ -362,6 +364,22 @@ async function protectedChallengeEvents(store: D1AssistantStore, ownEvents: Game
     if (any) challenges++;
   }
   return { ids, challenges };
+}
+
+/**
+ * Ciudad: cada obra se valida en orden contra los materiales y la obra en curso. Si Iván construyó, inauguró o
+ * recogió DESPUÉS de una acción de ciudad de la IA, anularla podría dejar sin efecto lo de Iván (p. ej. su obra ya no
+ * alcanzaría sin lo que recogió la IA). Esas acciones de la IA se conservan.
+ */
+const CITY_TYPES = ['city.build_started', 'city.inaugurated', 'city.collected'];
+async function protectedCityEvents(store: D1AssistantStore, ownEvents: GameEvent[], own: Set<string>): Promise<Set<string>> {
+  const ids = new Set<string>();
+  const mine = ownEvents.filter((e) => CITY_TYPES.includes(e.type));
+  if (!mine.length) return ids;
+  const after = (a: GameEvent, b: GameEvent) => (a.localDate !== b.localDate ? a.localDate > b.localDate : (a.createdAt ?? 0) > (b.createdAt ?? 0));
+  const foreign = (await store.events({ types: CITY_TYPES })).filter((e) => !own.has(e.id) && !e.voidedAt);
+  for (const e of mine) if (foreign.some((f) => after(f, e))) ids.add(e.id);
+  return ids;
 }
 
 async function remapSavedAt(d1: D1Database, exceptId: string, entityId: string, from: number, to: number) {

@@ -87,7 +87,12 @@ export const EVENT_SCHEMAS = {
 
   // --- Inmersión ---
   /** Cierre del día: una línea de reflexión. No da XP. */
-  'day.closed': z.object({ note: z.string().max(2000).default(''), mood: z.number().int().min(1).max(5).optional() }),
+  'day.closed': z.object({
+    note: z.string().max(2000).default(''),
+    mood: z.number().int().min(1).max(5).optional(),
+    /** Diarias que tocaban ese día al cerrarlo: congela el puntaje aunque después edites tu rutina. */
+    routine: z.array(id).max(50).optional(),
+  }),
   /** Misión sorpresa del día (se sortea en el dispositivo y se guarda para que el historial no cambie). */
   'bounty.drawn': z.object({ missionId: id, title: z.string().min(1).max(300), size, attribute: attr }),
   /** Canje de un premio real en la tienda (se paga con oro, nunca con XP). */
@@ -287,6 +292,14 @@ export const EVENT_SCHEMAS = {
   /** "¿Cómo fue tu día?": no había nada que registrar en una revisión (p. ej., "No gasté nada"). No da XP. */
   'day.check_skipped': z.object({ checkId: id, label: z.string().max(100).optional() }),
 
+  // [[ciudad]]
+  /** Empezar la obra del siguiente nivel de un distrito (descuenta materiales si alcanzaban). */
+  'city.build_started': z.object({ districtId: attr, level: z.number().int().min(1).max(50) }),
+  /** Inaugurar una obra terminada: el edificio sube de nivel y el equipo queda libre. */
+  'city.inaugurated': z.object({ districtId: attr, level: z.number().int().min(1).max(50) }),
+  /** Recoger lo que produjeron los edificios. */
+  'city.collected': z.object({}).passthrough(),
+
 } as const;
 
 export type EventType = keyof typeof EVENT_SCHEMAS;
@@ -351,6 +364,11 @@ export const EVENT_LABELS: Record<EventType, string> = {
 
   // [[habitos]]
   'day.check_skipped': 'Nada que registrar',
+
+  // [[ciudad]]
+  'city.build_started': 'Obra iniciada',
+  'city.inaugurated': 'Obra inaugurada',
+  'city.collected': 'Producción recogida',
 
 };
 

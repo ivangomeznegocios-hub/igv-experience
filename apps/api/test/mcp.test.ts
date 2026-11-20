@@ -471,3 +471,37 @@ describe('deshacer: retos iniciados por la IA y orden', () => {
   });
 });
 
+
+describe('deshacer: ciudad', () => {
+  it('no anula lo que la IA hizo en la ciudad si Iván registró algo de ciudad después', async () => {
+    const { todayCdmx } = await import('../src/ai/store');
+    const { addDays } = await import('@igv/core');
+    const e = { DB: fakeD1(), DEV_BYPASS_AUTH: 'true' } as any;
+    const m = (path: string, init?: RequestInit) => app.request(path, init, e);
+    const today = todayCdmx();
+    // La ciudad empezó hace 3 días: el Centro (nivel 1) ya produjo 12 materiales.
+    await m('/api/sync?since=0');
+    const settings = ((await (await m('/api/sync?since=0')).json()) as any).entities.find((x: any) => x.id === 'settings');
+    await m('/api/entities/settings', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ module: 'profile', kind: 'settings', data: { ...settings.data, scoreStart: addDays(today, -3) } }),
+    });
+    const key = ((await (await m('/api/ai/keys', json({ name: 'k' }))).json()) as any).token;
+    const call = async (name: string, args: unknown = {}) => {
+      const res = await mcpApp.request('/mcp', json({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, { authorization: `Bearer ${key}` }), e);
+      return ((await res.json()) as any).result as { isError?: boolean; content: { text: string }[] };
+    };
+    const r = await call('recoger_produccion');
+    expect(r.isError).toBeFalsy();
+    expect(r.content[0].text).toContain('Recogidos 12');
+    const items = ((await (await m('/api/ai/activity')).json()) as any).items as { id: string }[];
+
+    // Después, Iván registra algo de su ciudad (p. ej. otra recolección): lo de la IA se conserva al deshacer.
+    await m('/api/events', json({ id: 'evt-city-ivan-0001', type: 'city.collected', occurredAt: new Date().toISOString(), localDate: today, payload: {} }));
+    const undo = (await (await m(`/api/ai/activity/${items[0].id}/undo`, { method: 'POST' })).json()) as any;
+    expect(undo).toMatchObject({ ok: true, kept: 1 });
+    const sync = (await (await m('/api/sync?since=0')).json()) as { events: { type: string; voidedAt: string | null }[] };
+    expect(sync.events.filter((x) => x.type === 'city.collected').every((x) => !x.voidedAt)).toBe(true);
+  });
+});

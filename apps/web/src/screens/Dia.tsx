@@ -10,6 +10,7 @@ import { missingLine, useDayReview } from '../ui/DayReview';
 import { DAY_CHECK_UI, type DayCheckActionArgs } from '../ui/dayCheckActions';
 import { openPlanSheet } from '../ui/DayPlan';
 import { openQuickAdd } from '../ui/QuickAdd';
+import { closeDay } from '../lib/actions';
 import '../styles/habitos.css';
 
 const MOODS = ['😫', '😕', '😐', '🙂', '🔥'];
@@ -204,11 +205,7 @@ function ClosureCard({ date }: { date: string }) {
   const [mood, setMood] = useState<number | null>(prev?.mood ?? null);
   const isToday = date === state.today;
   const save = () => {
-    addEvent('day.closed', { note: note.trim(), mood: mood ?? undefined }, { localDate: date });
-    const bonus = !prev && state.missions.activeDays.has(date) ? dayCloseBonus(date, GAME_CONFIG.goldBonus.dayCloseOptions) : 0;
-    toast(bonus ? `Día cerrado. Bono sorpresa: +${bonus} de oro.` : isToday ? 'Día cerrado. Descansa, mañana seguimos.' : 'Cierre guardado.', bonus ? 'xp' : 'info');
-    const tomorrow = addDays(state.today, 1);
-    if (isToday && !prev && !state.plans[tomorrow]?.items.length) setTimeout(() => openPlanSheet(tomorrow), 350);
+    closeDay(state, date, { note, mood }, { onPlanTomorrow: (t) => setTimeout(() => openPlanSheet(t), 350) });
   };
   return (
     <>

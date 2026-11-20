@@ -66,11 +66,17 @@ export interface DayClosure {
   eventId: string;
   note: string;
   mood?: number;
+  /** Diarias que tocaban al cerrar (si se guardaron). */
+  routine?: string[];
 }
 
 /** Cierres del día (la última versión del día gana). No dan XP. */
 export function reduceDayClosures(ctx: Ctx): Record<string, DayClosure> {
   const out: Record<string, DayClosure> = {};
-  for (const e of ofType<{ note: string; mood?: number }>(ctx, 'day.closed')) out[e.localDate] = { eventId: e.id, note: e.payload.note ?? '', mood: e.payload.mood };
+  for (const e of ofType<{ note: string; mood?: number; routine?: string[] }>(ctx, 'day.closed')) {
+    // Editar la nota o el ánimo después no descongela la rutina del día: se conserva la que ya estaba.
+    const routine = e.payload.routine ?? out[e.localDate]?.routine;
+    out[e.localDate] = { eventId: e.id, note: e.payload.note ?? '', mood: e.payload.mood, routine };
+  }
   return out;
 }

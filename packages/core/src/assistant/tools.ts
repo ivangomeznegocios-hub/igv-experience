@@ -92,6 +92,9 @@ import { SALUD_GUIDE, SALUD_TOOLS, renderSaludOverview } from './tools-salud';
 // [[habitos]]
 import { HABITOS_GUIDE, HABITOS_TOOLS, habitsOverviewLines } from './tools-habitos';
 
+// [[ciudad]]
+import { CIUDAD_GUIDE, CIUDAD_TOOLS, renderCity } from './tools-ciudad';
+
 
 const DAY_NAMES = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
 
@@ -183,6 +186,18 @@ export function renderOverview(s: AssistantSnapshot, nowIso: string = s.computed
 
   // [[habitos]]
   L.push(...habitsOverviewLines(s));
+
+  // [[marcador]]
+  if (s.score) {
+    L.push(
+      '',
+      `Marcador de hoy: ${s.score.score}/100 (${s.score.status === 'won' ? 'día ganado' : `faltan ${s.score.toWin} para ganar con ${s.score.threshold}`}) · ${s.score.weekWon} días ganados esta semana · ${s.score.currentRun} seguidos.${s.score.comeback ? ' Regresa de una pausa: una misión chica hoy recupera su ritmo.' : ''}`,
+    );
+    if (s.score.pending.length) L.push(`Lo que más suma hoy: ${s.score.pending.slice(0, 4).map((p) => `${p.title} (+${p.points})`).join(', ')}.`);
+  }
+
+  // [[ciudad]]
+  if (s.city) L.push('', renderCity(s.city));
 
   if (s.xp.recent.length) L.push('', `XP reciente: ${s.xp.recent.slice(0, 10).map((e) => `${e.date} ${e.label} +${e.amount}`).join('; ')}.`);
   L.push('', `(Calculado por ${s.computedBy === 'app' ? 'la app' : 'el servidor'} · ${s.computedAt.slice(0, 16).replace('T', ' ')} UTC)`);
@@ -431,6 +446,7 @@ const HISTORY_CATEGORIES: Record<string, string[]> = {
   salud: ['health.checkup_done', 'health.metric'],
   entrenamiento: ['workout.logged'],
   notas: ['note.captured'],
+  ciudad: ['city.build_started', 'city.inaugurated', 'city.collected'],
 };
 
 const verHistorial = tool({
@@ -534,6 +550,12 @@ const GUIDE_SYSTEMS: string[] = [
 
   // [[habitos]]
   HABITOS_GUIDE,
+
+  // [[marcador]]
+  'Marcador del día: cada día suma hasta 100 puntos (rutina que tocaba 50, sus 3 del plan 25, registro 15, cierre 10; lo que no aplica se reparte). Con 70 gana el día. Dos o más días sin registrar son una pausa: no cuentan en su contra. Nunca regañes por días sin registrar; propón la jugada que más suma.',
+
+  // [[ciudad]]
+  CIUDAD_GUIDE,
 
 ];
 
@@ -867,7 +889,10 @@ const cerrarDia = tool({
   input: z.object({ nota: z.string().trim().max(2000), animo: z.number().int().min(1).max(5).optional(), fecha: zFecha }),
   async run({ nota, animo, fecha }, store) {
     const date = pastDate(store, fecha);
-    const ev = makeEvent(store, 'day.closed', { note: nota, mood: animo }, date);
+    // Hoy se congela qué diarias tocaban (como en la app), para que editar la rutina después no cambie el puntaje.
+    const snap = date === store.today ? await store.snapshot() : null;
+    const routine = snap?.habits?.routine.filter((h) => h.dueToday).map((h) => h.id) ?? [];
+    const ev = makeEvent(store, 'day.closed', { note: nota, mood: animo, ...(routine.length ? { routine } : {}) }, date);
     await store.addEvents([ev]);
     return ok(`Día cerrado (${date === store.today ? 'hoy' : fmtDay(date)}). Registro [${ev.id}].`, `Cerró el día${nota ? `: ${nota.slice(0, 60)}` : ''}`, { events: [ev.id] });
   },
@@ -1504,6 +1529,9 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
 
   // [[habitos]]
   ...HABITOS_TOOLS,
+
+  // [[ciudad]]
+  ...CIUDAD_TOOLS,
 
 ];
 

@@ -1,4 +1,5 @@
 import { ATTRIBUTE_NAMES, MISSION_SIZE_NAMES, type AttributeId, type Entity, type GameEvent, type MissionSize } from '../types';
+import { cityDistrict } from '../engine/city-catalog';
 
 const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 const MONTHS_LONG = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -92,6 +93,11 @@ export const EVENT_TEXT: Record<string, string> = {
 
   // [[habitos]]
   'day.check_skipped': 'Nada que registrar',
+
+  // [[ciudad]]
+  'city.build_started': 'Obra iniciada',
+  'city.inaugurated': 'Obra inaugurada',
+  'city.collected': 'Producción recogida',
 
 };
 
@@ -252,6 +258,14 @@ export function describeEvent(e: GameEvent, byId: Map<string, Entity>, currency 
     case 'day.check_skipped':
       detail = String(p.label ?? p.checkId);
       break;
+
+    // [[ciudad]]
+    case 'city.build_started':
+    case 'city.inaugurated': {
+      const d = cityDistrict(String(p.districtId));
+      detail = d ? `${d.building} (${d.name}) nivel ${p.level}` : `nivel ${p.level}`;
+      break;
+    }
 
   }
   return detail ? `${label}: ${detail}` : label;

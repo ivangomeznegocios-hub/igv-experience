@@ -4,7 +4,7 @@ import {
   ATTRIBUTE_NAMES,
   GAME_CONFIG,
   addDays,
-  dayCloseBonus,
+  goldFor,
   frequentMissions,
   isDailyDone,
   isInRoutine,
@@ -22,28 +22,94 @@ import {
   type ViceData,
 } from '@igv/core';
 import { addEvent, useGame } from '../data/store';
-import { completeGenerated, completeMission, completeQuick, completeTodo, isDone, saveTodo, uncomplete, updateSettings } from '../lib/actions';
+import { closeDay, completeGenerated, completeMission, completeQuick, completeTodo, isDone, saveTodo, uncomplete, updateSettings } from '../lib/actions';
 import { bossHpPercent, buildDailyBriefing, localHour, pickDailyEncounter } from '../lib/narrator';
 import { fmtDate, fmtMoney, fmtWeekday } from '../lib/time';
+import { getPrefs, setPrefs } from '../lib/prefs';
 import { BossArt, BossHpBar } from '../ui/BossArt';
 import { Hero } from '../ui/Hero';
 import { Icon } from '../ui/icons';
-import { AttrBadge, Badge, Bar, Chips, Collapse, Empty, Field, Sheet, SizeBadge, SwipeRow, confirmAction, toast, undoToast, useAutoFocus, TextInput, TextArea } from '../ui/kit';
+import { AttrBadge, Badge, Bar, Chips, Collapse, Empty, Field, Sheet, SizeBadge, SwipeRow, Tabs, confirmAction, toast, undoToast, useAutoFocus, TextInput, TextArea } from '../ui/kit';
 import { LessonForm } from '../ui/MissionForm';
 import { PeopleTodayCard } from '../ui/people';
 import { startMissionQuest, startQuest, startTodoQuest } from '../ui/QuestMode';
 import { openQuickAdd } from '../ui/QuickAdd';
 import { SyncPill } from '../ui/SyncPill';
-import { openPlanSheet, TodayPlanCard } from '../ui/DayPlan';
+import { openPlanSheet } from '../ui/DayPlan';
+import { DayCard } from '../ui/DayRing';
+import { openDayDeck } from '../ui/DayDeck';
+import { openDayResult } from '../ui/DayResult';
+import { NextPlayCard } from '../ui/NextPlay';
+import { TodayTiles } from '../ui/TodayTiles';
+import { CityCard } from '../ui/CityCard';
 import { WeekPaceCard } from '../ui/WeekPace';
 import { WeekShareCard } from '../ui/WeekShare';
 import { DayReviewRow } from '../ui/DayReview';
 import { HabitsHighlight } from '../ui/HabitBits';
 
+type MesaTab = 'hoy' | 'ciudad' | 'semana' | 'todo';
+
+function useWide(query = '(min-width: 1100px)') {
+  const [wide, setWide] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.(query).matches);
+  useEffect(() => {
+    const m = window.matchMedia?.(query);
+    if (!m) return;
+    const f = () => setWide(m.matches);
+    m.addEventListener('change', f);
+    return () => m.removeEventListener('change', f);
+  }, [query]);
+  return wide;
+}
+
+/**
+ * Hoy = la mesa: el anillo del día, la siguiente jugada y lo que te toca, a la vista. Lo demás va en pestañas
+ * (celular) o en columnas (computadora), para que abrir la app sea jugar y no recorrer una lista.
+ */
 export default function Hoy() {
   const { state } = useGame();
+  const wide = useWide();
+  const [tab, setTab] = useState<MesaTab>('hoy');
   const [lesson, setLesson] = useState(false);
   const [recurring, setRecurring] = useState<{ open: boolean; bossId?: string }>({ open: false });
+
+  const dayExtras = (
+    <>
+      {!state.days.start && <MorningRitualCard />}
+      <HeadsUpCard />
+      <BountyCard />
+      <AgendaCard />
+      <CampfireCard />
+    </>
+  );
+  const week = (
+    <>
+      <WeekReportCard />
+      <WeekPaceCard />
+      <WeeklyCard />
+      <HabitsHighlight />
+      <ActiveBossCard />
+    </>
+  );
+  const all = (
+    <>
+      <NarratorBriefing />
+      <DayReviewRow />
+      <DailyEncounterCard onDefeatRecurring={(bossId) => setRecurring({ open: true, bossId })} />
+      <NpcMissions />
+      <PeopleTodayCard />
+      <FavoritesSection />
+      <VicesMini />
+      <Hero />
+      <div className="grid2" style={{ marginTop: 10, marginBottom: 12 }}>
+        <button className="btn block" onClick={() => setLesson(true)}>
+          <Icon name="feather" /> Escribir lección
+        </button>
+        <button className="btn block" onClick={() => setRecurring({ open: true })}>
+          <Icon name="flag" /> Superé un reto
+        </button>
+      </div>
+    </>
+  );
 
   return (
     <>
@@ -74,37 +140,46 @@ export default function Hoy() {
         </div>
       )}
 
-      <Hero />
-      <MorningRitualCard />
-      <NarratorBriefing />
-      <DayReviewRow />
-      <HeadsUpCard />
-      <TodayPlanCard />
-      <WeekReportCard />
-      <BountyCard />
-      <RoutineCard />
-      <HabitsHighlight />
-      <AgendaCard />
-      <ActiveBossCard />
-      <DailyEncounterCard onDefeatRecurring={(bossId) => setRecurring({ open: true, bossId })} />
-      <NpcMissions />
-      <WeeklyCard />
-      <WeekPaceCard />
-      <CampfireCard />
-
-      <Collapse title="Más en tu jornada">
-        <PeopleTodayCard />
-        <FavoritesSection />
-        <VicesMini />
-        <div className="grid2" style={{ marginTop: 10 }}>
-          <button className="btn block" onClick={() => setLesson(true)}>
-            <Icon name="feather" /> Escribir lección
-          </button>
-          <button className="btn block" onClick={() => setRecurring({ open: true })}>
-            <Icon name="flag" /> Superé un reto
-          </button>
+      {wide ? (
+        <div className="mesa">
+          <div className="mesa-col left">
+            <DayCard />
+            <NextPlayCard />
+            {dayExtras}
+          </div>
+          <div className="mesa-col">
+            <CityCard />
+            <TodayTiles />
+            {all}
+          </div>
+          <div className="mesa-col">
+            <div className="mesa-col-title">Tu semana</div>
+            {week}
+          </div>
         </div>
-      </Collapse>
+      ) : (
+        <>
+          <DayCard />
+          <NextPlayCard />
+          <TodayTiles />
+          <div className="mesa-tabs">
+            <Tabs
+              value={tab}
+              onChange={setTab}
+              options={[
+                { value: 'hoy', label: 'Hoy' },
+                ...(state.city.start ? [{ value: 'ciudad' as const, label: 'Ciudad' }] : []),
+                { value: 'semana', label: 'Semana' },
+                { value: 'todo', label: 'Todo' },
+              ]}
+            />
+          </div>
+          {tab === 'hoy' && dayExtras}
+          {tab === 'ciudad' && <CityCard />}
+          {tab === 'semana' && week}
+          {tab === 'todo' && all}
+        </>
+      )}
 
       {lesson && <LessonForm open onClose={() => setLesson(false)} />}
       {recurring.open && <RecurringDefeatSheet initialBossId={recurring.bossId} onClose={() => setRecurring({ open: false })} />}
@@ -115,12 +190,15 @@ export default function Hoy() {
 function BirthDatePrompt() {
   const { state, store } = useGame();
   const [date, setDate] = useState('');
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissed, setDismissed] = useState(() => !!getPrefs().welcomeDismissed);
   if (!store.ready || state.settings.birthDate || dismissed) return null;
   return (
     <Sheet
       open
-      onClose={() => setDismissed(true)}
+      onClose={() => {
+        setPrefs({ welcomeDismissed: true });
+        setDismissed(true);
+      }}
       title="Bienvenido a IGV EXPERIENCE"
       actions={
         <button
@@ -224,95 +302,6 @@ function NarratorBriefing() {
   );
 }
 
-function RoutineCard() {
-  const { state, list } = useGame();
-  const wd = weekday(state.today);
-  const dailies = list<MissionData>('missions', 'daily');
-  const routine = dailies.filter((m) => isInRoutine(m.data, wd));
-  const doneToday = new Set(state.missions.completedToday);
-  // Igual que Hábitos y "¿Cómo fue tu día?": lo registrado como "Hice algo" con el mismo título cuenta para la diaria.
-  const isDone = (m: Entity<MissionData>) => isDailyDone({ doneOn: doneToday }, m);
-  const low = state.energy.low;
-  const suitable = (m: Entity<MissionData>) => !low || m.data.size === 'chica' || !!m.data.recovery;
-  const ordered = [...routine].sort((a, b) => Number(isDone(a)) - Number(isDone(b)) || Number(suitable(b)) - Number(suitable(a)));
-  const doneCount = routine.filter(isDone).length;
-  const perfect = routine.length > 0 && doneCount === routine.length;
-  const others = dailies.filter((m) => !routine.includes(m));
-  const [showOthers, setShowOthers] = useState(false);
-  const toggle = (m: Entity<MissionData>) => {
-    if (!isDone(m)) completeMission(m);
-    // Desmarcar lo que la marcó: la diaria o su "Hice algo" del mismo título.
-    else uncomplete(doneToday.has(m.id) ? m.id : quickMissionId(m.data.title), state.today, m.data.title);
-  };
-
-  const row = (m: Entity<MissionData>) => {
-    const done = isDone(m);
-    const isBounty = state.bounty.today?.missionId === m.id;
-    return (
-      <SwipeRow key={m.id} onRight={done ? undefined : () => completeMission(m)}>
-        <div className={`item ${done ? 'done' : ''}`} style={{ opacity: suitable(m) || done ? 1 : 0.5 }}>
-          <button className={`check ${done ? 'done' : ''}`} aria-pressed={done} aria-label={`${done ? 'Desmarcar' : 'Completar'} ${m.data.title}`} onClick={() => toggle(m)}>
-            <Icon name="check" />
-          </button>
-          <div className="grow" onClick={() => toggle(m)} style={{ cursor: 'pointer' }}>
-            <div className="item-title">{m.data.title}</div>
-            <div className="row wrap" style={{ gap: 4, marginTop: 3 }}>
-              <SizeBadge size={m.data.size} />
-              <AttrBadge attr={m.data.attribute} />
-              {isBounty && <Badge tone="flame">Sorpresa +{state.bounty.today!.bonus}</Badge>}
-              {m.data.recovery && low && <Badge tone="teal">Recuperación</Badge>}
-            </div>
-          </div>
-          {!done && (
-            <button className="btn icon sm play-btn" aria-label={`Empezar ${m.data.title}`} title="Iniciar en Modo enfoque" onClick={() => startMissionQuest(m)}>
-              <Icon name="play" />
-            </button>
-          )}
-        </div>
-      </SwipeRow>
-    );
-  };
-
-  return (
-    <div className={`card ${perfect ? 'perfect-card' : ''}`}>
-      <div className="card-head">
-        <div>
-          <h2>Rutina de hoy</h2>
-          <div className="tiny muted">
-            {perfect ? `¡Día perfecto! ${doneCount}/${routine.length} hechas` : `${doneCount}/${routine.length} hechas · toca ✓, desliza → o pulsa ▶ para enfocarte`}
-          </div>
-        </div>
-        <div className="row" style={{ gap: 2 }}>
-          <Link to="/habitos" className="btn sm ghost">
-            Hábitos
-          </Link>
-          <Link to="/misiones?tab=daily" className="btn sm ghost">
-            Editar
-          </Link>
-        </div>
-      </div>
-      {routine.length > 0 && <Bar value={doneCount} max={routine.length} tone={perfect ? 'gold' : 'green'} size="sm" />}
-      {low && (
-        <div className="banner warn" style={{ margin: '10px 0 4px' }}>
-          <Icon name="bolt" width={18} /> Energía baja: hoy prioriza misiones chicas y de recuperación.
-        </div>
-      )}
-      <div style={{ marginTop: 6 }}>
-        {routine.length === 0 && <Empty>No tienes diarias en tu rutina para hoy. Agrégalas en Misiones → Diarias.</Empty>}
-        {ordered.map(row)}
-      </div>
-      {others.length > 0 && (
-        <>
-          <button className="btn sm ghost" onClick={() => setShowOthers((x) => !x)}>
-            {showOthers ? 'Ocultar' : `Otras diarias (${others.length})`}
-          </button>
-          {showOthers && others.map(row)}
-        </>
-      )}
-    </div>
-  );
-}
-
 function FavoritesSection() {
   const { state, events, list } = useGame();
   // La rutina ya está en su tarjeta: tampoco se repite como "Hice algo" con el mismo título (contaría doble).
@@ -364,6 +353,7 @@ function AgendaCard() {
     saveTodo({ ...t.data, date: tomorrow }, t.id);
     undoToast(`"${t.data.title}" pasó a mañana`, () => saveTodo(t.data, t.id));
   };
+  if (!due.length && !doneToday.length) return null;
   return (
     <div className="card">
       <div className="card-head">
@@ -380,7 +370,6 @@ function AgendaCard() {
           </Link>
         </div>
       </div>
-      {due.length === 0 && doneToday.length === 0 && <div className="small muted">Nada pendiente para hoy.</div>}
       {due.map((t) => (
         <SwipeRow key={t.id} onRight={() => completeTodo(t)} onLeft={() => postpone(t)} leftLabel="Mañana">
           <div className="item">
@@ -441,6 +430,7 @@ function BountyCard() {
 
   if (!b) return null;
   const m = list<MissionData>('missions').find((x) => x.id === b.missionId);
+  const bonusGold = goldFor({ amount: b.bonus }, GAME_CONFIG.gold.xpPerGold);
   return (
     <div className={`card bounty ${b.completed ? 'won' : ''}`}>
       <div className="row">
@@ -451,7 +441,9 @@ function BountyCard() {
           <div className="eyebrow">Misión sorpresa del día · +{b.bonus} XP bono</div>
           <div className="item-title">{b.title}</div>
           <div className="tiny muted">
-            {b.completed ? `¡Cumplida! Ganaste +${b.bonus} XP extra.` : `Complétala hoy para cobrar ${GAME_CONFIG.bounty.bonusPercent}% extra de XP y oro.`}
+            {b.completed
+              ? `¡Cumplida! Ganaste +${b.bonus} XP extra${bonusGold ? ` y +${bonusGold} de oro` : ''}.`
+              : `Complétala hoy para cobrar +${b.bonus} XP extra${bonusGold ? ` y +${bonusGold} de oro` : ''}.`}
           </div>
         </div>
         {!b.completed && m && (
@@ -673,102 +665,26 @@ function WeekReportCard() {
 /** Cierre del día: resumen de la jornada y una nota para el registro. */
 function CampfireCard() {
   const { state } = useGame();
-  const [open, setOpen] = useState(false);
   const closed = state.dayClosures[state.today];
   const evening = localHour() >= 18;
   if (!evening && !closed && state.xp.today === 0) return null;
   return (
-    <>
-      <button className={`card close-day campfire-card ${evening && !closed ? 'glow' : ''}`} onClick={() => setOpen(true)}>
-        <div className="campfire-icon">
-          <Icon name="campfire" width={24} height={24} />
-        </div>
-        <div className="grow" style={{ textAlign: 'left' }}>
-          <div className="eyebrow" style={{ color: 'var(--flame)' }}>
-            Cierre del día
-          </div>
-          <b>{closed ? 'Día cerrado' : 'Cierra tu día'}</b>
-          <div className="tiny muted">{closed ? closed.note || 'Toca para ver tu resumen' : `Hoy: +${state.xp.today} XP · +${state.gold.earnedToday} oro · racha ${state.streak.current}d`}</div>
-        </div>
-        <Icon name="right" width={18} />
-      </button>
-      {open && <CloseDaySheet onClose={() => setOpen(false)} />}
-    </>
-  );
-}
-
-const MOODS = ['😫', '😕', '😐', '🙂', '🔥'];
-
-function CloseDaySheet({ onClose }: { onClose: () => void }) {
-  const { state } = useGame();
-  const prev = state.dayClosures[state.today];
-  const [note, setNote] = useState(prev?.note ?? '');
-  const [mood, setMood] = useState<number | null>(prev?.mood ?? null);
-  const entries = state.xp.ledger.filter((e) => e.date === state.today);
-  const byAttr = new Map<string, number>();
-  for (const e of entries) if (e.attribute) byAttr.set(e.attribute, (byAttr.get(e.attribute) ?? 0) + e.amount);
-  const missions = entries.filter((e) => e.source === 'mission').length;
-  return (
-    <Sheet
-      open
-      onClose={onClose}
-      title="Cierre del día"
-      actions={
-        <button
-          className="btn primary"
-          onClick={() => {
-            addEvent('day.closed', { note: note.trim(), mood: mood ?? undefined });
-            const bonus = !prev && missions > 0 ? dayCloseBonus(state.today, GAME_CONFIG.goldBonus.dayCloseOptions) : 0;
-            toast(bonus ? `Día cerrado. Bono sorpresa: +${bonus} de oro.` : 'Día cerrado. Descansa, mañana seguimos.', bonus ? 'xp' : 'info');
-            onClose();
-            const tomorrow = addDays(state.today, 1);
-            if (!state.plans[tomorrow]?.items.length) setTimeout(() => openPlanSheet(tomorrow), 350);
-          }}
-        >
-          {prev ? 'Actualizar cierre' : 'Cerrar el día'}
-        </button>
-      }
+    <button
+      className={`card close-day campfire-card ${evening && !closed ? 'glow' : ''}`}
+      onClick={() => (closed ? openDayResult(state.today) : openDayDeck({ date: state.today, closeOnly: true }))}
     >
-      <div className="campfire-hero">
-        <div className="campfire-glow" aria-hidden="true">
-          <Icon name="campfire" width={36} height={36} />
-        </div>
-        <div className="small muted">Resumen del día · {fmtDate(state.today, true)}</div>
+      <div className="campfire-icon">
+        <Icon name="campfire" width={24} height={24} />
       </div>
-      <div className="grid2" style={{ gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
-        <div className="stat-tile">
-          <span>XP hoy</span>
-          <b className="gold num">+{state.xp.today}</b>
+      <div className="grow" style={{ textAlign: 'left' }}>
+        <div className="eyebrow" style={{ color: 'var(--flame)' }}>
+          Cierre del día
         </div>
-        <div className="stat-tile">
-          <span>Misiones</span>
-          <b className="num">{missions}</b>
-        </div>
-        <div className="stat-tile">
-          <span>Racha</span>
-          <b className="num flame">{state.streak.current}</b>
-        </div>
+        <b>{closed ? 'Día cerrado' : 'Cierra tu día'}</b>
+        <div className="tiny muted">{closed ? closed.note || 'Toca para ver tu resultado' : `Hoy: +${state.xp.today} XP · +${state.gold.earnedToday} oro · racha ${state.streak.current}d`}</div>
       </div>
-      {byAttr.size > 0 && (
-        <div className="row wrap" style={{ gap: 6, marginBottom: 12 }}>
-          {[...byAttr.entries()].map(([a, x]) => (
-            <Badge key={a} tone="gold">
-              {ATTRIBUTE_NAMES[a as AttributeId]} +{x}
-            </Badge>
-          ))}
-          {state.gold.earnedToday > 0 && <Badge tone="gold">+{state.gold.earnedToday} oro</Badge>}
-        </div>
-      )}
-      {entries.length === 0 && <p className="small muted">Hoy no registraste XP. Si fue día de descanso, márcalo desde el botón +.</p>}
-      <DayReviewRow flat onNavigate={onClose} />
-      <Field label="¿Cómo cerraste el día?">
-        <Chips value={mood} onChange={setMood} size="lg" options={MOODS.map((m, i) => ({ value: i + 1, label: m }))} />
-      </Field>
-      <Field label="Una línea sobre tu día">
-        <TextInput className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Lo mejor de hoy, lo que aprendí…" />
-      </Field>
-      <p className="tiny muted">Tu nota aparece en el Historial y en Mi vida en semanas.</p>
-    </Sheet>
+      <Icon name="right" width={18} />
+    </button>
   );
 }
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { GAME_CONFIG, addDays, diffDays, weekStart, type Entity, type MainQuestData, type SeasonData } from '@igv/core';
+import { GAME_CONFIG, addDays, diffDays, endReviewOpensOn, seasonCompleted, weekStart, type Entity, type MainQuestData, type SeasonData } from '@igv/core';
 import { addEvent, saveEntity, deleteEntity, useGame } from '../data/store';
 import { fmtDate, newId, todayLocal } from '../lib/time';
 import { Badge, Bar, Empty, Field, PageHeader, Sheet, Tabs, confirmAction, TextArea, TextInput } from '../ui/kit';
@@ -40,6 +40,8 @@ function Seasons() {
     const elapsed = Math.max(0, Math.min(totalDays, diffDays(s.data.startDate, state.today) + 1));
     const focus = s.data.focusMainQuestId ? (byId.get(s.data.focusMainQuestId) as Entity<MainQuestData> | undefined) : undefined;
     const started = s.data.startDate <= state.today;
+    const endOpens = endReviewOpensOn(s, GAME_CONFIG.season.endReviewWindowDays);
+    const done = seasonCompleted(state.seasons, s, GAME_CONFIG.season.endReviewWindowDays);
     return (
       <div key={s.id} className={`card ${isCurrent ? 'hero' : ''}`}>
         <div className="card-head" style={{ alignItems: 'flex-start' }}>
@@ -47,7 +49,7 @@ function Seasons() {
             <div className="row wrap" style={{ gap: 6 }}>
               <Badge tone="blue">Temporada {s.data.number}</Badge>
               {isCurrent && <Badge tone="gold">Semana {state.seasons.currentWeek} de {Math.ceil(totalDays / 7)}</Badge>}
-              {rv.end && <Badge tone="green">Completada</Badge>}
+              {done && <Badge tone="green">Completada</Badge>}
             </div>
             <h2 style={{ marginTop: 6 }}>{s.data.name}</h2>
             <div className="small muted">
@@ -62,7 +64,13 @@ function Seasons() {
         {started && <Bar value={elapsed} max={totalDays} tone="blue" size="sm" label={<span>{Math.round((elapsed / totalDays) * 100)}% de la temporada</span>} />}
         <div className="grid2" style={{ marginTop: 10 }}>
           <ReviewBox label="Revisión de inicio" review={rv.start} onWrite={() => setReview({ season: s, phase: 'start' })} />
-          <ReviewBox label="Revisión de fin" review={rv.end} onWrite={() => setReview({ season: s, phase: 'end' })} disabled={!started} />
+          <ReviewBox
+            label="Revisión de fin"
+            review={rv.end}
+            onWrite={() => setReview({ season: s, phase: 'end' })}
+            disabled={state.today < endOpens}
+            hint={state.today < endOpens ? `Se abre el ${fmtDate(endOpens, true)}` : undefined}
+          />
         </div>
       </div>
     );
@@ -85,7 +93,7 @@ function Seasons() {
   );
 }
 
-function ReviewBox({ label, review, onWrite, disabled }: { label: string; review?: { text: string; date: string }; onWrite: () => void; disabled?: boolean }) {
+function ReviewBox({ label, review, onWrite, disabled, hint }: { label: string; review?: { text: string; date: string }; onWrite: () => void; disabled?: boolean; hint?: string }) {
   return (
     <div className="card flat" style={{ marginBottom: 0, padding: 10 }}>
       <div className="slot-label">{label}</div>
@@ -99,9 +107,12 @@ function ReviewBox({ label, review, onWrite, disabled }: { label: string; review
           </button>
         </>
       ) : (
-        <button className="btn sm" style={{ marginTop: 6 }} onClick={onWrite} disabled={disabled}>
-          Escribir
-        </button>
+        <>
+          <button className="btn sm" style={{ marginTop: 6 }} onClick={onWrite} disabled={disabled}>
+            Escribir
+          </button>
+          {hint && <div className="tiny muted" style={{ marginTop: 4 }}>{hint}</div>}
+        </>
       )}
     </div>
   );

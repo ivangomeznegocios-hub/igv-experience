@@ -108,6 +108,15 @@ export function Mas() {
 
       <div className="section-title">Tu vida</div>
       <div className="menu-grid">
+        {state.city.start && (
+          <Tile
+            to="/ciudad"
+            icon="building"
+            title="Tu ciudad"
+            sub={state.city.ready.length ? `${state.city.ready.length} obra lista para inaugurar` : `Tamaño ${state.city.size}${state.city.stored ? ` · ${state.city.stored} por recoger` : ''}`}
+            alert={state.city.ready.length > 0}
+          />
+        )}
         <Tile to="/npcs" icon="users" title="Mi gente" sub={today ? `${today} contacto${today === 1 ? '' : 's'} hoy${toAttend ? ` · ${toAttend} por atender` : ''}` : toAttend ? `${toAttend} por atender` : 'Familia, amigos y trabajo'} alert={toAttend > 0} />
         <Tile to="/salud" icon="salud-cross" title="Salud" sub={h.score === null ? 'Chequeos y ficha médica' : `${h.score}% al día${h.due.length ? ` · ${h.due.length} te toca${h.due.length === 1 ? '' : 'n'}` : ''}`} alert={h.due.some((d) => d.status === 'atrasado')} />
         <Tile to="/cuerpo" icon="heart" title="Cuerpo" sub={weight ? `${weight.kg} kg · sueño y medidas` : 'Peso, medidas y sueño'} />

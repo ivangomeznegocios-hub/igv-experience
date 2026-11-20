@@ -79,6 +79,13 @@ export interface SettingsData {
   heightCm?: number;
   /** Personaje 3D: apariencia y ropa. La forma del cuerpo NO va aquí: sale de los registros `body.logged`. */
   character?: CharacterData;
+  /** Desde qué día cuenta el puntaje del día y el impulso (lo fija el arranque). Antes de esa fecha nada se juzga. */
+  scoreStart?: string;
+  /**
+   * Tu "mínimo" para un día malo: si lo haces, el día queda salvado (no se gana, pero conserva el impulso).
+   * Sin definir, cualquier misión completada salva el día.
+   */
+  dayMinimum?: { missionId: string; title: string };
 }
 
 // ---------- Personaje 3D ----------

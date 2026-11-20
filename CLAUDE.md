@@ -316,6 +316,25 @@ Ninguno rompe las reglas de oro: cada uno tiene una prueba de propiedades "agreg
   pide el nombre de cada fuente nueva); el historial describe eventos nuevos con `describeEvent` de core; deshacer de la
   IA no borra lo que la IA creó si Iván ya registró algo ahí (`UNDO_GUARDS` en `apps/api/src/ai/store.ts`).
 
+## Plan de juego (fase 11)
+
+Plan completo en `docs/plan-juego.md` (etapas J0–J6: arreglos, el día y el regreso, tu ciudad, dinero real,
+arranque y 90 días, historia, personaje). Idea central: la app no tiene avisos, así que lo que trae de vuelta es
+**algo tuyo que crece** (la ciudad), **algo en juego** (oro = pesos con impulso) y que **volver siempre conviene**
+(pausas sin castigo, jugada de regreso).
+
+- **Marcador del día** (`marcador`, J1; detalle en `docs/sistemas/marcador.md`): `reduceDays` → `state.days`
+  (puntaje 0–100 de cómo te fue, días ganados / salvados / pausa, impulso) y `nextPlay()` (siguiente jugada).
+  Solo cuenta desde `settings.scoreStart`. Nunca da ni quita XP; el impulso aún no toca el oro (J3).
+- **Tu ciudad** (`ciudad`, J2; detalle en `docs/sistemas/ciudad.md`): `reduceCity` → `state.city`. Un distrito por
+  atributo; 1 material por cada XP de su atributo; obras con costo y días (`config.city`), que hay que inaugurar;
+  producción diaria con almacén de pocos días. Eventos `city.build_started` / `city.inaugurated` / `city.collected`.
+  Nunca da XP ni oro. Maqueta 3D en `apps/web/src/city/` (three.js con `lazy`), pantalla `/ciudad`.
+- **La mesa** (`screens/Hoy.tsx`): anillo del día (`ui/DayRing.tsx`), siguiente jugada (`ui/NextPlay.tsx`),
+  mosaicos "Hoy te toca" (`ui/TodayTiles.tsx`), baraja de registro (`ui/DayDeck.tsx`) y resultado del día
+  (`ui/DayResult.tsx`). Celular: pestañas Hoy · Semana · Todo; computadora: tres columnas. El título de la pestaña
+  del navegador dice cómo va tu día (`TabTitle` en `App.tsx`).
+
 ## Cómo agregar un sistema nuevo
 
 1. `packages/core/src/events.ts`: agrega sus tipos de evento (schema zod + etiqueta).

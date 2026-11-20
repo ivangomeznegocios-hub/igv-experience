@@ -97,6 +97,8 @@ export const GAME_CONFIG = {
   /** Temporadas. */
   season: {
     weeks: 13,
+    /** La revisión de fin solo completa la temporada si se escribe en sus últimos N días (o después). */
+    endReviewWindowDays: 7,
   },
 
   /** NPCs: días sin contacto para generar la misión "escribirle". */
@@ -308,6 +310,63 @@ export const GAME_CONFIG = {
     viceTrendDelta: 1,
   },
 
+  // [[marcador]]
+  /**
+   * Puntaje del día (0–100): cómo te fue, no cuánto registraste. Cada parte pesa lo que dice `weights`; si una
+   * parte no aplica ese día (sin rutina, sin plan, nada que registrar), su peso se reparte entre las demás.
+   * No da XP: decide si el día se ganó (y, más adelante, cuánto oro multiplica el impulso).
+   */
+  dayScore: {
+    weights: { routine: 50, plan: 25, log: 15, close: 10 },
+    /** Puntaje mínimo para ganar el día. */
+    winThreshold: 70,
+    /** Revisiones de "¿Cómo fue tu día?" que cuentan como registro (lista fija para no recalcular el historial sin querer). */
+    logChecks: ['sueno', 'gastos', 'gente', 'tiempo', 'habitos-dejar'],
+    /** Días vacíos seguidos (ya terminados) a partir de los cuales es una pausa: neutra, sin pendientes. */
+    pauseMinDays: 2,
+  },
+  /**
+   * Impulso: multiplicador (en %) del oro por días ganados seguidos. Nunca toca la XP. Un día no ganado baja un
+   * escalón (no a cero); descanso, día salvado y día libre lo mantienen; una pausa completa baja un solo escalón.
+   */
+  momentum: {
+    steps: [
+      { wins: 0, pct: 100 },
+      { wins: 2, pct: 125 },
+      { wins: 4, pct: 150 },
+      { wins: 7, pct: 175 },
+      { wins: 14, pct: 200 },
+    ],
+  },
+
+  // [[ciudad]]
+  /**
+   * Tu ciudad: materiales = 1 por cada XP del atributo del distrito (desde que empezaste) + lo que producen tus
+   * edificios. Nunca da XP ni oro. `levels[n-1]` = costo en materiales y días de obra para llegar al nivel n.
+   */
+  city: {
+    levels: [
+      { cost: 50, days: 1 },
+      { cost: 120, days: 1 },
+      { cost: 220, days: 2 },
+      { cost: 360, days: 2 },
+      { cost: 540, days: 3 },
+      { cost: 780, days: 3 },
+      { cost: 1080, days: 4 },
+      { cost: 1450, days: 5 },
+      { cost: 1900, days: 6 },
+      { cost: 2500, days: 7 },
+    ],
+    /** Distrito con el que empiezas (nivel 1, sin obra). */
+    startDistrict: 'disciplina',
+    /** Materiales por día que produce cada nivel del edificio de un distrito. */
+    productionPerLevel: 4,
+    /** El almacén de cada distrito guarda hasta N días de producción (luego se llena y deja de juntar). */
+    storageDays: 3,
+    /** Equipos de obra: uno al inicio y otro más desde este nivel de jugador. */
+    crews: 1,
+    extraCrewAtLevel: 7,
+  },
 
   /** Meta mensual inicial del Dragón Financiero (MXN). Editable en la app. */
   defaultMonthlyGoal: 100_000,

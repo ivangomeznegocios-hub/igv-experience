@@ -594,7 +594,13 @@ input[type='range'] { width: 100%; accent-color: var(--gold); }
 }
 .fab:active { transform: scale(0.94); }
 .fab svg { width: 28px; height: 28px; stroke-width: 2.4; }
-@media (min-width: 1000px) { .fab { bottom: 28px; right: calc(50% - 434px + 108px); } }
+/* Al bajar por la página los botones flotantes se apartan (ui/ActionDock.tsx) y vuelven al subir. */
+@media (max-width: 999px) {
+  .fab, .vz-fab { transition: transform 0.22s ease, opacity 0.22s ease; }
+  body.fab-away .fab, body.fab-away .vz-fab { transform: translateX(96px); opacity: 0; pointer-events: none; }
+}
+/* En computadora van al pie del menú lateral: nunca encima del contenido. */
+@media (min-width: 1000px) { .fab { bottom: 20px; left: 17px; right: auto; } }
 
 .qa-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .qa-btn {
