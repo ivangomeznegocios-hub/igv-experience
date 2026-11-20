@@ -10,6 +10,7 @@ import {
   WORKOUT_PLACES,
   addDays,
   buildSnapshot,
+  capExerciseMuscles,
   epley1rm,
   matchExercise,
   memoryAssistantStore,
@@ -18,9 +19,12 @@ import {
   project,
   quickMissionId,
   renderOverview,
+  reviewDay,
   runAssistantTool,
   suggestSession,
   trainingAnalysis,
+  linkedTrainingDailyId,
+  MAX_EXERCISE_MUSCLES,
   trainingMission,
   validateEvent,
   wouldBeRecords,
@@ -129,6 +133,32 @@ describe('entrenamiento: series por músculo y semana', () => {
     expect(s.training.summary.sessionsThisWeek).toBe(2);
     expect(s.training.summary.cardioMinutesThisWeek).toBe(30);
     expect(MUSCLE_IDS.every((m) => s.training.summary.muscles[m].weekSets === 0)).toBe(true);
+  });
+
+  it('en el texto libre una "m" sola son metros, no minutos', () => {
+    const s = run([ev('body.logged', TODAY, { workout: 'Nadé 800 m' }), ev('body.logged', MONDAY, { workout: 'Corrí 400 m y 20 minutos de bici' })], TODAY);
+    expect(s.training.workouts.map((w) => w.minutes)).toEqual([20, null]);
+    expect(s.training.summary.cardioMinutesThisWeek).toBe(20);
+  });
+
+  it('los músculos de un ejercicio propio se recortan a lo que acepta el registro (si no, el servidor rechaza el entreno y su misión)', () => {
+    const all = [...MUSCLE_IDS];
+    const payload = (primary: string[], secondary: string[]) => ({
+      id: 'abcdefgh2',
+      type: 'workout.logged',
+      occurredAt: at(TODAY, '18:00'),
+      localDate: TODAY,
+      payload: { kind: 'fuerza', exercises: [{ exerciseId: 'ex-burpees', name: 'Burpees', primary, secondary, sets: [{ reps: 10 }] }] },
+    });
+    // Sin recortar: 7 principales o 9 secundarios no pasan la validación.
+    expect(validateEvent(payload(all.slice(0, 7), [])).ok).toBe(false);
+    expect(validateEvent(payload(all.slice(0, 1), all.slice(1, 10))).ok).toBe(false);
+    const capped = capExerciseMuscles(all.slice(0, 7), [...all, 'pecho']);
+    expect(capped.primary).toEqual(all.slice(0, MAX_EXERCISE_MUSCLES.primary));
+    expect(capped.secondary).toHaveLength(MAX_EXERCISE_MUSCLES.secondary);
+    expect(capped.secondary.some((m) => capped.primary.includes(m))).toBe(false);
+    expect(validateEvent(payload(capped.primary, capped.secondary)).ok).toBe(true);
+    expect(capExerciseMuscles(['pecho', 'pecho', 'triceps'], ['triceps', 'hombro_frontal'])).toEqual({ primary: ['pecho', 'triceps'], secondary: ['hombro_frontal'] });
   });
 
   it('un ejercicio propio usa sus músculos; si se borra, los que guardó el registro', () => {
@@ -296,6 +326,28 @@ describe('entrenamiento: récords y XP', () => {
     expect(bySource(s, 'training_record')).toBe(GAME_CONFIG.training.record.maxPerDay * GAME_CONFIG.missionXp.chica);
   });
 
+  it('la vista previa de récords (aviso al guardar) respeta uno por ejercicio por día y el máximo por día', () => {
+    const base = wk('2026-11-10', [['press-banca', 1, 5, 60], ['sentadilla', 1, 5, 80], ['remo-barra', 1, 5, 60], ['press-militar', 1, 5, 40]]);
+    const morning = wk(TODAY, [['press-banca', 1, 5, 65]]);
+    const s = run([base, morning], TODAY);
+    const next = [
+      { exerciseId: 'press-banca', measure: 'peso' as const, sets: [{ reps: 5, kg: 70 }] },
+      { exerciseId: 'sentadilla', measure: 'peso' as const, sets: [{ reps: 5, kg: 90 }] },
+      { exerciseId: 'remo-barra', measure: 'peso' as const, sets: [{ reps: 5, kg: 70 }] },
+      { exerciseId: 'press-militar', measure: 'peso' as const, sets: [{ reps: 5, kg: 50 }] },
+    ];
+    // Sin el día, compara solo contra la mejor marca.
+    expect(wouldBeRecords(s.training.records, next)).toEqual(['press-banca', 'sentadilla', 'remo-barra', 'press-militar']);
+    // Con el día: press de banca ya dio récord hoy y solo quedan 2 de 3.
+    const preview = wouldBeRecords(s.training.records, next, { date: TODAY, ledger: s.xp.ledger });
+    expect(preview).toEqual(['sentadilla', 'remo-barra']);
+    // Lo mismo que da el motor al guardarlo.
+    const evening = wk(TODAY, [['press-banca', 1, 5, 70], ['sentadilla', 1, 5, 90], ['remo-barra', 1, 5, 70], ['press-militar', 1, 5, 50]]);
+    expect(run([base, morning, evening], TODAY).training.workouts.at(-1)!.records).toEqual(preview);
+    // Lo de hoy no cuenta para otro día.
+    expect(wouldBeRecords(s.training.records, next, { date: addDays(TODAY, -1), ledger: s.xp.ledger })).toHaveLength(GAME_CONFIG.training.record.maxPerDay);
+  });
+
   it('un registro atrasado no le quita el récord a otro ni gana uno sin superar lo de su fecha', () => {
     const a = wk('2026-11-01', [['sentadilla', 3, 5, 80]]);
     const b = wk('2026-11-10', [['sentadilla', 3, 5, 90]]);
@@ -355,11 +407,32 @@ describe('entrenamiento: reglas de oro', () => {
 });
 
 describe('entrenamiento: misión que da la XP', () => {
-  it('por defecto la misión rápida "Entrenar" (media · Fuerza); o la diaria ligada en ajustes', () => {
-    expect(trainingMission(null, seed)).toEqual({ missionId: 'quick-entrenar', title: 'Entrenar', size: 'media', attribute: 'fuerza', kind: 'quick', mainQuestId: null });
-    const linked = trainingMission({ missionId: 'daily-entrenar' }, seed);
-    expect(linked).toMatchObject({ missionId: 'daily-entrenar', kind: 'daily', attribute: 'fuerza' });
-    expect(trainingMission({ missionId: 'no-existe' }, seed).missionId).toBe('quick-entrenar');
+  const quick = { missionId: 'quick-entrenar', title: 'Entrenar', size: 'media', attribute: 'fuerza', kind: 'quick', mainQuestId: null };
+
+  it('por defecto la diaria "Entrenar 30 min" del catálogo (la que cuenta El Sedentario); o la ligada en ajustes', () => {
+    for (const settings of [null, undefined, {}, { where: 'gym' as const }]) {
+      expect(trainingMission(settings, seed)).toEqual({ missionId: 'daily-entrenar', title: 'Entrenar 30 min', size: 'chica', attribute: 'fuerza', kind: 'daily', mainQuestId: 'mq-04' });
+      expect(linkedTrainingDailyId(settings, seed)).toBe('daily-entrenar');
+    }
+    const otra: Entity = { id: 'daily-correr', module: 'missions', kind: 'daily', sort: 99, data: { title: 'Correr', size: 'media', attribute: 'fuerza' } };
+    expect(trainingMission({ missionId: 'daily-correr' }, [...seed, otra])).toMatchObject({ missionId: 'daily-correr', kind: 'daily', size: 'media' });
+  });
+
+  it('la misión rápida "Entrenar" si la eligió (null), si la diaria ya no existe o si no hay diaria de entrenar', () => {
+    expect(trainingMission({ missionId: null }, seed)).toEqual(quick);
+    expect(linkedTrainingDailyId({ missionId: null }, seed)).toBeNull();
+    expect(trainingMission({ missionId: 'no-existe' }, seed)).toEqual(quick);
+    expect(trainingMission(null, seed.filter((e) => e.id !== 'daily-entrenar'))).toEqual(quick);
+    expect(trainingMission(null, seed.map((e) => (e.id === 'daily-entrenar' ? { ...e, deletedAt: 1 } : e)))).toEqual(quick);
+  });
+
+  it('la revisión del día pregunta qué entrenaste al marcar la diaria de entrenar (también sin ajustes)', () => {
+    const entreno = (events: GameEvent[], entities: Entity[] = seed) => reviewDay({ date: TODAY, today: TODAY, events, entities }).checks.find((c) => c.id === 'entreno');
+    expect(entreno([done(TODAY, 'daily-entrenar', 'chica', 'fuerza')])?.status).toBe('missing');
+    expect(entreno([done(TODAY, 'daily-entrenar', 'chica', 'fuerza'), wk(TODAY, [['sentadilla', 3, 5, 100]])])?.status).toBe('done');
+    expect(entreno([])).toBeUndefined();
+    const optOut: Entity = { id: 'training-settings', module: 'training', kind: 'settings', sort: 0, data: { missionId: null } };
+    expect(entreno([done(TODAY, 'daily-entrenar', 'chica', 'fuerza')], [...seed, optOut])).toBeUndefined();
   });
 });
 
@@ -368,7 +441,8 @@ describe('entrenamiento: herramientas de IA', () => {
   const mk = (events: GameEvent[] = [], entities: Entity[] = seed) => memoryAssistantStore({ events, entities, today: TODAY });
 
   it('registrar_entrenamiento reconoce ejercicios, crea el entreno y la misión "Entrenar" (+30 XP); deshacer = ambos registros', async () => {
-    const store = mk();
+    const quickSettings: Entity = { id: 'training-settings', module: 'training', kind: 'settings', sort: 0, data: { missionId: null } };
+    const store = mk([], [...seed, quickSettings]);
     const r = await runTool(store, 'registrar_entrenamiento', {
       titulo: 'Pecho y tríceps',
       donde: 'gym',
@@ -389,7 +463,7 @@ describe('entrenamiento: herramientas de IA', () => {
     expect(workout.payload.missionEventId).toBe(mission.id);
     expect(workout.payload.exercises.map((x: WorkoutExercise) => x.exerciseId)).toEqual(['press-banca', 'fondos', 'extension-polea']);
     expect(workout.payload.exercises[0].sets).toHaveLength(4);
-    const state = project({ events: evs, entities: seed, today: TODAY });
+    const state = project({ events: evs, entities: [...seed, quickSettings], today: TODAY });
     expect(bySource(state, 'mission')).toBe(30);
     expect(state.streak.current).toBe(1);
     expect(state.training.summary.muscles.pecho.weekSets).toBe(6);
@@ -398,6 +472,22 @@ describe('entrenamiento: herramientas de IA', () => {
     expect(again.isError).toBeFalsy();
     expect(again.text).toContain('ya estaba registrada');
     expect(again.refs?.events).toHaveLength(1);
+  });
+
+  it('sin ajustes completa la diaria "Entrenar 30 min" (avanza El Sedentario) y no duplica si ya la marcaste', async () => {
+    const store = mk();
+    const r = await runTool(store, 'registrar_entrenamiento', { ejercicios: [{ nombre: 'sentadilla', n_series: 3, reps: 5, kg: 100 }] });
+    expect(r.text).toContain(`+${GAME_CONFIG.missionXp.chica} XP por "Entrenar 30 min"`);
+    expect(store.allEvents().find((e) => e.type === 'mission.completed')!.payload).toMatchObject({ missionId: 'daily-entrenar', kind: 'daily', size: 'chica' });
+    const state = project({ events: store.allEvents(), entities: seed, today: TODAY });
+    expect(state.missions.completions['daily-entrenar']?.dates).toContain(TODAY);
+    expect(state.missions.completions['quick-entrenar']).toBeUndefined();
+
+    // Ya marcó "Entrenar 30 min" en Hoy: anotar el entreno no crea otra misión.
+    const marked = mk([done(TODAY, 'daily-entrenar', 'chica', 'fuerza')]);
+    const again = await runTool(marked, 'registrar_entrenamiento', { ejercicios: [{ nombre: 'sentadilla', n_series: 3, reps: 5, kg: 100 }] });
+    expect(again.text).toContain('ya estaba registrada');
+    expect(marked.allEvents().filter((e) => e.type === 'mission.completed')).toHaveLength(1);
   });
 
   it('usa la diaria ligada en ajustes de entrenamiento', async () => {
@@ -459,5 +549,23 @@ describe('entrenamiento: herramientas de IA', () => {
     expect(text).toContain('## Entrenamiento');
     expect(text).toContain('cuádriceps (lista en');
     expect(text).toContain('Siguiente sesión sugerida: Torso');
+  });
+
+  it('el panorama calcula la recuperación a la hora actual, no a la de la foto en caché', async () => {
+    // Sentadilla el lunes a las 19:00 (CDMX) → cuádriceps listos el jueves a la misma hora (72 h).
+    const events = [wk(MONDAY, [['sentadilla', 4, 5, 100]], {}, { occurredAt: '2026-11-17T01:00:00.000Z' })];
+    const state = project({ events, entities: seed, today: TODAY });
+    const readyAt = Date.parse(state.training.summary.muscles.cuadriceps.readyAt!);
+    const before = new Date(readyAt - 12 * 3_600_000); // jueves 07:00: se sube la foto
+    const after = new Date(readyAt + 2 * 3_600_000); // jueves 21:00: pregunta al Coach
+    const snap = buildSnapshot(state, seed, { version: 1, computedBy: 'app', now: before });
+    expect(renderOverview(snap)).toContain('cuádriceps (lista en 12 h)');
+    expect(renderOverview(snap, after.toISOString())).not.toContain('cuádriceps (lista en');
+    // ver_resumen usa la hora del servidor (store.now()), aunque la foto sea de la mañana.
+    const store = memoryAssistantStore({ events, entities: seed, today: TODAY, now: () => after });
+    store.snapshot = async () => snap;
+    const r = await runAssistantTool('ver_resumen', {}, store, { allowWrites: false });
+    expect(r.text).toContain('## Entrenamiento');
+    expect(r.text).not.toContain('cuádriceps (lista en');
   });
 });

@@ -117,7 +117,7 @@ gmRoute.post('/ask', async (c) => {
   const intro =
     readOnly && context
       ? `Estos son los datos de la pantalla donde estoy:\n\n${context}\n\n(Solo consulta: no registres ni cambies nada.)`
-      : `Este es mi estado actual en la app:\n\n${renderOverview(await store.snapshot())}${context ? `\n\nDatos de la pantalla donde estoy:\n${context}` : ''}${allowWrites ? '' : '\n\n(En esta conversación solo puedes consultar; no registres ni cambies nada.)'}`;
+      : `Este es mi estado actual en la app:\n\n${renderOverview(await store.snapshot(), store.now().toISOString())}${context ? `\n\nDatos de la pantalla donde estoy:\n${context}` : ''}${allowWrites ? '' : '\n\n(En esta conversación solo puedes consultar; no registres ni cambies nada.)'}`;
   const tools: Anthropic.Beta.BetaTool[] = ASSISTANT_TOOLS.filter((t) => allowWrites || !t.writes).map((t) => ({
     name: t.name,
     description: t.description,

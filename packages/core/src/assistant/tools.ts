@@ -99,7 +99,8 @@ const DAY_NAMES = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábad
 // Texto de panorama (lo usa ver_resumen y el Coach)
 // ---------------------------------------------------------------------------------------------
 
-export function renderOverview(s: AssistantSnapshot): string {
+/** `nowIso`: hora actual (la recuperación muscular depende de la hora; la foto puede ser de horas antes). */
+export function renderOverview(s: AssistantSnapshot, nowIso: string = s.computedAt): string {
   const cur = s.profile.currency;
   const L: string[] = [];
   L.push(`# Panorama de ${s.profile.name} · ${fmtDay(s.today)}`);
@@ -163,7 +164,7 @@ export function renderOverview(s: AssistantSnapshot): string {
   if (s.notes?.pending) L.push('', `Notas por procesar: ${s.notes.pending} (lo que dictó sin conexión; léelas con ver_notas).`);
 
   // [[entreno]]
-  L.push(...renderTrainingOverview(s));
+  L.push(...renderTrainingOverview(s, nowIso));
 
   // [[gente]]
   L.push(...renderPeopleOverview(s));
@@ -201,7 +202,7 @@ const verResumen = tool({
     'Panorama completo de hoy: nivel, XP, racha, energía, oro, dinero del mes, atributos, temporada, rutina y plan del día, misión sorpresa, agenda, grandes retos, metas, retos de N días, hábitos a dejar y personas olvidadas. Úsala primero para entender cómo va.',
   input: z.object({}),
   async run(_i, store) {
-    return { text: renderOverview(await store.snapshot()) };
+    return { text: renderOverview(await store.snapshot(), store.now().toISOString()) };
   },
 });
 

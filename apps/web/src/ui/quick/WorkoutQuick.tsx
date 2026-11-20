@@ -4,6 +4,7 @@ import {
   EXERCISE_LIBRARY,
   EXERCISE_MEASURES,
   GAME_CONFIG,
+  MAX_EXERCISE_MUSCLES,
   MISSION_SIZE_NAMES,
   ATTRIBUTE_NAMES,
   MUSCLES,
@@ -164,11 +165,19 @@ export function WorkoutForm({ date, setDate, today, onDone, initial }: WorkoutQu
   const { state, entities, list } = useGame();
   const tr = state.training;
   const [restored] = useState(() => (initial ? null : loadDraft()));
+  // Un borrador de un día anterior (p. ej. de anoche) se guarda en su día, salvo que la hoja se abriera para otra fecha.
+  const [restoredDate] = useState(() => (restored && date === today && /^\d{4}-\d{2}-\d{2}$/.test(restored.date) && restored.date < today ? restored.date : null));
   const [draft, setDraft] = useState<WorkoutDraft>(() => initial ?? restored?.draft ?? emptyDraft(tr.settings, tr.summary.usualWhere));
   const [picking, setPicking] = useState(false);
   const [showRestored, setShowRestored] = useState(!!restored);
   const [routineName, setRoutineName] = useState('');
   const [asRoutine, setAsRoutine] = useState(false);
+
+  useEffect(() => {
+    if (restoredDate) setDate(restoredDate);
+    // Solo al abrir.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     storeDraft(date, draft);
@@ -203,7 +212,7 @@ export function WorkoutForm({ date, setDate, today, onDone, initial }: WorkoutQu
       const r = saveRoutine(routineFromDraft(routineName, draft));
       d = { ...draft, routineId: r.id, title: draft.title.trim() || r.data.name };
     }
-    logWorkout(d, date, state, entities);
+    if (!logWorkout(d, date, state, entities)) return;
     clearDraft();
     onDone();
   };
@@ -212,13 +221,14 @@ export function WorkoutForm({ date, setDate, today, onDone, initial }: WorkoutQu
     <>
       {showRestored && (
         <div className="banner" style={{ padding: '8px 12px' }}>
-          <span className="small">Recuperé el entrenamiento que dejaste a medias.</span>
+          <span className="small">Recuperé el entrenamiento que dejaste a medias{restoredDate ? ` (del ${fmtDate(restoredDate)})` : ''}.</span>
           <button
             className="btn sm"
             onClick={() => {
               clearDraft();
               setDraft(emptyDraft(tr.settings, tr.summary.usualWhere));
               setShowRestored(false);
+              if (restoredDate && date === restoredDate) setDate(today);
             }}
           >
             Descartar
@@ -459,7 +469,11 @@ function CustomExerciseForm({ name: initialName, existing, onSaved, onCancel }: 
   const [measure, setMeasure] = useState<ExerciseMeasure>('peso');
   const [primary, setPrimary] = useState<MuscleId[]>([]);
   const [secondary, setSecondary] = useState<MuscleId[]>([]);
-  const toggle = (list: MuscleId[], set: (l: MuscleId[]) => void, m: MuscleId) => set(list.includes(m) ? list.filter((x) => x !== m) : [...list, m]);
+  // Topes del registro (6 principales, 8 secundarios): con más, el servidor rechazaría el entrenamiento.
+  const toggle = (list: MuscleId[], set: (l: MuscleId[]) => void, m: MuscleId, max: number) =>
+    set(list.includes(m) ? list.filter((x) => x !== m) : list.length >= max ? list : [...list, m]);
+  const fullPrimary = primary.length >= MAX_EXERCISE_MUSCLES.primary;
+  const fullSecondary = secondary.length >= MAX_EXERCISE_MUSCLES.secondary;
   const ok = name.trim().length >= 2 && primary.length > 0;
   return (
     <>
@@ -475,19 +489,33 @@ function CustomExerciseForm({ name: initialName, existing, onSaved, onCancel }: 
       <Field label="Cómo se mide">
         <Chips value={measure} onChange={setMeasure} options={EXERCISE_MEASURES.map((m) => ({ value: m, label: MEASURE_NAMES[m] }))} />
       </Field>
-      <Field label="Músculos principales">
+      <Field label={`Músculos principales · hasta ${MAX_EXERCISE_MUSCLES.primary}`}>
         <div className="chips">
           {MUSCLE_IDS.map((m) => (
-            <button type="button" key={m} className={`chip ${primary.includes(m) ? 'on' : ''}`} onClick={() => (setSecondary((s) => s.filter((x) => x !== m)), toggle(primary, setPrimary, m))}>
+            <button
+              type="button"
+              key={m}
+              className={`chip ${primary.includes(m) ? 'on' : ''}`}
+              disabled={fullPrimary && !primary.includes(m)}
+              style={fullPrimary && !primary.includes(m) ? { opacity: 0.45 } : undefined}
+              onClick={() => (setSecondary((s) => s.filter((x) => x !== m)), toggle(primary, setPrimary, m, MAX_EXERCISE_MUSCLES.primary))}
+            >
               {MUSCLES[m].name}
             </button>
           ))}
         </div>
       </Field>
-      <Field label="Secundarios (cuentan media serie) · opcional">
+      <Field label={`Secundarios (cuentan media serie) · opcional, hasta ${MAX_EXERCISE_MUSCLES.secondary}`}>
         <div className="chips">
           {MUSCLE_IDS.filter((m) => !primary.includes(m)).map((m) => (
-            <button type="button" key={m} className={`chip ${secondary.includes(m) ? 'on' : ''}`} onClick={() => toggle(secondary, setSecondary, m)}>
+            <button
+              type="button"
+              key={m}
+              className={`chip ${secondary.includes(m) ? 'on' : ''}`}
+              disabled={fullSecondary && !secondary.includes(m)}
+              style={fullSecondary && !secondary.includes(m) ? { opacity: 0.45 } : undefined}
+              onClick={() => toggle(secondary, setSecondary, m, MAX_EXERCISE_MUSCLES.secondary)}
+            >
               {MUSCLES[m].name}
             </button>
           ))}
@@ -500,7 +528,7 @@ function CustomExerciseForm({ name: initialName, existing, onSaved, onCancel }: 
         onClick={() => {
           const e = saveCustomExercise({ name: name.trim(), primary, secondary, measure, equipment: measure === 'distancia' ? 'cardio' : 'corporal' }, existing);
           toast(`Ejercicio creado: ${e.data.name}`);
-          onSaved({ id: e.id, name: e.data.name, equipment: e.data.equipment ?? 'corporal', measure, primary, secondary, compound: primary.length > 1 });
+          onSaved({ id: e.id, name: e.data.name, equipment: e.data.equipment ?? 'corporal', measure, primary: e.data.primary, secondary: e.data.secondary ?? [], compound: e.data.primary.length > 1 });
         }}
       >
         Crear y agregar
