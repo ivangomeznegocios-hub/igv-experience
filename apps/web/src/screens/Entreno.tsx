@@ -22,6 +22,7 @@ import {
   type ExerciseTop,
   type MissionData,
   type MuscleId,
+  type MusclePaintMode,
   type MuscleStatus,
   type RoutineData,
   type TrainingAnalysis,
@@ -44,7 +45,7 @@ import {
 } from '../lib/entreno';
 import { fmtDate, fmtNum, fmtWeekday } from '../lib/time';
 import { BarChart, LineChart } from '../ui/charts';
-import { BodyMap } from '../ui/BodyMap';
+import { MuscleBody } from '../ui/MuscleBody';
 import { Icon } from '../ui/icons';
 import { Badge, Bar, Chips, Empty, Field, PageHeader, Sheet, Tabs, confirmAction, toast } from '../ui/kit';
 import { ExercisePicker, Stepper } from '../ui/quick/WorkoutQuick';
@@ -52,6 +53,7 @@ import '../styles/entreno.css';
 
 type Tab = 'semana' | 'historial' | 'records' | 'rutinas';
 const TAB_KEY = 'igv-entreno-tab';
+const PAINT_KEY = 'igv-entreno-pintar';
 
 function useNow() {
   const [now, setNow] = useState(() => new Date().toISOString());
@@ -130,72 +132,31 @@ export default function Entreno() {
 function WeekTab() {
   const { state } = useGame();
   const a = useAnalysis();
-  const [mode, setMode] = useState<'volumen' | 'recuperacion'>('volumen');
+  const [mode, setModeState] = useState<MusclePaintMode>(() => {
+    try {
+      return (localStorage.getItem(PAINT_KEY) as MusclePaintMode) || 'estado';
+    } catch {
+      return 'estado';
+    }
+  });
+  const setMode = (m: MusclePaintMode) => {
+    setModeState(m);
+    try {
+      localStorage.setItem(PAINT_KEY, m);
+    } catch {
+      /* nada */
+    }
+  };
+  // Tocar un músculo en el cuerpo lo selecciona; el detalle completo (ejercicios) se abre aparte.
+  const [picked, setPicked] = useState<MuscleId | null>(null);
   const [muscle, setMuscle] = useState<MuscleId | null>(null);
-  const tc = GAME_CONFIG.training;
   const hasAny = state.training.workouts.length > 0;
-
-  const classes: Partial<Record<MuscleId, string>> = {};
-  const titles: Partial<Record<MuscleId, string>> = {};
-  for (const id of MUSCLE_IDS) {
-    const m = a.muscles[id];
-    if (mode === 'volumen') classes[id] = m.volumeLevel ? `v${m.volumeLevel}` : '';
-    else classes[id] = m.state === 'recuperando' ? (m.fatigue > 0.66 ? 'rec3' : m.fatigue > 0.33 ? 'rec2' : 'rec1') : m.state === 'listo' ? 'ready' : m.lastDate ? 'forgot' : '';
-    titles[id] = `${m.name}: ${Math.round(m.weekSets * 10) / 10} de ${m.target.target} series · ${muscleStateText(m)}`;
-  }
 
   return (
     <>
       <div className="card">
         <h2 style={{ marginBottom: 8 }}>Tu cuerpo esta semana</h2>
-        <div className="row" style={{ justifyContent: 'center', marginBottom: 10 }}>
-          <Chips
-            value={mode}
-            onChange={setMode}
-            options={[
-              { value: 'volumen', label: 'Volumen' },
-              { value: 'recuperacion', label: 'Recuperación' },
-            ]}
-          />
-        </div>
-        <BodyMap classes={classes} titles={titles} selected={muscle} onSelect={setMuscle} />
-        {mode === 'volumen' ? (
-          <div className="bm-legend">
-            <span>
-              <i className="sw-v0" />0
-            </span>
-            <span>
-              <i className="sw-v1" />
-              bajo {tc.weeklySets.min}
-            </span>
-            <span>
-              <i className="sw-v2" />
-              {tc.weeklySets.min}–{tc.weeklySets.target - 1}
-            </span>
-            <span>
-              <i className="sw-v3" />
-              {tc.weeklySets.target}–{tc.weeklySets.max}
-            </span>
-            <span>
-              <i className="sw-v4" />+{tc.weeklySets.max}
-            </span>
-          </div>
-        ) : (
-          <div className="bm-legend">
-            <span>
-              <i className="sw-rec" />
-              recuperando
-            </span>
-            <span>
-              <i className="sw-ready" />
-              listo
-            </span>
-            <span>
-              <i className="sw-forgot" />
-              olvidado {tc.forgottenDays}+ días
-            </span>
-          </div>
-        )}
+        <MuscleBody muscles={a.muscles} mode={mode} onMode={setMode} selected={picked} onSelect={setPicked} onDetail={setMuscle} />
         <div className="tr-stats">
           <div className="tr-stat">
             <b>{a.sessions}</b>

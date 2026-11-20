@@ -10,11 +10,14 @@ import {
   NeutralToneMapping,
   PCFShadowMap,
   PerspectiveCamera,
+  Raycaster,
   RingGeometry,
+  Vector2,
   Scene,
   WebGLRenderer,
 } from 'three';
-import { buildFigure, type Figure, type FigureSpec } from './figure';
+import type { MuscleId } from '@igv/core';
+import { buildFigure, type Figure, type FigureSpec, type MusclePaintSpec } from './figure';
 
 export type StageView = 'body' | 'face';
 
@@ -49,6 +52,17 @@ export class Stage {
   private camera = new PerspectiveCamera(26, 1, 0.1, 30);
   private pivot = new Group();
   private figure: Figure | null = null;
+  /** Silueta "antes" (comparar). */
+  private ghost: Figure | null = null;
+  private ghostKey = '';
+  private pendingGhost: FigureSpec | null | undefined;
+  private musclePaint: MusclePaintSpec | null = null;
+  /** Al tocar (sin arrastrar) un músculo del modo músculos. */
+  onPick: ((m: MuscleId | null) => void) | null = null;
+  private downAt = { x: 0, y: 0, t: 0, moved: false };
+  private raycaster = new Raycaster();
+  /** Giro animado hacia un ángulo (Frente / Espalda). */
+  private turnTarget: number | null = null;
   private ring: Mesh;
   private ringTrack: Mesh;
   private ringProgress = -1;
@@ -160,24 +174,57 @@ export class Stage {
   /** Reconstruye la figura (cambió la complexión, la apariencia o la ropa). */
   setSpec(spec: FigureSpec) {
     // Reconstruir cuesta decenas de milisegundos: solo si de verdad cambió algo, y una vez por cuadro.
-    const key = JSON.stringify([spec.physique.heightCm, spec.physique.fat, spec.physique.muscle, spec.physique.girths, spec.character]);
+    const key = JSON.stringify([spec.physique.heightCm, spec.physique.fat, spec.physique.muscle, spec.physique.girths, spec.character, !!spec.muscles]);
     if (key === this.specKey) return;
     this.specKey = key;
     this.pendingSpec = spec;
     this.invalidate();
   }
 
+  /** Silueta del cuerpo de otra fecha, como contorno encima de la figura (null = quitarla). */
+  setGhost(spec: FigureSpec | null) {
+    const key = spec ? JSON.stringify([spec.physique.heightCm, spec.physique.fat, spec.physique.muscle, spec.physique.girths, spec.character.look.build, spec.ghost]) : '';
+    if (key === this.ghostKey) return;
+    this.ghostKey = key;
+    this.pendingGhost = spec;
+    this.invalidate();
+  }
+
+  /** Colores de los músculos (modo músculos). Solo vuelve a pintar; no reconstruye. */
+  setMusclePaint(paint: MusclePaintSpec | null) {
+    this.musclePaint = paint;
+    if (paint && this.figure?.muscleMeshes.length) this.figure.paintMuscles(paint);
+    this.invalidate();
+  }
+
   private build() {
     const spec = this.pendingSpec;
-    if (!spec) return;
-    this.pendingSpec = null;
-    const next = buildFigure(spec);
-    if (this.figure) {
-      this.pivot.remove(this.figure.group);
-      this.figure.dispose();
+    if (spec) {
+      this.pendingSpec = null;
+      const next = buildFigure(spec);
+      if (this.figure) {
+        this.pivot.remove(this.figure.group);
+        this.figure.dispose();
+      }
+      this.figure = next;
+      this.pivot.add(next.group);
+      if (this.musclePaint && next.muscleMeshes.length) next.paintMuscles(this.musclePaint);
     }
-    this.figure = next;
-    this.pivot.add(next.group);
+    if (this.pendingGhost !== undefined) {
+      const g = this.pendingGhost;
+      this.pendingGhost = undefined;
+      if (this.ghost) {
+        this.pivot.remove(this.ghost.group);
+        this.ghost.dispose();
+        this.ghost = null;
+      }
+      if (g) {
+        this.ghost = buildFigure(g);
+        this.ghost.group.renderOrder = 10;
+        this.ghost.group.traverse((o) => (o.renderOrder = 10));
+        this.pivot.add(this.ghost.group);
+      }
+    }
   }
 
   /** Avance al siguiente nivel (0–1) y color del anillo del piso. */
@@ -213,6 +260,15 @@ export class Stage {
     this.invalidate();
   }
 
+  /** Gira (animado, por el camino corto) hasta un ángulo: 0 = de frente, π = de espalda. */
+  turnTo(yaw: number) {
+    this.autoRotate = false;
+    this.yawVel = 0;
+    const d = Math.atan2(Math.sin(yaw - this.yaw), Math.cos(yaw - this.yaw));
+    this.turnTarget = this.yaw + d;
+    this.invalidate();
+  }
+
   dispose() {
     this.disposed = true;
     cancelAnimationFrame(this.raf);
@@ -225,6 +281,7 @@ export class Stage {
     this.canvas.removeEventListener('wheel', this.onWheel);
     this.canvas.removeEventListener('webglcontextrestored', this.onRestored);
     this.figure?.dispose();
+    this.ghost?.dispose();
     for (const m of this.props) {
       m.geometry.dispose();
       (m.material as MeshBasicMaterial).map?.dispose();
@@ -269,6 +326,15 @@ export class Stage {
         this.yaw = INTRO_FROM + (INTRO_TO - INTRO_FROM) * e;
         if (this.intro >= 1) this.autoRotate = false;
         moving = true;
+      } else if (this.turnTarget !== null) {
+        const d = this.turnTarget - this.yaw;
+        if (Math.abs(d) < 0.002) {
+          this.yaw = this.turnTarget;
+          this.turnTarget = null;
+        } else {
+          this.yaw += d * (1 - Math.exp(-dt * 7));
+          moving = true;
+        }
       } else if (Math.abs(this.yawVel) > 0.02) {
         this.yaw += this.yawVel * dt;
         this.yawVel *= Math.exp(-dt * 3.2);
@@ -279,10 +345,11 @@ export class Stage {
     // Encuadre: cuerpo completo o rostro, ajustado al tamaño del lienzo.
     const H = this.figure?.height ?? 1.75;
     const tan = Math.tan((this.camera.fov * Math.PI) / 360);
-    const fitH = this.view === 'face' ? 0.37 : H * 1.14;
+    // Margen arriba para que los botones del encuadre no tapen la cabeza.
+    const fitH = this.view === 'face' ? 0.37 : H * 1.28;
     const fitW = this.view === 'face' ? 0.3 : 0.95;
     const dist = Math.max(fitH / (2 * tan), fitW / (2 * tan * this.camera.aspect)) / this.zoom;
-    const targetY = this.view === 'face' ? (this.figure?.faceY ?? H * 0.93) : H * 0.47 + (1 - 1 / this.zoom) * H * 0.32;
+    const targetY = this.view === 'face' ? (this.figure?.faceY ?? H * 0.93) : H * 0.52 + (1 - 1 / this.zoom) * H * 0.3;
     if (!this.frame.init) this.frame = { y: targetY, dist, init: true };
     const ease = 1 - Math.exp(-dt * 9);
     this.frame.y += (targetY - this.frame.y) * ease;
@@ -309,8 +376,11 @@ export class Stage {
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     this.canvas.setPointerCapture(e.pointerId);
     this.autoRotate = false;
+    this.turnTarget = null;
     this.dragging = true;
     this.yawVel = 0;
+    if (this.pointers.size === 1) this.downAt = { x: e.clientX, y: e.clientY, t: performance.now(), moved: false };
+    else this.downAt.moved = true;
     if (this.pointers.size === 2) {
       const [a, b] = [...this.pointers.values()];
       this.pinchStart = Math.hypot(a!.x - b!.x, a!.y - b!.y);
@@ -323,6 +393,7 @@ export class Stage {
     if (!prev) return;
     const dx = e.clientX - prev.x;
     const dy = e.clientY - prev.y;
+    if (Math.hypot(e.clientX - this.downAt.x, e.clientY - this.downAt.y) > 8) this.downAt.moved = true;
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (this.pointers.size === 2) {
       const [a, b] = [...this.pointers.values()];
@@ -343,13 +414,36 @@ export class Stage {
   };
 
   private onUp = (e: PointerEvent) => {
+    const tap = e.type === 'pointerup' && this.pointers.size === 1 && !this.downAt.moved && performance.now() - this.downAt.t < 500;
     this.pointers.delete(e.pointerId);
+    if (tap && this.onPick && this.figure?.muscleMeshes.length) {
+      this.yawVel = 0;
+      this.onPick(this.pick(e.clientX, e.clientY));
+    }
     if (this.pointers.size === 0) this.dragging = false;
     // Si el dedo se quedó quieto antes de soltar, no hay inercia.
     if (performance.now() - this.lastMove > 90) this.yawVel = 0;
     this.pinchStart = 0;
     this.invalidate();
   };
+
+  /** Qué músculo hay bajo un punto de la pantalla. */
+  private pick(clientX: number, clientY: number): MuscleId | null {
+    const fig = this.figure;
+    if (!fig) return null;
+    const r = this.canvas.getBoundingClientRect();
+    const ndc = new Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+    this.raycaster.setFromCamera(ndc, this.camera);
+    // La cabeza, las manos y los zapatos también tapan: se prueba contra toda la figura y se ve si lo primero es un músculo.
+    const hit = this.raycaster.intersectObject(fig.group, true)[0];
+    if (!hit?.face || !fig.muscleMeshes.includes(hit.object as Mesh)) return null;
+    const mesh = hit.object as Mesh;
+    for (const v of [hit.face.a, hit.face.b, hit.face.c]) {
+      const m = fig.muscleAt(mesh, v);
+      if (m) return m;
+    }
+    return null;
+  }
 
   private onWheel = (e: WheelEvent) => {
     // Solo el gesto de pellizco del trackpad (llega como rueda + ctrl); la rueda normal desplaza la página.
