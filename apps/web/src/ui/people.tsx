@@ -11,10 +11,14 @@ import {
   diffDays,
   GAME_CONFIG,
   isValidBirthday,
+  isValidMetOnAsOf,
   legacyNpcType,
+  npcTypeOnSave,
   relationLevelName,
   relationTrack,
   roleInfo,
+  roleOf,
+  startLevelOf,
   type ContactChannel,
   type Entity,
   type GameEvent,
@@ -212,13 +216,17 @@ export function ContactForm({ preselect, date, setDate, today, onDone }: { prese
     onDone();
   };
 
+  // Siempre hay dónde escribir un nombre (para agregar a alguien nuevo); con pocas personas va debajo de sus chips.
+  const many = people.length > 6;
+  const nameInput = (
+    <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder={many ? 'Buscar o escribir un nombre nuevo' : people.length ? 'Alguien más: escribe su nombre' : 'Nombre de la persona'} />
+  );
+
   return (
     <>
       <Field label={sel.length > 1 ? `¿Con quién? · ${sel.length} personas` : '¿Con quién?'}>
         <div className="stack">
-          {people.length > 6 || !people.length ? (
-            <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder={people.length ? 'Buscar o escribir un nombre nuevo' : 'Nombre de la persona'} />
-          ) : null}
+          {many && nameInput}
           {shown.length > 0 && (
             <div className="gp-pick" role="group" aria-label="Personas">
               {shown.map((p) => {
@@ -238,6 +246,7 @@ export function ContactForm({ preselect, date, setDate, today, onDone }: { prese
               )}
             </div>
           )}
+          {!many && nameInput}
           {query && !exact && (
             <>
               <button type="button" className="btn sm" onClick={() => setNewCircle((x) => !x)}>
@@ -331,7 +340,8 @@ export function PersonSheet({
   const p = initial?.data;
   const [name, setName] = useState(p?.name ?? '');
   const [circle, setCircle] = useState<PeopleCircle>(p ? circleOf(p) : (preset?.circle ?? (preset?.role ? roleInfo(preset.role)?.circle : undefined) ?? 'amigos'));
-  const [role, setRole] = useState(p?.role ?? preset?.role ?? '');
+  // Fichas viejas: el rol (Mentor, Rival, Cliente) solo existe en `npcType`; se muestra y se conserva al guardar.
+  const [role, setRole] = useState(p ? (roleOf(p) ?? '') : (preset?.role ?? ''));
   const [key, setKey] = useState(!!p?.key);
   const [start, setStart] = useState<number>(p?.startLevel ?? 1);
   const [cadence, setCadence] = useState<number | null>(p?.cadenceDays ?? null);
@@ -351,7 +361,7 @@ export function PersonSheet({
   const autoCadence = cadenceFor({ circle, role }, GAME_CONFIG);
   const birthday = bd.m && bd.d ? `${bd.y ? `${bd.y}-` : ''}${bd.m.padStart(2, '0')}-${bd.d.padStart(2, '0')}` : '';
   const bdOk = !birthday || isValidBirthday(birthday);
-  const metOk = !metOn || /^\d{4}(-\d{2})?$/.test(metOn);
+  const metOk = !metOn || isValidMetOnAsOf(metOn, state.today);
   const valid = !!name.trim() && bdOk && metOk;
 
   const save = () => {
@@ -362,7 +372,7 @@ export function PersonSheet({
       name: name.trim(),
       circle,
       role: r,
-      npcType: legacyNpcType(circle, r),
+      npcType: npcTypeOnSave(p, circle, r),
       relation: p?.relation ?? 3,
       key,
       guildId: guildId || null,
@@ -474,9 +484,9 @@ export function PersonSheet({
             </select>
           </Field>
         )}
-        <Field label="¿Cuándo? (año, o año y mes)">
-          <input className="input" value={metOn} onChange={(e) => setMetOn(e.target.value.replace(/[^\d-]/g, '').slice(0, 7))} placeholder={`${state.today.slice(0, 4)} o ${state.today.slice(0, 7)}`} inputMode="numeric" />
-          {!metOk && <span className="tiny red">Usa el año (2015) o año y mes (2015-06)</span>}
+        <Field label="¿Cuándo? (año, año y mes, o fecha)">
+          <input className="input" value={metOn} onChange={(e) => setMetOn(e.target.value.replace(/[^\d-]/g, '').slice(0, 10))} placeholder={`${state.today.slice(0, 4)} o ${state.today.slice(0, 7)}`} inputMode="numeric" />
+          {!metOk && <span className="tiny red">Usa 2015, 2015-06 o 2015-06-12, no en el futuro</span>}
         </Field>
         <Field label="Teléfono (opcional)">
           <input className="input" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Con lada, para WhatsApp" />
@@ -650,7 +660,12 @@ export function PeopleWatcher() {
     const levelName = relationLevelName(st.track, top.level, !!roleInfo(st.role)?.fem);
     const id = `${top.npcId}:${top.level}:${Date.now()}`;
     const verb = st.track === 'familia' ? `Tu relación con ${e.data.name} ahora es` : `${e.data.name} ahora es`;
-    setItems((xs) => [...xs, { id, title: `${verb} ${levelName}`, sub: `Nivel ${top.level} de cercanía · +${top.xp} XP Relaciones` }]);
+    // Con un punto de partida igual o mayor, el nivel que se ve no cambia: se avisa la XP sin anunciar un nivel menor.
+    const item =
+      top.level > startLevelOf(e.data)
+        ? { id, title: `${verb} ${levelName}`, sub: `Nivel ${top.level} de cercanía · +${top.xp} XP Relaciones` }
+        : { id, title: `Más cercanía con ${e.data.name}`, sub: `Sigue en ${st.levelName} (nivel ${st.level}) · +${top.xp} XP Relaciones` };
+    setItems((xs) => [...xs, item]);
     sfx.achievement();
     haptic([20, 40, 20]);
     window.setTimeout(() => setItems((xs) => xs.filter((x) => x.id !== id)), 4600);

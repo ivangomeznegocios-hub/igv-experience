@@ -8,15 +8,19 @@ import {
   circleOf,
   contactsOf,
   gapsText,
+  isValidMetOnAsOf,
   knownForText,
   levelFromCounts,
   memoryAssistantStore,
   mostSeen,
   nextBirthday,
+  npcTypeOnSave,
   relationGates,
   relationSummary,
   roleInfo,
+  roleOf,
   runAssistantTool,
+  startLevelOf,
   temperatureFor,
   trendFor,
   validateEvent,
@@ -284,6 +288,31 @@ describe('Mi gente: fichas, roles y compatibilidad', () => {
     expect(s.npcs.npcs.n1).toMatchObject({ circle: 'trabajo', role: 'Mentor', track: 'profesional', level: 1, levelName: 'Conocido', lastInteraction: '2026-11-18' });
   });
 
+  it('al guardar una ficha vieja se conserva su tipo si el círculo y el rol no cambiaron', () => {
+    const mentor = { npcType: 'mentor' as const };
+    expect(roleOf(mentor)).toBe('Mentor');
+    expect(npcTypeOnSave(mentor, 'trabajo', 'Mentor')).toBe('mentor');
+    expect(npcTypeOnSave({ npcType: 'rival' }, 'conocidos', 'Rival')).toBe('rival');
+    expect(npcTypeOnSave({ npcType: 'party' }, 'amigos', null)).toBe('party');
+    // si cambian, se recalcula
+    expect(npcTypeOnSave(mentor, 'trabajo', null)).toBe('aliado');
+    expect(npcTypeOnSave({ npcType: 'party' }, 'familia', 'Hermana')).toBe('party');
+    expect(npcTypeOnSave({ npcType: 'party' }, 'trabajo', 'Colega')).toBe('aliado');
+    expect(npcTypeOnSave(null, 'clientes', null)).toBe('cliente');
+  });
+
+  it('punto de partida entre 1 y 5', () => {
+    expect(startLevelOf({})).toBe(1);
+    expect(startLevelOf({ startLevel: 4 })).toBe(4);
+    expect(startLevelOf({ startLevel: 9 })).toBe(5);
+    expect(startLevelOf({ startLevel: 0 })).toBe(1);
+  });
+
+  it('"¿cuándo se conocieron?": año, año y mes o fecha completa, nunca en el futuro', () => {
+    for (const ok of ['2015', '2015-06', '2015-06-12', '2026', '2026-11', '2026-11-19']) expect(isValidMetOnAsOf(ok, TODAY)).toBe(true);
+    for (const bad of ['2031', '2026-12', '2026-11-20', '2015-13', '1850', '2015-02-30', '20', '2015-6']) expect(isValidMetOnAsOf(bad, TODAY)).toBe(false);
+  });
+
   it('reconoce roles escritos a mano', () => {
     expect(roleInfo('amiga de la prepa')?.label).toBe('Amiga');
     expect(roleInfo('Mejor amigo')?.label).toBe('Mejor amigo');
@@ -464,6 +493,47 @@ describe('Mi gente: herramientas de IA', () => {
     const old = await call(store, 'guardar_persona', { nombre: 'Don Pepe', tipo: 'mentor' });
     const op = (await store.catalog()).find((x) => x.id === old.refs!.entities[0].id)!;
     expect(op.data).toMatchObject({ npcType: 'mentor', circle: 'trabajo' });
+  });
+
+  it('guardar_persona: editar una ficha vieja (Mentor, Rival) conserva su rol, su tipo y su frecuencia', async () => {
+    const luis: Entity = { id: 'luis', module: 'npcs', kind: 'npc', sort: 1, data: { name: 'Luis', npcType: 'mentor', relation: 3, key: true, lastContact: '2026-10-01' } };
+    const rafa: Entity = { id: 'rafa', module: 'npcs', kind: 'npc', sort: 1, data: { name: 'Rafa', npcType: 'rival', relation: 3, key: false } };
+    const pepa: Entity = { id: 'pepa', module: 'npcs', kind: 'npc', sort: 1, data: { name: 'Pepa', npcType: 'party', relation: 3, key: false } };
+    const store = mk([], ents(luis, rafa, pepa));
+    const before = (await store.snapshot()).people.list.find((p) => p.id === 'luis')!;
+    expect(before).toMatchObject({ role: 'Mentor', cadenceDays: 30, temperature: 'tibia' });
+    const r = await call(store, 'guardar_persona', { id: 'luis', telefono: '5512345678' });
+    expect(r.isError).toBeFalsy();
+    expect(r.text).toContain('Mentor · persona clave · frecuencia cada mes');
+    const saved = (await store.catalog()).find((e) => e.id === 'luis')!.data as NpcData;
+    expect(saved).toMatchObject({ role: 'Mentor', npcType: 'mentor', circle: 'trabajo', phone: '5512345678' });
+    expect(cadenceFor(saved, GAME_CONFIG)).toBe(30);
+    const after = (await store.snapshot()).people.list.find((p) => p.id === 'luis')!;
+    expect(after).toMatchObject({ role: 'Mentor', cadenceDays: 30, temperature: 'tibia' });
+    // Rival y el tipo 'party' tampoco se pierden
+    expect((await call(store, 'guardar_persona', { id: 'rafa', clave: true })).isError).toBeFalsy();
+    expect((await store.catalog()).find((e) => e.id === 'rafa')!.data).toMatchObject({ role: 'Rival', npcType: 'rival', circle: 'conocidos' });
+    expect((await call(store, 'guardar_persona', { id: 'pepa', notas: 'De la prepa' })).isError).toBeFalsy();
+    expect((await store.catalog()).find((e) => e.id === 'pepa')!.data).toMatchObject({ role: null, npcType: 'party', circle: 'amigos' });
+    // borrar el rol a propósito sí lo quita
+    expect((await call(store, 'guardar_persona', { id: 'luis', rol: '' })).isError).toBeFalsy();
+    expect((await store.catalog()).find((e) => e.id === 'luis')!.data).toMatchObject({ role: null, npcType: 'aliado' });
+  });
+
+  it('guardar_persona: la fecha en que se conocieron acepta día completo y un valor viejo no bloquea otras ediciones', async () => {
+    const old = person('old', { name: 'Toño', circle: 'amigos', role: 'Amigo', metOn: '2031' });
+    const store = mk([], ents(old));
+    // un valor guardado antes (desde la app) no impide marcarlo como clave
+    const r = await call(store, 'guardar_persona', { id: 'old', clave: true });
+    expect(r.isError).toBeFalsy();
+    expect((await store.catalog()).find((e) => e.id === 'old')!.data).toMatchObject({ key: true, metOn: '2031' });
+    // pero un valor nuevo sí se valida
+    expect((await call(store, 'guardar_persona', { id: 'old', conocio_fecha: '2015-13' })).isError).toBe(true);
+    expect((await call(store, 'guardar_persona', { id: 'old', conocio_fecha: '2026-11-20' })).isError).toBe(true);
+    expect((await call(store, 'guardar_persona', { id: 'old', conocio_fecha: '2015-06-12' })).isError).toBeFalsy();
+    expect((await store.catalog()).find((e) => e.id === 'old')!.data).toMatchObject({ metOn: '2015-06-12' });
+    // lo que guarda la IA, la app lo acepta igual
+    expect(isValidMetOnAsOf('2015-06-12', TODAY)).toBe(true);
   });
 
   it('ver_mi_gente y ver_persona muestran nivel, lo que falta, temperatura, lugares y contactos', async () => {

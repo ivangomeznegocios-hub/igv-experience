@@ -9,6 +9,7 @@ import {
   knownForText,
   relationLevelName,
   roleInfo,
+  startLevelOf,
   type ContactChannel,
   type Entity,
   type GateKey,
@@ -54,6 +55,9 @@ export default function Persona() {
   const autoCadence = cadenceFor({ ...d, cadenceDays: undefined }, GAME_CONFIG);
   const known = knownForText(st.knownSince, today);
   const phoneDigits = (d.phone ?? '').replace(/\D/g, '');
+  // Días en que subió el nivel que se ve (los niveles ganados por debajo del punto de partida no lo cambian).
+  const start = startLevelOf(d);
+  const levelUpDays = new Set(Object.entries(st.levelDates).filter(([lv]) => Number(lv) > start).map(([, dt]) => dt));
 
   const quick = (channel: ContactChannel) => logContacts([ent.id], [d.name], { channel, date: today });
   const setCadence = (v: number) => saveEntity<NpcData>({ ...ent, data: { ...d, cadenceDays: v === -1 ? null : v } });
@@ -291,7 +295,7 @@ export default function Persona() {
                 </div>
                 <div className="tiny muted">
                   {fmtWeekday(c.date)} {fmtDate(c.date, c.date.slice(0, 4) !== today.slice(0, 4))}
-                  {Object.entries(st.levelDates).some(([, dt]) => dt === c.date) ? ' · subió de nivel' : ''}
+                  {levelUpDays.has(c.date) ? ' · subió de nivel' : ''}
                 </div>
                 {c.note && <div className="small" style={{ marginTop: 2 }}>{c.note}</div>}
               </div>

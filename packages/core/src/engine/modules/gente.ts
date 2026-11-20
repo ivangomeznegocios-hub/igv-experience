@@ -240,6 +240,20 @@ export function legacyNpcType(circle: PeopleCircle, role?: string | null): NpcTy
   return 'aliado';
 }
 
+/**
+ * Tipo de la primera versión al guardar una ficha editada: si el círculo y el rol (los que se ven, `circleOf`/`roleOf`)
+ * no cambiaron, se conserva el que tenía; si cambiaron, se recalcula con `legacyNpcType`.
+ */
+export function npcTypeOnSave(prev: Partial<NpcData> | null | undefined, circle: PeopleCircle, role: string | null): NpcType {
+  if (prev?.npcType && circle === circleOf(prev) && (role?.trim() || null) === roleOf(prev)) return prev.npcType;
+  return legacyNpcType(circle, role);
+}
+
+/** Punto de partida de la ficha ("¿Qué tan cercana es hoy?"), entre 1 y 5. */
+export function startLevelOf(d: Partial<NpcData>): number {
+  return Math.max(1, Math.min(MAX_RELATION_LEVEL, Math.floor(Number(d.startLevel) || 1)));
+}
+
 export function relationTrack(circle: PeopleCircle): RelationTrack {
   if (circle === 'familia' || circle === 'pareja') return 'familia';
   if (circle === 'trabajo' || circle === 'clientes') return 'profesional';
@@ -404,11 +418,16 @@ export function nextBirthday(npcId: string, b: string | null | undefined, today:
   return { npcId, date, inDays: diffDays(today, date), turns: turns !== null && turns >= 0 ? turns : null };
 }
 
-/** 'YYYY', 'YYYY-MM' o 'YYYY-MM-DD' (no en el futuro). */
+/** 'YYYY', 'YYYY-MM' o 'YYYY-MM-DD' bien formada (no revisa el futuro: para eso, `isValidMetOnAsOf`). */
 export function isValidMetOn(s: string): boolean {
   if (/^\d{4}$/.test(s)) return Number(s) >= 1900;
   if (/^\d{4}-\d{2}$/.test(s)) return isDateString(`${s}-01`);
   return isDateString(s);
+}
+
+/** "¿Cuándo se conocieron?" válida y no en el futuro. La misma regla en la app y en la IA. */
+export function isValidMetOnAsOf(s: string, today: string): boolean {
+  return isValidMetOn(s) && s <= today.slice(0, s.length);
 }
 
 /** "11 años", "8 meses", "12 días" desde una fecha (que puede ser solo año o año-mes). */
@@ -572,7 +591,7 @@ export function reducePeople(ctx: Ctx, missions: MissionsState): NpcsState {
     // Persona clave: aviso a los N días (config npc.keyContactDays) o antes, si ya se enfrió según su frecuencia.
     const overdue = !!d.key && daysSince !== null && (daysSince >= cfg.npc.keyContactDays || (temperature === 'fria' && daysSince > 0));
     const earned = a?.earned ?? 1;
-    const start = Math.max(1, Math.min(MAX_RELATION_LEVEL, Math.floor(Number(d.startLevel) || 1)));
+    const start = startLevelOf(d);
     const level = Math.max(start, earned);
     const counts = countsOf(a);
     let recent = 0;

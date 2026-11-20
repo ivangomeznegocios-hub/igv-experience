@@ -5,12 +5,12 @@ import {
   circleOf,
   contactsOf,
   isValidBirthday,
-  isValidMetOn,
+  isValidMetOnAsOf,
   knownForText,
-  legacyNpcType,
   levelNameFor,
   nextBirthday,
   nextLevelInfo,
+  npcTypeOnSave,
   relationSummary,
   roleInfo,
   roleOf,
@@ -185,11 +185,14 @@ export const guardarPersonaTool = tool({
     const p: Partial<NpcData> = prev?.data ?? {};
     const name = i.nombre ?? p.name;
     if (!name) throw new ToolError('Falta "nombre".');
-    const role = blankToNull(i.rol, p.role);
+    // Fichas viejas: el rol (Mentor, Rival, Cliente) solo existe en `npcType`; se conserva al editar otra cosa
+    // (si se cambia el `tipo` viejo, el rol vuelve a salir de él).
+    const role = blankToNull(i.rol, i.tipo ? p.role : roleOf(p));
     const fromRole = i.rol ? roleInfo(i.rol)?.circle : undefined;
     const circle: PeopleCircle = i.circulo ?? fromRole ?? (p.circle || (i.tipo ? circleOf({ npcType: i.tipo }) : null) || circleOf({ ...p, role }));
     const metOn = blankToNull(i.conocio_fecha, p.metOn);
-    if (metOn && (!isValidMetOn(metOn) || metOn > store.today.slice(0, metOn.length)))
+    // Solo se valida si cambia: un valor viejo guardado desde la app no bloquea editar otra cosa.
+    if (metOn && metOn !== (p.metOn ?? null) && !isValidMetOnAsOf(metOn, store.today))
       throw new ToolError(`"conocio_fecha" inválida (${metOn}): usa 'YYYY', 'YYYY-MM' o 'YYYY-MM-DD', no en el futuro.`);
     const birthday = blankToNull(i.cumpleanos, p.birthday);
     if (birthday && !isValidBirthday(birthday)) throw new ToolError(`"cumpleanos" inválido (${birthday}): usa 'MM-DD' o 'YYYY-MM-DD'.`);
@@ -207,7 +210,7 @@ export const guardarPersonaTool = tool({
       name,
       circle,
       role,
-      npcType: i.tipo ?? legacyNpcType(circle, role),
+      npcType: i.tipo ?? npcTypeOnSave(p, circle, role),
       key: i.clave ?? p.key ?? false,
       relation: i.relacion ?? p.relation ?? 3,
       guildId,
