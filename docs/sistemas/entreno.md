@@ -97,13 +97,17 @@ vigente > músculos guardados en el registro (si borraste el ejercicio propio).
 ## Músculos en tu cuerpo 3D y "antes / ahora" (solo visualización, sin XP)
 
 - **Core, `engine/muscle-map.ts`** (puro, probado en `test/cuerpo-3d.test.ts`):
-  - `muscleRegionAt(part, v, angle, xn)`: qué grupo muscular hay en un punto de la superficie. `part` = `torso` /
-    `brazo` / `pierna`; `v` = altura (fracción de la estatura en torso y pierna; en el brazo 0 = hombro, 0.5 = codo,
-    1 = muñeca); `angle` = ángulo alrededor de la parte (0 = hacia afuera, π/2 = frente, −π/2 = atrás); `xn` = distancia
-    a la línea media del torso (0–1). Alturas de referencia en `BODY_LANDMARKS`. Frente: pecho, deltoides anterior,
-    bíceps, antebrazo, abdomen (más ancho arriba), oblicuos, cuádriceps, aductores, trapecio superior. Espalda: trapecio
-    (rombo), dorsales, deltoides posterior, tríceps, espalda baja (erectores), glúteos, isquios, pantorrillas. Hay
-    prueba de que cada `MuscleId` tiene zona y se ve desde las vistas que dice `MUSCLES[id].views`.
+  - `muscleFieldAt(part, v, angle, xn)` → `{ id, d, id2, d2 }`: cada músculo es una forma anatómica (superelipse
+    girada, con forma de gota o rombo) en coordenadas de la parte: `part` = `torso` / `brazo` / `pierna`; `v` = altura
+    (fracción de la estatura en torso y pierna; en el brazo 0 = hombro, 0.5 = codo, 1 = muñeca); `angle` = ángulo
+    alrededor de la parte (0 = hacia afuera, π/2 = frente, −π/2 = atrás); `xn` = distancia a la línea media del torso
+    (0–1). `d` = 1 en el centro y 0 en el borde (entre músculos queda piel); `id2`/`d2` = el vecino más cercano, para
+    marcar el surco entre dos músculos aunque sean del mismo color. Formas: pectoral en abanico del esternón a la
+    axila, recto abdominal en columna con oblicuos a los lados, trapecio superior en la pendiente del cuello, deltoides
+    en tres cabezas, bíceps solo al frente y tríceps solo atrás, antebrazo (flexores y extensores), cuádriceps en gota
+    (con el vasto interno sobre la rodilla), aductores, isquios, gemelos; atrás, trapecio en rombo, dorsales en V,
+    erectores en dos columnas y glúteos. `muscleRegionAt` = el músculo si `d > 0`. Hay prueba de que cada `MuscleId`
+    tiene zona y se ve desde las vistas que dice `MUSCLES[id].views`, de la piel del esternón y del vecino del surco.
   - `musclePaint(status, mode)` → `{ tone, strength }`. Modos: **Estado** (recuperando dentro de sus 48/72 h > en la meta
     ≥ objetivo > trabajado ≥ mínimo > te falta, como "Te falta esta semana"), **Volumen** (`volumeLevel` 1–4) y
     **Recuperación** (recuperando por fatiga · listo · sin trabajar 8+ días). `muscleLegend(mode)` arma la leyenda con
@@ -116,11 +120,13 @@ vigente > músculos guardados en el registro (si borraste el ejercicio propio).
   "≈ Cintura −3 cm". `compareChoices(measureDates, hoy)` → opciones de "antes": Primer registro, Hace 1 año / 6 / 3 / 1
   mes (el último registro de esa fecha, sin repetir ni caer en el último).
 - **Figura 3D** (`apps/web/src/character/figure.ts`): `FigureSpec.muscles = true` = modo músculos: torso descubierto y
-  un short de compresión gris **pintado** sobre la piel (sin malla aparte); torso, brazos y piernas guardan por vértice
-  su músculo (`muscleRegionAt`). `Figure.paintMuscles({ tints, selected })` solo cambia colores (no reconstruye): tinte
-  suave sobre la piel neutralizada (≈50 %), bordes difuminados (3 pasadas de promedio con los vecinos) y un surco tenue
-  entre músculos tipo lámina de anatomía; el seleccionado se marca y los demás se apagan. `FigureSpec.ghost` = silueta
-  "antes": solo el cuerpo, con un material de contorno (más visible en los bordes, encima de todo).
+  short deportivo gris oscuro a medio muslo; piel, brazos, piernas y short guardan por vértice su músculo, qué tan
+  adentro está (`d`) y el surco. `Figure.paintMuscles({ tints, selected, outline })` solo cambia colores (no
+  reconstruye): tinte suave que se desvanece hacia el borde de cada músculo sobre la piel un poco neutralizada, piel sin
+  pintar entre músculos, surco tenue entre vecinos y un poco de volumen al centro; en el short solo asoman los glúteos
+  como un tono leve; el seleccionado se marca y los demás se apagan. `outline: false` = cuerpo liso (al comparar).
+  `FigureSpec.ghost` = silueta "antes": solo el cuerpo, con un material de contorno (más visible en los bordes,
+  encima de todo).
 - **Escenario** (`stage.ts`): `setMusclePaint`, `setGhost`, `turnTo(yaw)` (giro animado; Frente = 0, Espalda = π) y
   `onPick` (tocar sin arrastrar → raycast → músculo). Sigue dibujando solo cuando algo cambia; three.js sigue en su
   propio archivo (`CharacterView`, cargado con `lazy`).

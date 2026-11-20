@@ -10,6 +10,7 @@ import {
   everMeasured,
   formatDelta,
   muscleDetail,
+  muscleFieldAt,
   muscleLegend,
   musclePaint,
   muscleRegionAt,
@@ -103,7 +104,8 @@ describe('músculos sobre el cuerpo 3D', () => {
             const m = muscleRegionAt(part, vv, angle, xn);
             if (!m) continue;
             const e = found.get(m) ?? { front: 0, back: 0 };
-            if (Math.sin(angle) > 0.3) e.front++;
+            // De frente también se ve lo que asoma por el costado (la pantorrilla por dentro).
+            if (Math.sin(angle) > 0.05) e.front++;
             if (Math.sin(angle) < -0.3) e.back++;
             found.set(m, e);
           }
@@ -146,6 +148,19 @@ describe('músculos sobre el cuerpo 3D', () => {
     expect(muscleRegionAt('pierna', 0.52, B)).toBe('gluteos');
   });
 
+  it('entre músculos queda piel y el campo dice qué tan adentro estás (para difuminar y marcar el surco)', () => {
+    const F = Math.PI / 2;
+    // Esternón: entre los dos pectorales no hay músculo.
+    expect(muscleRegionAt('torso', 0.75, F, 0.0)).toBeNull();
+    // El centro del pectoral está más adentro que su borde.
+    expect(muscleFieldAt('torso', 0.748, F, 0.5).d).toBeGreaterThan(muscleFieldAt('torso', 0.748, F, 0.88).d);
+    // Bíceps solo al frente del brazo; tríceps solo atrás; a un lado del brazo no hay ninguno de los dos.
+    expect(['biceps', 'triceps']).not.toContain(muscleRegionAt('brazo', 0.36, 0));
+    // Entre deltoides frontal y lateral el vecino más cercano es el otro deltoides (surco entre los dos).
+    const f = muscleFieldAt('brazo', 0.1, Math.PI / 4);
+    expect([f.id, f.id2].sort()).toEqual(['hombro_frontal', 'hombro_lateral']);
+  });
+
   const wk = (date: string, exercises: [string, number, number, number?][], occurredAt: string) => {
     const ex: WorkoutExercise[] = exercises.map(([exerciseId, n, reps, kg]) => ({
       exerciseId,
@@ -169,10 +184,10 @@ describe('músculos sobre el cuerpo 3D', () => {
     expect(musclePaint(st.pecho, 'volumen').tone).toBe('v3');
     // Bíceps: 3 series hace 72 h (48 h): listo, bajo el mínimo de 6 → te falta.
     expect(st.biceps.state).toBe('listo');
-    expect(musclePaint(st.biceps, 'estado')).toEqual({ tone: 'falta', strength: 1 });
+    expect(musclePaint(st.biceps, 'estado')).toEqual({ tone: 'falta', strength: 0.75 });
     expect(musclePaint(st.biceps, 'recuperacion').tone).toBe('listo');
     // Nunca entrenado: te falta (más suave) en estado; sin pintar en volumen y recuperación.
-    expect(musclePaint(st.pantorrillas, 'estado')).toEqual({ tone: 'falta', strength: 0.8 });
+    expect(musclePaint(st.pantorrillas, 'estado')).toEqual({ tone: 'falta', strength: 0.55 });
     expect(musclePaint(st.pantorrillas, 'volumen').tone).toBeNull();
     expect(musclePaint(st.pantorrillas, 'recuperacion').tone).toBeNull();
     // Recuperación: más intenso entre más reciente.

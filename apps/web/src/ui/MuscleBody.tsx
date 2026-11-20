@@ -26,7 +26,7 @@ const CharacterView = lazy(() => import('../character/CharacterView'));
  * colores van en la leyenda, en el mapa plano de respaldo y en la figura.
  */
 export const MUSCLE_TONE_COLORS: Record<MuscleTone, string> = {
-  falta: '#c4625b',
+  falta: '#bf6e66',
   efectivo: '#7dbcab',
   meta: '#2f8f7c',
   recuperando: '#d98b3a',

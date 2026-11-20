@@ -19,7 +19,7 @@ import {
   TubeGeometry,
   Vector3,
 } from 'three';
-import { MUSCLE_IDS, muscleRegionAt, type BodyPart, type CharacterData, type FaceTrait, type MuscleId, type Physique } from '@igv/core';
+import { MUSCLE_IDS, muscleFieldAt, type BodyPart, type CharacterData, type FaceTrait, type MuscleId, type Physique } from '@igv/core';
 import { clamp, frontZ, garment, gauss, gridGeometry, halfWidth, lerp, loft, pchip, profile, ringXZ, smoothstep, tube, type P3, type Ring, type RingFn, type RingKey } from './geom';
 
 /**
@@ -37,7 +37,7 @@ export interface FigureSpec {
   character: CharacterData;
   /**
    * Modo músculos: sin ropa arriba y con un short de compresión neutro; la piel (y el short) llevan las zonas
-   * musculares (`muscleRegionAt` de core) para pintarlas con `Figure.paintMuscles`.
+   * musculares (`muscleFieldAt` de core) para pintarlas con `Figure.paintMuscles`.
    */
   muscles?: boolean;
   /** Silueta "antes": solo el cuerpo, dibujado como contorno translúcido encima de la figura actual. */
@@ -48,6 +48,8 @@ export interface FigureSpec {
 export interface MusclePaintSpec {
   tints: Partial<Record<MuscleId, { color: string; strength: number }>>;
   selected: MuscleId | null;
+  /** Surcos entre músculos (false = cuerpo liso, p. ej. al comparar antes / ahora). */
+  outline?: boolean;
 }
 
 export interface Figure {
@@ -83,7 +85,8 @@ function ghostMaterial(color: string): ShaderMaterial {
 
 const TAU = Math.PI * 2;
 /** Color de la prenda de abajo en la silueta (no se dibuja). */
-const SHORTS_COLOR = '#808080';
+const SHORTS_COLOR = '#3a3d43';
+const GLUTES = MUSCLE_IDS.indexOf('gluteos');
 const PI = Math.PI;
 
 const mix = (a: string, b: string, t: number) => `#${new Color(a).lerp(new Color(b), t).getHexString()}`;
@@ -172,6 +175,8 @@ export function buildFigure(spec: FigureSpec): Figure {
     pantalon: { ease: 0.0095, fit: 0.42, hem: 0.048 },
     jogger: { ease: 0.012, fit: 0.5, hem: 0.072 },
   }[outfit.bottom];
+  // Modo músculos: short deportivo gris oscuro a medio muslo.
+  if (muscleMode) Object.assign(bottomCfg, { ease: 0.008, fit: 0.22, hem: 0.405 });
   const pantsHemY = Y(bottomCfg.hem);
 
   // Torso
@@ -212,78 +217,62 @@ export function buildFigure(spec: FigureSpec): Figure {
   const chinY = H - hh;
 
   // ---------- Zonas musculares (modo músculos) ----------
-  type Zone = { geo: BufferGeometry; tags: Int8Array; base: Float32Array; border: Uint8Array; nbStart: Uint32Array; nb: Uint32Array };
+  type Zone = { geo: BufferGeometry; tags: Int8Array; inside: Float32Array; groove: Float32Array; base: Float32Array; fabric: boolean };
   const zoneList: Zone[] = [];
   const muscleMeshes: Mesh[] = [];
   const zoneMat = mat('#ffffff', 0.62, { vertex: true });
-  /** Pintor de una malla por zonas: guarda qué músculo hay en cada vértice (según `muscleRegionAt`). */
-  // Base del modo músculos: tu tono de piel un poco neutralizado (los tintes se leen limpios, sin verse lodosos)
-  // y un short de compresión gris pintado sobre la piel (sin malla aparte: no hace bultos).
-  const baseSkin = new Color(mix(look.skin, '#d9d5cf', 0.4));
-  const briefC = new Color('#8f8c87');
-  const briefEdge = new Color('#77746f');
-  const zoner = (part: BodyPart, coords: (pt: P3) => { v: number; xn?: number }) => {
+  const fabricMat = mat('#ffffff', 0.9, { vertex: true, double: true });
+  // Base del modo músculos: tu tono de piel un poco neutralizado, para que los tintes se lean limpios.
+  const baseSkin = new Color(mix(look.skin, '#d9d5cf', 0.35));
+  /**
+   * Pintor de una malla por zonas: por vértice guarda el músculo (`muscleFieldAt` de core), qué tan adentro está
+   * (0 en el borde, 1 en el centro: el tinte se difumina hacia el borde) y el surco (borde del músculo y línea
+   * entre dos músculos vecinos, aunque sean del mismo color).
+   */
+  const zoner = (part: BodyPart, coords: (pt: P3) => { v: number; xn?: number }, baseHex?: string) => {
     const tags: number[] = [];
+    const inside: number[] = [];
+    const groove: number[] = [];
     const base: number[] = [];
+    const baseC = baseHex ? new Color(baseHex) : baseSkin;
     return {
       tags,
+      inside,
+      groove,
       base,
+      fabric: !!baseHex,
       paint: (pt: P3, u: number, out: Float32Array, at: number) => {
         const c = coords(pt);
-        const m = muscleRegionAt(part, c.v, u, c.xn ?? 0);
-        tags[at / 3] = m ? MUSCLE_IDS.indexOf(m) : -1;
-        // Short: de la cadera (un poco bajo el ombligo) a lo alto del muslo; el borde un poco más oscuro.
-        const top = 0.576;
-        const hem = 0.488 + 0.012 * Math.cos(u);
-        const inBrief = part === 'torso' ? c.v < top : part === 'pierna' && c.v > hem;
-        const edge = inBrief && (part === 'torso' ? top - c.v < 0.006 : c.v - hem < 0.006);
-        const col = inBrief ? (edge ? briefEdge : briefC) : baseSkin;
-        out[at] = col.r;
-        out[at + 1] = col.g;
-        out[at + 2] = col.b;
-        base[at] = col.r;
-        base[at + 1] = col.g;
-        base[at + 2] = col.b;
+        const f = muscleFieldAt(part, c.v, u, c.xn ?? 0);
+        const i = at / 3;
+        tags[i] = f.id && f.d > 0 ? MUSCLE_IDS.indexOf(f.id) : -1;
+        inside[i] = Math.max(0, f.d);
+        const edge = f.id ? gauss(f.d - 0.02, 0.085) : 0;
+        const between = f.id2 && f.d2 > -0.1 ? gauss(f.d - f.d2, 0.09) : 0;
+        groove[i] = Math.max(edge, between);
+        out[at] = base[at] = baseC.r;
+        out[at + 1] = base[at + 1] = baseC.g;
+        out[at + 2] = base[at + 2] = baseC.b;
       },
     };
   };
   /** Agrega una malla pintada por zonas (en uno o varios grupos que comparten la geometría). */
-  const addZoned = (parents: Group[], geo: BufferGeometry, z: { tags: number[]; base: number[] }) => {
+  const addZoned = (parents: Group[], geo: BufferGeometry, z: { tags: number[]; inside: number[]; groove: number[]; base: number[]; fabric: boolean }) => {
     const n = (geo.getAttribute('position') as BufferAttribute).count;
     const tags = new Int8Array(n).fill(-1);
-    for (let i = 0; i < Math.min(n, z.tags.length); i++) tags[i] = z.tags[i] ?? -1;
-    // Borde entre músculos: los vértices de un triángulo con zonas distintas (la línea de la lámina anatómica).
-    const border = new Uint8Array(n);
-    const idx = geo.index!.array;
-    const deg = new Uint32Array(n + 1);
-    for (let i = 0; i < idx.length; i += 3) {
-      const a = idx[i]!;
-      const b = idx[i + 1]!;
-      const c = idx[i + 2]!;
-      if (tags[a] !== tags[b] || tags[b] !== tags[c]) border[a] = border[b] = border[c] = 1;
-      deg[a]! += 2;
-      deg[b]! += 2;
-      deg[c]! += 2;
-    }
-    // Vecinos de cada vértice (con repetidos: da igual para promediar), para suavizar el borde del tinte.
-    const nbStart = new Uint32Array(n + 1);
-    for (let i = 0; i < n; i++) nbStart[i + 1] = nbStart[i]! + deg[i]!;
-    const fill = nbStart.slice(0, n);
-    const nb = new Uint32Array(nbStart[n]!);
-    for (let i = 0; i < idx.length; i += 3) {
-      const t = [idx[i]!, idx[i + 1]!, idx[i + 2]!];
-      for (let k2 = 0; k2 < 3; k2++) {
-        const v = t[k2]!;
-        nb[fill[v]!++] = t[(k2 + 1) % 3]!;
-        nb[fill[v]!++] = t[(k2 + 2) % 3]!;
-      }
-    }
+    const inside = new Float32Array(n);
+    const groove = new Float32Array(n);
     const base = new Float32Array(n * 3);
-    for (let i = 0; i < Math.min(n * 3, z.base.length); i++) base[i] = z.base[i] ?? 0;
-    const zone: Zone = { geo, tags, base, border, nbStart, nb };
+    for (let i = 0; i < n; i++) {
+      tags[i] = z.tags[i] ?? -1;
+      inside[i] = z.inside[i] ?? 0;
+      groove[i] = z.groove[i] ?? 0;
+    }
+    for (let i = 0; i < n * 3; i++) base[i] = z.base[i] ?? 0;
+    const zone: Zone = { geo, tags, inside, groove, base, fabric: z.fabric };
     zoneList.push(zone);
     for (const parent of parents) {
-      const mesh = add(parent, geo, zoneMat);
+      const mesh = add(parent, geo, z.fabric ? fabricMat : zoneMat);
       mesh.userData.zone = zone;
       muscleMeshes.push(mesh);
     }
@@ -292,65 +281,44 @@ export function buildFigure(spec: FigureSpec): Figure {
   const outC = new Color();
   const whiteC = new Color('#ffffff');
   /**
-   * Pinta los músculos: tinte suave sobre la piel (mezcla, no color plano), bordes difuminados entre zonas y
-   * una línea fina y tenue entre músculos. El seleccionado se marca y los demás se apagan un poco.
+   * Pinta los músculos: tinte suave que se desvanece hacia el borde de cada músculo, piel sin pintar entre
+   * músculos y un surco tenue que los separa. El seleccionado se marca y los demás se apagan un poco.
    */
-  const paintMuscles = ({ tints, selected }: MusclePaintSpec) => {
+  const paintMuscles = ({ tints, selected, outline = true }: MusclePaintSpec) => {
     const specs = MUSCLE_IDS.map((id) => tints[id]);
     const colors = specs.map((t) => (t ? new Color(t.color) : null));
     const sel = selected ? MUSCLE_IDS.indexOf(selected) : -1;
     for (const z of zoneList) {
-      const n = z.tags.length;
-      // Tinte por vértice (RGB + cuánto) antes de suavizar.
-      // Canales: tinte RGB ya multiplicado, cuánto tinte y cuánto borde (la línea entre músculos).
-      const C = 5;
-      let w = new Float32Array(n * C);
-      for (let i = 0; i < n; i++) {
-        const t = z.tags[i]!;
-        if (t < 0) continue;
-        w[i * C + 4] = z.border[i]! * (t === sel ? 2.4 : 1);
-        const spec = specs[t];
-        const isSel = t === sel;
-        let a = 0;
-        if (spec && colors[t]) {
-          tintC.copy(colors[t]!);
-          a = 0.52 * spec.strength;
-          if (isSel) a = 0.78;
-          else if (sel >= 0) a *= 0.35;
-        } else if (isSel) {
-          tintC.copy(whiteC);
-          a = 0.32;
-        }
-        w[i * C] = tintC.r * a;
-        w[i * C + 1] = tintC.g * a;
-        w[i * C + 2] = tintC.b * a;
-        w[i * C + 3] = a;
-      }
-      // Dos pasadas de promedio con los vecinos: el borde del tinte se difumina unos milímetros.
-      for (let pass = 0; pass < 3; pass++) {
-        const next = new Float32Array(n * C);
-        for (let i = 0; i < n; i++) {
-          const s0 = z.nbStart[i]!;
-          const s1 = z.nbStart[i + 1]!;
-          const cnt = s1 - s0;
-          for (let c = 0; c < C; c++) {
-            let acc = w[i * C + c]! * cnt;
-            for (let j = s0; j < s1; j++) acc += w[z.nb[j]! * C + c]!;
-            next[i * C + c] = acc / (2 * Math.max(1, cnt));
-          }
-        }
-        w = next;
-      }
       const attr = z.geo.getAttribute('color') as BufferAttribute;
       const arr = attr.array as Float32Array;
-      for (let i = 0; i < n; i++) {
-        const a = w[i * C + 3]!;
-        outC.setRGB(z.base[i * 3]!, z.base[i * 3 + 1]!, z.base[i * 3 + 2]!).multiplyScalar(1 - a);
-        outC.r += w[i * C]!;
-        outC.g += w[i * C + 1]!;
-        outC.b += w[i * C + 2]!;
-        // Surco suave entre músculos (más marcado alrededor del seleccionado).
-        outC.multiplyScalar(1 - 0.2 * Math.min(1.6, w[i * C + 4]!));
+      for (let i = 0; i < z.tags.length; i++) {
+        const t = z.tags[i]!;
+        const d = z.inside[i]!;
+        outC.setRGB(z.base[i * 3]!, z.base[i * 3 + 1]!, z.base[i * 3 + 2]!);
+        if (t >= 0) {
+          // Un poco de volumen: el centro del músculo apenas más claro.
+          if (!z.fabric && outline) outC.multiplyScalar(0.97 + 0.06 * d);
+          const spec = specs[t];
+          const isSel = t === sel;
+          let a = 0;
+          if (spec && colors[t]) {
+            tintC.copy(colors[t]!);
+            a = 0.55 * spec.strength;
+            if (isSel) a = 0.8;
+            else if (sel >= 0) a *= 0.35;
+          } else if (isSel) {
+            tintC.copy(whiteC);
+            a = 0.3;
+          }
+          // En el short solo asoman los glúteos, como un tono leve sobre la tela (los muslos se ven abajo del short).
+          if (z.fabric) {
+            a = t === GLUTES ? a * 0.32 : 0;
+            tintC.lerp(whiteC, 0.35);
+          }
+          outC.lerp(tintC, a * smoothstep(0, 0.24, d));
+        }
+        const g = z.groove[i]!;
+        if (outline && g > 0.01 && (!z.fabric || t === GLUTES)) outC.multiplyScalar(1 - (t === sel && sel >= 0 ? 0.3 : z.fabric ? 0.08 : 0.12) * g);
         arr[i * 3] = outC.r;
         arr[i * 3 + 1] = outC.g;
         arr[i * 3 + 2] = outC.b;
@@ -438,7 +406,7 @@ export function buildFigure(spec: FigureSpec): Figure {
   if (ghost) add(root, loft(tube(torso, Y(cr), neckTop, 48, { bottom: 0.022 * k }), 64, { warp: 0.4, displace: torsoDisplace(1) }), skinMat, false);
   else if (muscleMode) {
     const z = zoner('torso', (pt) => ({ v: pt.y / H, xn: Math.abs(pt.x) / Math.max(0.01, torso(pt.y).w) }));
-    addZoned([root], loft(tube(torso, Y(cr), neckTop, 150, { bottom: 0.022 * k }), 168, { warp: 0.4, displace: torsoDisplace(1), paint: z.paint }), z);
+    addZoned([root], loft(tube(torso, torsoSkinY, neckTop, 130), 192, { warp: 0.2, displace: torsoDisplace(1), paint: z.paint }), z);
   } else add(root, loft(tube(torso, torsoSkinY, neckTop, top === 'ninguna' ? 64 : 16), 104, { warp: 0.4, displace: torsoDisplace(1) }), skinMat);
 
   // ---------- Piernas ----------
@@ -471,7 +439,7 @@ export function buildFigure(spec: FigureSpec): Figure {
   if (ghost) both(loft(tube(leg, Y(0.025), legTop, 40), 32), skinMat);
   else if (muscleMode) {
     const z = zoner('pierna', legV);
-    addZoned([left, right], loft(tube(leg, Y(0.025), legTop, 110), 72, { paint: z.paint }), z);
+    addZoned([left, right], loft(tube(leg, Y(0.025), pantsHemY + 0.04 * k, 110), 96, { paint: z.paint }), z);
   } else both(loft(tube(leg, Y(0.025), pantsHemY + 0.04 * k, outfit.bottom === 'short' ? 44 : 8), 40), skinMat);
 
   // ---------- Brazos y manos ----------
@@ -1197,14 +1165,17 @@ export function buildFigure(spec: FigureSpec): Figure {
     arms(loft(tube(sleeve, sleeveEnd, armTop, long ? 70 : 28, { top: rD * 0.1 + sEase }), 36), cloth);
   }
 
-  // ---------- Ropa: parte de abajo (en modo músculos el short va pintado sobre la piel) ----------
-  if (!muscleMode) {
+  // ---------- Ropa: parte de abajo (en modo músculos, el short deja ver el tinte de glúteos y muslos) ----------
+  {
     const style = outfit.bottom;
     const cloth = mat(outfit.bottomColor, style === 'jeans' ? 0.82 : 0.92, { double: true });
     const cfg = bottomCfg;
     const pelvisEase = 0.0075;
     const pelvis = garment(torso, waistY, Y(cr), { ease: pelvisEase, fit: 0.2 });
-    add(root, loft(tube(pelvis, Y(cr), waistY, 30, { bottom: 0.022 * k + pelvisEase }), 96, { warp: 0.4, displace: torsoDisplace(0.9) }), cloth);
+    if (muscleMode) {
+      const z = zoner('torso', (pt) => ({ v: pt.y / H, xn: Math.abs(pt.x) / Math.max(0.01, pelvis(pt.y).w) }), SHORTS_COLOR);
+      addZoned([root], loft(tube(pelvis, Y(cr), waistY, 72, { bottom: 0.022 * k + pelvisEase }), 144, { warp: 0.4, displace: torsoDisplace(0.9), paint: z.paint }), z);
+    } else add(root, loft(tube(pelvis, Y(cr), waistY, 30, { bottom: 0.022 * k + pelvisEase }), 96, { warp: 0.4, displace: torsoDisplace(0.9) }), cloth);
     const hemY = pantsHemY;
     const cuff = 0.035 * k;
     const jogger = style === 'jogger';
@@ -1212,7 +1183,10 @@ export function buildFigure(spec: FigureSpec): Figure {
       ease: (y) => (jogger ? lerp(0.005, cfg.ease, smoothstep(hemY, hemY + cuff, y)) : cfg.ease),
       fit: (y) => (jogger ? cfg.fit * smoothstep(hemY, hemY + cuff * 2.5, y) : cfg.fit),
     });
-    both(loft(tube(pant, hemY, legTop, style === 'short' ? 28 : 64, { top: 0.03 * k + cfg.ease }), 40), cloth);
+    if (muscleMode) {
+      const z = zoner('pierna', legV, SHORTS_COLOR);
+      addZoned([left, right], loft(tube(pant, hemY, legTop, 40, { top: 0.03 * k + cfg.ease }), 56, { paint: z.paint }), z);
+    } else both(loft(tube(pant, hemY, legTop, style === 'short' ? 28 : 64, { top: 0.03 * k + cfg.ease }), 40), cloth);
     if ((style === 'jeans' || style === 'pantalon') && top === 'ninguna') {
       const beltMat = mat(style === 'jeans' ? '#3a2a1c' : '#17181b', 0.6, { double: true });
       const belt = garment(torso, Y(0.607), Y(0.583), { ease: pelvisEase + 0.0028, fit: 0.2 });

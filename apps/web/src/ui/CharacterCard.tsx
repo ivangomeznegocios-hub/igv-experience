@@ -43,7 +43,7 @@ import { FrontBack, MusclePanel, useMusclePaint, useNowIso } from './MuscleBody'
 
 const CharacterView = lazy(() => import('../character/CharacterView'));
 /** Al comparar antes / ahora la figura va sin ropa (la ropa holgada esconde la forma), sin pintar músculos. */
-const BARE = { tints: {}, selected: null };
+const BARE = { tints: {}, selected: null, outline: false };
 
 type Tab = 'resumen' | 'medidas' | 'apariencia' | 'ropa';
 
@@ -228,6 +228,7 @@ export function CharacterCard() {
       setSide('frente');
       return;
     }
+    if (musclesOn && side === 'espalda') turnTo('frente');
     setMusclesOn(false);
     setPicked(null);
     setView(f === 'rostro' ? 'face' : 'body');

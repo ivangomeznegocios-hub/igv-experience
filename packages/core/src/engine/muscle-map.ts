@@ -34,75 +34,158 @@ export const BODY_LANDMARKS = {
   knee: 0.287,
 } as const;
 
-const sinA = Math.sin;
-const cosA = Math.cos;
+/**
+ * Forma de un músculo: superelipse (girada) en coordenadas de la parte. `d` = 1 en el centro, 0 en el borde
+ * (negativo afuera). Entre músculos queda piel sin pintar, como en una lámina de anatomía.
+ */
+interface Shape {
+  id: MuscleId;
+  /** Centro y semiejes en coordenadas de la parte (ver `coords`). */
+  cx: number;
+  cy: number;
+  rx: number;
+  ry: number;
+  /** Giro en radianes (positivo = el eje x sube). */
+  rot?: number;
+  /** Exponente (2 = elipse, más = más cuadrado). */
+  p?: number;
+  /** Semieje de abajo distinto (forma de gota o rombo). */
+  ryLow?: number;
+  /** Afinar hacia abajo: el ancho baja este tanto en la punta inferior (0–1). */
+  taper?: number;
+}
 
-/** Grupo muscular en un punto de la superficie (o null: hueso, articulación, cuello, manos, pies). */
-export function muscleRegionAt(part: BodyPart, v: number, angle: number, xn = 0): MuscleId | null {
-  const s = sinA(angle);
-  const c = cosA(angle);
-  if (part === 'brazo') {
-    if (v < 0) return null;
-    if (v < 0.27) return s > 0.42 ? 'hombro_frontal' : s < -0.42 ? 'hombro_posterior' : 'hombro_lateral';
-    if (v < 0.47) {
-      // Bíceps al frente, tríceps atrás; el borde va un poco hacia afuera (el tríceps se ve de lado).
-      if (s > 0.15 - 0.25 * Math.max(0, -c)) return 'biceps';
-      if (s < -0.05) return 'triceps';
-      return c > 0 ? 'triceps' : 'biceps';
+const TAU = Math.PI * 2;
+/** Diferencia de ángulos en (−π, π]. */
+const angDiff = (a: number, b: number) => {
+  let d = (a - b) % TAU;
+  if (d > Math.PI) d -= TAU;
+  if (d <= -Math.PI) d += TAU;
+  return d;
+};
+
+function shapeD(sh: Shape, x: number, y: number): number {
+  let dx = x - sh.cx;
+  let dy = y - sh.cy;
+  if (sh.rot) {
+    const c = Math.cos(sh.rot);
+    const s = Math.sin(sh.rot);
+    [dx, dy] = [dx * c + dy * s, -dx * s + dy * c];
+  }
+  const ry = dy < 0 && sh.ryLow ? sh.ryLow : sh.ry;
+  const t = dy < 0 ? Math.min(1, -dy / ry) : 0;
+  const rx = sh.rx * (1 - (sh.taper ?? 0) * t);
+  const p = sh.p ?? 2;
+  const r = (Math.abs(dx / rx) ** p + Math.abs(dy / ry) ** p) ** (1 / p);
+  return 1 - r;
+}
+
+// Torso: x = distancia a la línea media (xn, 0–1), y = altura × 10 (≈ la misma escala que x).
+const TORSO_FRONT: Shape[] = [
+  // Pectoral: abanico redondo del esternón a la axila, el borde de afuera más alto.
+  { id: 'pecho', cx: 0.5, cy: 7.46, rx: 0.46, ry: 0.46, rot: 0.32, p: 2.3 },
+  // Recto abdominal: columna redondeada, más ancha arriba.
+  { id: 'abdomen', cx: 0, cy: 6.36, rx: 0.28, ry: 0.7, p: 2.8, ryLow: 0.7, taper: 0.25 },
+  // Oblicuos: a los lados del abdomen, inclinados hacia la cadera.
+  { id: 'oblicuos', cx: 0.72, cy: 6.32, rx: 0.25, ry: 0.56, rot: -0.35, p: 2.2 },
+  // Trapecio superior: la pendiente del cuello al hombro.
+  { id: 'trapecio', cx: 0.45, cy: 8.24, rx: 0.36, ry: 0.15, rot: -0.3 },
+];
+const TORSO_BACK: Shape[] = [
+  // Trapecio: rombo de la nuca a media espalda.
+  { id: 'trapecio', cx: 0, cy: 7.92, rx: 0.6, ry: 0.5, ryLow: 1.18, p: 1.35, taper: 0.1 },
+  // Dorsales: alas en V de la axila a la cintura.
+  { id: 'espalda', cx: 0.64, cy: 7.05, rx: 0.72, ry: 0.27, rot: 1.0, p: 2.2 },
+  // Espalda baja: las dos columnas de los erectores.
+  { id: 'lumbar', cx: 0.17, cy: 6.12, rx: 0.15, ry: 0.52, p: 2.4 },
+  { id: 'oblicuos', cx: 0.86, cy: 6.2, rx: 0.14, ry: 0.36, p: 2.2 },
+  // Glúteos.
+  { id: 'gluteos', cx: 0.47, cy: 5.25, rx: 0.42, ry: 0.4, p: 2.2 },
+];
+
+// Pierna: x = ángulo × 0.33 (desde el centro de la forma), y = altura × 10.
+const LEG: (Shape & { a: number })[] = [
+  // Cuádriceps: gota al frente del muslo, más ancha arriba, y el vasto interno abultado sobre la rodilla.
+  { id: 'cuadriceps', a: Math.PI / 2 - 0.1, cx: 0, cy: 4.15, rx: 0.42, ry: 1.05, ryLow: 1.0, taper: 0.45, p: 2.2 },
+  { id: 'cuadriceps', a: Math.PI / 2 + 0.6, cx: 0, cy: 3.4, rx: 0.15, ry: 0.28 },
+  // Aductores: cara interna del muslo, arriba.
+  { id: 'aductores', a: Math.PI, cx: 0, cy: 4.55, rx: 0.24, ry: 0.68, ryLow: 0.8, taper: 0.5 },
+  // Isquiotibiales: atrás del muslo.
+  { id: 'isquios', a: -Math.PI / 2, cx: 0, cy: 4.0, rx: 0.38, ry: 0.9, ryLow: 0.95, taper: 0.4, p: 2.2 },
+  // Glúteo (la parte que baja a la pierna).
+  { id: 'gluteos', a: -Math.PI / 2 + 0.3, cx: 0, cy: 5.25, rx: 0.42, ry: 0.4 },
+  // Pantorrilla: los dos gemelos atrás de la espinilla.
+  { id: 'pantorrillas', a: -Math.PI / 2 - 0.6, cx: 0, cy: 2.12, rx: 0.38, ry: 0.5, ryLow: 0.62, taper: 0.4 },
+  { id: 'pantorrillas', a: -Math.PI / 2 + 0.4, cx: 0, cy: 2.18, rx: 0.22, ry: 0.45, ryLow: 0.55, taper: 0.4 },
+];
+
+// Brazo: x = ángulo (desde el centro de la forma), y = largo × 13 hacia abajo (aquí "abajo" = hacia la muñeca).
+const ARM: (Shape & { a: number })[] = [
+  // Deltoides: tres cabezas que bajan en punta hacia la mitad del brazo.
+  { id: 'hombro_frontal', a: Math.PI / 2 - 0.15, cx: 0, cy: 1.55, rx: 0.8, ry: 1.2, ryLow: 1.8, taper: 0.7 },
+  { id: 'hombro_lateral', a: 0, cx: 0, cy: 1.45, rx: 0.85, ry: 1.2, ryLow: 1.9, taper: 0.7 },
+  { id: 'hombro_posterior', a: -Math.PI / 2 + 0.15, cx: 0, cy: 1.55, rx: 0.8, ry: 1.2, ryLow: 1.8, taper: 0.7 },
+  // Bíceps solo al frente; tríceps solo atrás.
+  { id: 'biceps', a: Math.PI / 2 + 0.15, cx: 0, cy: 4.6, rx: 0.85, ry: 1.5, taper: 0.35 },
+  { id: 'triceps', a: -Math.PI / 2 - 0.1, cx: 0, cy: 4.35, rx: 1.0, ry: 1.75, taper: 0.4 },
+  // Antebrazo: flexores (cara interna) y extensores (cara externa), gruesos arriba y finos hacia la muñeca.
+  { id: 'antebrazo', a: Math.PI / 2 + 0.55, cx: 0, cy: 8.2, rx: 0.95, ry: 1.05, ryLow: 2.3, taper: 0.6 },
+  { id: 'antebrazo', a: -0.35, cx: 0, cy: 8.2, rx: 0.95, ry: 1.05, ryLow: 2.3, taper: 0.6 },
+];
+
+/** El brazo se mide hacia abajo: se voltea para que `ryLow`/`taper` apunten a la muñeca. */
+const ARM_UP = ARM.map((sh) => ({ ...sh, cy: -sh.cy }));
+
+/** Qué tanto de cada músculo hay en un punto: el principal (`d` 0–1, 1 = centro) y el vecino más cercano. */
+export interface MuscleField {
+  id: MuscleId | null;
+  /** 0 en el borde, 1 en el centro (≤ 0 = piel entre músculos). */
+  d: number;
+  /** Segundo músculo más cercano (para marcar el surco entre los dos). */
+  id2: MuscleId | null;
+  d2: number;
+}
+
+/** Campo muscular en un punto de la superficie (ver coordenadas arriba). */
+export function muscleFieldAt(part: BodyPart, v: number, angle: number, xn = 0): MuscleField {
+  const best: MuscleField = { id: null, d: -1, id2: null, d2: -1 };
+  const take = (id: MuscleId, d: number) => {
+    if (d > best.d) {
+      if (best.id !== id) {
+        best.id2 = best.id;
+        best.d2 = best.d;
+      }
+      best.id = id;
+      best.d = d;
+    } else if (id !== best.id && d > best.d2) {
+      best.id2 = id;
+      best.d2 = d;
     }
-    if (v < 0.53) return null; // codo
-    if (v < 0.93) return 'antebrazo';
-    return null; // muñeca y mano
+  };
+  const s = Math.sin(angle);
+  if (part === 'torso') {
+    if (v > BODY_LANDMARKS.neck || v < BODY_LANDMARKS.crotch) return best;
+    const y = v * 10;
+    // Al frente y atrás; en los costados se prueban los dos (los dorsales y oblicuos dan la vuelta).
+    const fade = (k: number) => Math.min(1, Math.max(0, k));
+    if (s > -0.25) for (const sh of TORSO_FRONT) take(sh.id, shapeD(sh, xn, y) - 0.6 * fade(-s * 4));
+    if (s < 0.25) for (const sh of TORSO_BACK) take(sh.id, shapeD(sh, xn, y) - 0.6 * fade(s * 4));
+    return best;
   }
   if (part === 'pierna') {
-    const back = s < -0.12;
-    const medial = c < -0.5;
-    if (v > 0.545) return null;
-    if (v > BODY_LANDMARKS.gluteFold) return back || (c > 0.55 && s < 0.2) ? 'gluteos' : medial ? 'aductores' : v > 0.525 ? null : 'cuadriceps';
-    if (v > 0.315) {
-      if (medial && v > 0.355) return 'aductores';
-      if (back) return 'isquios';
-      return 'cuadriceps';
-    }
-    if (v > 0.255) return null; // rodilla
-    if (v > 0.105) return s < 0.25 || (medial && s < 0.6) ? 'pantorrillas' : null; // espinilla: hueso
-    return null; // tobillo y pie
+    const y = v * 10;
+    for (const sh of LEG) take(sh.id, shapeD(sh, angDiff(angle, sh.a) * 0.33, y));
+    return best;
   }
-  // Torso
-  const L = BODY_LANDMARKS;
-  const front = s > 0.2;
-  const backSide = s < -0.2;
-  if (v > L.neck - 0.004) return null; // cuello
-  if (v < L.crotch) return null;
-  if (v < 0.578) {
-    // Pelvis: glúteos atrás; al frente, abdomen bajo y la cadera.
-    if (backSide && xn > 0.06) return 'gluteos';
-    if (front && xn < 0.32 && v > 0.555) return 'abdomen';
-    return null;
-  }
-  if (front) {
-    // Trapecio superior: la pendiente del cuello al hombro.
-    if (v > 0.805 && xn > 0.24 && xn < 0.9) return 'trapecio';
-    if (v > 0.802) return null; // clavículas
-    // Borde inferior del pectoral: sube hacia la axila.
-    if (v > 0.697 + 0.04 * xn * xn) return xn < 0.95 ? 'pecho' : 'espalda';
-    // Recto abdominal: más ancho arriba (costillas) que abajo (pubis).
-    if (xn < 0.25 + 0.12 * Math.min(1, (v - 0.575) / 0.12)) return 'abdomen';
-    return v < 0.69 ? 'oblicuos' : 'espalda';
-  }
-  if (backSide) {
-    // Trapecio: rombo de la nuca al centro de la espalda.
-    const trapW = v > 0.79 ? 1 : v < 0.66 ? 0 : 0.12 + 0.75 * ((v - 0.66) / 0.13);
-    if (v > 0.66 && xn < trapW) return 'trapecio';
-    if (v > 0.645) return 'espalda';
-    // Espalda baja: las dos columnas de los erectores; a los lados, el final del dorsal y los oblicuos.
-    if (xn < 0.34) return 'lumbar';
-    return xn > 0.8 ? 'oblicuos' : 'espalda';
-  }
-  // Costados
-  if (v > 0.80) return 'trapecio';
-  if (v > 0.69) return 'espalda';
-  return 'oblicuos';
+  const y = -v * 13;
+  for (const sh of ARM_UP) take(sh.id, shapeD(sh, angDiff(angle, sh.a), y));
+  return best;
+}
+
+/** Grupo muscular en un punto de la superficie (o null: piel entre músculos, cuello, articulaciones, manos). */
+export function muscleRegionAt(part: BodyPart, v: number, angle: number, xn = 0): MuscleId | null {
+  const f = muscleFieldAt(part, v, angle, xn);
+  return f.d > 0 ? f.id : null;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -152,7 +235,8 @@ export function musclePaint(m: MuscleStatus, mode: MusclePaintMode): MusclePaint
   }
   if (m.weekSets >= m.target.target) return { tone: 'meta', strength: 1 };
   if (m.weekSets >= m.target.min) return { tone: 'efectivo', strength: 1 };
-  return { tone: 'falta', strength: m.weekSets > 0 ? 1 : 0.8 };
+  // Lo que no has trabajado va más tenue: llama la atención sin gritar.
+  return { tone: 'falta', strength: m.weekSets > 0 ? 0.75 : 0.55 };
 }
 
 export interface MuscleLegendItem {
