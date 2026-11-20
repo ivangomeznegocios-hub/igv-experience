@@ -1,4 +1,4 @@
-import { TRAINING_SETTINGS_ID, linkedTrainingDailyId, quickMissionId, type TrainingSettingsData, type AttributeId, type CompletionKind, type Entity, type GameEvent, type GeneratedMission, type MissionData, type MissionSize, type SettingsData, type TodoData } from '@igv/core';
+import { GAME_CONFIG, TRAINING_SETTINGS_ID, addDays, dayCloseBonus, linkedTrainingDailyId, quickMissionId, type GameState, type TrainingSettingsData, type AttributeId, type CompletionKind, type Entity, type GameEvent, type GeneratedMission, type MissionData, type MissionSize, type SettingsData, type TodoData } from '@igv/core';
 import { addEvent, getEntity, getEvents, restoreEvent, saveEntity, voidEvent } from '../data/store';
 import { toast, undoToast } from '../ui/kit';
 import { openWorkout } from './entreno';
@@ -68,6 +68,28 @@ export function uncomplete(missionId: string, date?: string, title?: string) {
 export function writeLesson(text: string, mission: Entity<MissionData> | null, date?: string) {
   const attribute: AttributeId = mission?.data.attribute ?? 'inteligencia';
   return addEvent('lesson.written', { text, missionId: mission?.id ?? null, attribute }, date ? { localDate: date } : {});
+}
+
+/**
+ * Cierra un día (evento `day.closed`). El bono sorpresa lo calcula el motor (`state.gold.bonuses`); aquí solo
+ * se anticipa con la misma regla: se cobra si ese día hubo al menos una misión. Una sola función para Hoy y /dia.
+ */
+export function closeDay(
+  state: GameState,
+  date: string,
+  input: { note: string; mood: number | null },
+  opts: { onPlanTomorrow?: (tomorrow: string) => void } = {},
+) {
+  const prev = state.dayClosures[date];
+  addEvent('day.closed', { note: input.note.trim(), mood: input.mood ?? undefined }, { localDate: date });
+  const isToday = date === state.today;
+  const hadMission = state.missions.activeDays.has(date);
+  const bonus = !prev && hadMission ? dayCloseBonus(date, GAME_CONFIG.goldBonus.dayCloseOptions) : 0;
+  if (bonus) toast(`Día cerrado. Bono sorpresa: +${bonus} de oro.`, 'xp');
+  else if (!prev && isToday && !hadMission) toast('Día cerrado. Si hoy completas una misión, cobras tu bono sorpresa.', 'info');
+  else toast(isToday ? 'Día cerrado. Descansa, mañana seguimos.' : 'Cierre guardado.', 'info');
+  const tomorrow = addDays(state.today, 1);
+  if (isToday && !prev && !state.plans[tomorrow]?.items.length) opts.onPlanTomorrow?.(tomorrow);
 }
 
 export function updateSettings(current: SettingsData, patch: Partial<SettingsData>) {

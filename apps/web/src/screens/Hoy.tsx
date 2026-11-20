@@ -4,7 +4,7 @@ import {
   ATTRIBUTE_NAMES,
   GAME_CONFIG,
   addDays,
-  dayCloseBonus,
+  goldFor,
   frequentMissions,
   isDailyDone,
   isInRoutine,
@@ -22,9 +22,10 @@ import {
   type ViceData,
 } from '@igv/core';
 import { addEvent, useGame } from '../data/store';
-import { completeGenerated, completeMission, completeQuick, completeTodo, isDone, saveTodo, uncomplete, updateSettings } from '../lib/actions';
+import { closeDay, completeGenerated, completeMission, completeQuick, completeTodo, isDone, saveTodo, uncomplete, updateSettings } from '../lib/actions';
 import { bossHpPercent, buildDailyBriefing, localHour, pickDailyEncounter } from '../lib/narrator';
 import { fmtDate, fmtMoney, fmtWeekday } from '../lib/time';
+import { getPrefs, setPrefs } from '../lib/prefs';
 import { BossArt, BossHpBar } from '../ui/BossArt';
 import { Hero } from '../ui/Hero';
 import { Icon } from '../ui/icons';
@@ -115,12 +116,15 @@ export default function Hoy() {
 function BirthDatePrompt() {
   const { state, store } = useGame();
   const [date, setDate] = useState('');
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissed, setDismissed] = useState(() => !!getPrefs().welcomeDismissed);
   if (!store.ready || state.settings.birthDate || dismissed) return null;
   return (
     <Sheet
       open
-      onClose={() => setDismissed(true)}
+      onClose={() => {
+        setPrefs({ welcomeDismissed: true });
+        setDismissed(true);
+      }}
       title="Bienvenido a IGV EXPERIENCE"
       actions={
         <button
@@ -441,6 +445,7 @@ function BountyCard() {
 
   if (!b) return null;
   const m = list<MissionData>('missions').find((x) => x.id === b.missionId);
+  const bonusGold = goldFor({ amount: b.bonus }, GAME_CONFIG.gold.xpPerGold);
   return (
     <div className={`card bounty ${b.completed ? 'won' : ''}`}>
       <div className="row">
@@ -451,7 +456,9 @@ function BountyCard() {
           <div className="eyebrow">Misión sorpresa del día · +{b.bonus} XP bono</div>
           <div className="item-title">{b.title}</div>
           <div className="tiny muted">
-            {b.completed ? `¡Cumplida! Ganaste +${b.bonus} XP extra.` : `Complétala hoy para cobrar ${GAME_CONFIG.bounty.bonusPercent}% extra de XP y oro.`}
+            {b.completed
+              ? `¡Cumplida! Ganaste +${b.bonus} XP extra${bonusGold ? ` y +${bonusGold} de oro` : ''}.`
+              : `Complétala hoy para cobrar +${b.bonus} XP extra${bonusGold ? ` y +${bonusGold} de oro` : ''}.`}
           </div>
         </div>
         {!b.completed && m && (
@@ -717,12 +724,8 @@ function CloseDaySheet({ onClose }: { onClose: () => void }) {
         <button
           className="btn primary"
           onClick={() => {
-            addEvent('day.closed', { note: note.trim(), mood: mood ?? undefined });
-            const bonus = !prev && missions > 0 ? dayCloseBonus(state.today, GAME_CONFIG.goldBonus.dayCloseOptions) : 0;
-            toast(bonus ? `Día cerrado. Bono sorpresa: +${bonus} de oro.` : 'Día cerrado. Descansa, mañana seguimos.', bonus ? 'xp' : 'info');
+            closeDay(state, state.today, { note, mood }, { onPlanTomorrow: (t) => setTimeout(() => openPlanSheet(t), 350) });
             onClose();
-            const tomorrow = addDays(state.today, 1);
-            if (!state.plans[tomorrow]?.items.length) setTimeout(() => openPlanSheet(tomorrow), 350);
           }}
         >
           {prev ? 'Actualizar cierre' : 'Cerrar el día'}

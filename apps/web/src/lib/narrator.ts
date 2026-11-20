@@ -4,6 +4,7 @@ import {
   GAME_CONFIG,
   isInRoutine,
   pickForDate,
+  quickMissionId,
   weekday,
   type AttributeId,
   type BossData,
@@ -275,6 +276,6 @@ export function pickDailyEncounter(state: GameState, entities: Entity[]): DailyE
   const completed =
     picked.kind === 'recurring_boss' && picked.bossId
       ? (state.bosses.recurring[picked.bossId]?.dates.includes(state.today) ?? false)
-      : state.missions.completedToday.some((id) => id === `quick-${picked.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`);
+      : state.missions.completedToday.includes(quickMissionId(picked.title));
   return { ...picked, completed };
 }

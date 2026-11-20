@@ -99,10 +99,29 @@ export function reduceGold(ctx: Ctx, xp: XpEntry[], deps: { activeDays: Set<stri
     addCredit(d, amount);
   }
 
+  // Oro ganado hasta una fecha (inclusive). Los cargos se evalúan en orden cronológico, así que basta con un
+  // cursor que avanza (antes se recorrían todas las fechas por cada cargo). Los pagos de compromisos que se
+  // acreditan durante el recorrido pueden caer en una fecha ya pasada por el cursor: se suman aparte.
+  const creditDates = [...earnedByDate.keys()].sort();
+  let cursorIdx = 0;
+  let cursorSum = 0;
+  let cursorDate = '';
+  const lateCredits: { date: string; amount: number }[] = [];
   const earnedThrough = (date: string) => {
-    let s = 0;
-    for (const [d, g] of earnedByDate) if (d <= date) s += g;
-    return s;
+    while (cursorIdx < creditDates.length && creditDates[cursorIdx] <= date) {
+      cursorSum += earnedByDate.get(creditDates[cursorIdx]) ?? 0;
+      cursorIdx++;
+    }
+    cursorDate = date;
+    let late = 0;
+    for (const c of lateCredits) if (c.date <= date) late += c.amount;
+    return cursorSum + late;
+  };
+  const addLateCredit = (date: string, amount: number) => {
+    addCredit(date, amount);
+    // Si la fecha ya la pasó el cursor (o no estaba en la lista), se cuenta aparte; si no, el cursor la
+    // recogerá de `earnedByDate` cuando llegue.
+    if (date <= cursorDate || !creditDates.includes(date)) lateCredits.push({ date, amount });
   };
 
   // Resultados de compromisos (cuenta el primero, y solo si es en o después de la fecha del compromiso).
@@ -148,7 +167,7 @@ export function reduceGold(ctx: Ctx, xp: XpEntry[], deps: { activeDays: Set<stri
         payout = Math.round(p.stake * ctx.cfg.pledge.payoutMultiplier);
         bonuses.push({ date: res!.date, amount: payout - p.stake, source: 'pledge', label: `Compromiso cumplido: ${p.title}` });
         // Regresa lo apostado + la ganancia el día que lo cumpliste.
-        addCredit(res!.date, payout);
+        addLateCredit(res!.date, payout);
       }
     }
     pledges.push({

@@ -17,6 +17,7 @@ export type { AchievementState } from './engine/modules/achievements';
 export type { AttributesState, AttributeState } from './engine/modules/attributes';
 export type { SkillState, SkillUnlock } from './engine/modules/skills';
 export type { SeasonsState, JournalEntry, SeasonReview } from './engine/modules/seasons';
+export { endReviewOpensOn, seasonCompleted } from './engine/modules/seasons';
 export type { MapState, PlaceState, NpcsState, NpcState, GeneratedMission } from './engine/modules/world';
 export type { MoneyState, MonthMoney } from './engine/modules/money';
 export type { BountyState, BountyInfo } from './engine/modules/bounty';

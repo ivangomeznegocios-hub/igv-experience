@@ -327,18 +327,38 @@ export interface Game {
   store: Snapshot;
 }
 
+/**
+ * Una sola proyección por cambio para toda la app (antes, cada componente que llamaba `useGame()` volvía a
+ * calcular el juego completo; en Hoy eran 20+ veces por toque).
+ */
+let gameCache: { version: number; today: string; game: Game } | null = null;
+
+function buildGame(store: Snapshot): Game {
+  if (gameCache && gameCache.version === store.version && gameCache.today === store.today) return gameCache.game;
+  const events = [...store.events.values()];
+  const entities = [...store.entities.values()].filter((e) => !e.deletedAt);
+  const state = project({ events, entities, today: store.today });
+  const byId = new Map(entities.map((e) => [e.id, e]));
+  const lists = new Map<string, Entity[]>();
+  const list = <D,>(module: string, kind?: string) => {
+    const key = `${module}/${kind ?? ''}`;
+    let out = lists.get(key);
+    if (!out) {
+      out = entities.filter((e) => e.module === module && (!kind || e.kind === kind)).sort((a, b) => a.sort - b.sort);
+      lists.set(key, out);
+    }
+    // Copia: hay pantallas que ordenan el resultado en su lugar.
+    return out.slice() as Entity<D>[];
+  };
+  const game = { state, events, entities, byId, list, store };
+  gameCache = { version: store.version, today: store.today, game };
+  return game;
+}
+
 export function useGame(): Game {
   const store = useStore();
-  return useMemo(() => {
-    const events = [...store.events.values()];
-    const entities = [...store.entities.values()].filter((e) => !e.deletedAt);
-    const state = project({ events, entities, today: store.today });
-    const byId = new Map(entities.map((e) => [e.id, e]));
-    const list = <D,>(module: string, kind?: string) =>
-      entities.filter((e) => e.module === module && (!kind || e.kind === kind)).sort((a, b) => a.sort - b.sort) as Entity<D>[];
-    return { state, events, entities, byId, list, store };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store.version, store.today]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useMemo(() => buildGame(store), [store.version, store.today]);
 }
 
 /** Proyección en una fecha pasada (fotos de atributos al inicio/fin de temporada). */

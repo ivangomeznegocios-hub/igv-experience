@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { onStoreError, sync, useGame, useStore } from './data/store';
+import { ActionDock } from './ui/ActionDock';
 import { Fx } from './ui/fx';
 import { QuestMode } from './ui/QuestMode';
 import { QuickAdd } from './ui/QuickAdd';
@@ -265,6 +266,7 @@ export default function App() {
       <SyncPill />
       {store.ready && <QuestMode />}
       {store.ready && <QuickAdd />}
+      <ActionDock />
       {store.ready && <PlanSheet />}
       {store.ready && <RecordWatcher />}
       {store.ready && <NotificationsSync />}

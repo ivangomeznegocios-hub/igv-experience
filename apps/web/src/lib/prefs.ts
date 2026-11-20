@@ -3,6 +3,8 @@ export interface Prefs {
   sound: boolean;
   haptics: boolean;
   notify: { enabled: boolean; morning: string; evening: string; npcs: boolean; weekly: boolean };
+  /** Cerraste la hoja de bienvenida sin guardar fecha (no volver a mostrarla en este dispositivo). */
+  welcomeDismissed?: boolean;
 }
 
 const KEY = 'igv-prefs';

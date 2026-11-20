@@ -97,6 +97,8 @@ export const GAME_CONFIG = {
   /** Temporadas. */
   season: {
     weeks: 13,
+    /** La revisión de fin solo completa la temporada si se escribe en sus últimos N días (o después). */
+    endReviewWindowDays: 7,
   },
 
   /** NPCs: días sin contacto para generar la misión "escribirle". */
