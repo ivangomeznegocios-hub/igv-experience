@@ -3,7 +3,7 @@ import { DAILY_SLOTS, type Entity, type MissionData, type MissionKind, type Main
 import { saveEntity, useGame } from '../data/store';
 import { newId } from '../lib/time';
 import { writeLesson } from '../lib/actions';
-import { AttrChips, Field, Sheet, SizeChips, useAutoFocus } from './kit';
+import { AttrChips, Field, Sheet, SizeChips, useAutoFocus, TextInput, TextArea } from './kit';
 
 const KIND_LABEL: Record<string, string> = { side: 'secundaria', daily: 'diaria', event: 'evento', chapter: 'capítulo' };
 
@@ -57,7 +57,7 @@ export function MissionForm({
       }
     >
       <Field label="Nombre">
-        <input ref={ref} className="input" value={d.title} onChange={(e) => up({ title: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && save()} />
+        <TextInput ref={ref} className="input" value={d.title} onChange={(e) => up({ title: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && save()} />
       </Field>
       <Field label="Tamaño">
         <SizeChips value={d.size} onChange={(size) => up({ size })} />
@@ -126,7 +126,7 @@ export function MissionForm({
         </Field>
       )}
       <Field label="Notas">
-        <textarea className="input" value={d.notes ?? ''} onChange={(e) => up({ notes: e.target.value })} />
+        <TextArea className="input" value={d.notes ?? ''} onChange={(e) => up({ notes: e.target.value })} />
       </Field>
     </Sheet>
   );
@@ -175,7 +175,7 @@ export function LessonForm({ open, onClose, mission }: { open: boolean; onClose:
         </select>
       </Field>
       <Field label="¿Qué aprendí?">
-        <textarea ref={ref} className="input" rows={5} value={text} onChange={(e) => setText(e.target.value)} placeholder="Qué pasó, por qué, y qué haré distinto." />
+        <TextArea ref={ref} className="input" rows={5} value={text} onChange={(e) => setText(e.target.value)} placeholder="Qué pasó, por qué, y qué haré distinto." />
       </Field>
     </Sheet>
   );

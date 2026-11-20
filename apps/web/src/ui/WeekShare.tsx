@@ -3,7 +3,7 @@ import { addDays, ATTRIBUTE_NAMES, GAME_CONFIG, personalRecords, weekReport, wee
 import { useGame } from '../data/store';
 import { updateSettings } from '../lib/actions';
 import { fmtDate, fmtMoney, fmtNum } from '../lib/time';
-import { Field, Sheet, toast } from './kit';
+import { Field, Sheet, toast, TextInput } from './kit';
 import { Icon } from './icons';
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -199,7 +199,7 @@ function PartnerSheet({ onClose }: { onClose: () => void }) {
         Alguien a quien le mandas tu resumen cada semana. Saber que alguien lo va a ver ayuda a cumplir.
       </p>
       <Field label="Nombre">
-        <input className="input" value={name} placeholder="Ej. Carlos" onChange={(e) => setName(e.target.value)} />
+        <TextInput className="input" value={name} placeholder="Ej. Carlos" onChange={(e) => setName(e.target.value)} />
       </Field>
       <Field label="WhatsApp (opcional, con lada: 52…)">
         <input className="input" inputMode="tel" value={phone} placeholder="5215512345678" onChange={(e) => setPhone(e.target.value)} />

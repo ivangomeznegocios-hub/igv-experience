@@ -46,7 +46,7 @@ import { fmtDate, fmtNum, fmtWeekday } from '../lib/time';
 import { BarChart, LineChart } from '../ui/charts';
 import { BodyMap } from '../ui/BodyMap';
 import { Icon } from '../ui/icons';
-import { Badge, Bar, Chips, Empty, Field, PageHeader, Sheet, Tabs, confirmAction, toast } from '../ui/kit';
+import { Badge, Bar, Chips, Empty, Field, PageHeader, Sheet, Tabs, confirmAction, toast, TextInput } from '../ui/kit';
 import { ExercisePicker, Stepper } from '../ui/quick/WorkoutQuick';
 import '../styles/entreno.css';
 
@@ -509,7 +509,7 @@ function WorkoutDetail({ w, onClose }: { w: Workout; onClose: () => void }) {
       )}
       {naming !== null ? (
         <div className="row" style={{ gap: 6, marginTop: 14 }}>
-          <input className="input grow" value={naming} autoFocus maxLength={120} placeholder="Nombre de la rutina" onChange={(e) => setNaming(e.target.value)} />
+          <TextInput className="input grow" value={naming} autoFocus maxLength={120} placeholder="Nombre de la rutina" onChange={(e) => setNaming(e.target.value)} />
           <button
             className="btn primary"
             disabled={!naming.trim()}
@@ -788,7 +788,7 @@ function RoutineSheet({ routine, onClose }: { routine: Entity<RoutineData> | nul
       ) : (
         <>
           <Field label="Nombre">
-            <input className="input" value={name} maxLength={120} placeholder="Pecho y tríceps" onChange={(e) => setName(e.target.value)} />
+            <TextInput className="input" value={name} maxLength={120} placeholder="Pecho y tríceps" onChange={(e) => setName(e.target.value)} />
           </Field>
           {exercises.map((x, i) => (
             <div key={`${x.exerciseId}-${i}`} className="wk-ex">

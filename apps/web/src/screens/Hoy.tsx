@@ -28,7 +28,7 @@ import { fmtDate, fmtMoney, fmtWeekday } from '../lib/time';
 import { BossArt, BossHpBar } from '../ui/BossArt';
 import { Hero } from '../ui/Hero';
 import { Icon } from '../ui/icons';
-import { AttrBadge, Badge, Bar, Chips, Collapse, Empty, Field, Sheet, SizeBadge, SwipeRow, confirmAction, toast, undoToast, useAutoFocus } from '../ui/kit';
+import { AttrBadge, Badge, Bar, Chips, Collapse, Empty, Field, Sheet, SizeBadge, SwipeRow, confirmAction, toast, undoToast, useAutoFocus, TextInput, TextArea } from '../ui/kit';
 import { LessonForm } from '../ui/MissionForm';
 import { PeopleTodayCard } from '../ui/people';
 import { startMissionQuest, startQuest, startTodoQuest } from '../ui/QuestMode';
@@ -765,7 +765,7 @@ function CloseDaySheet({ onClose }: { onClose: () => void }) {
         <Chips value={mood} onChange={setMood} size="lg" options={MOODS.map((m, i) => ({ value: i + 1, label: m }))} />
       </Field>
       <Field label="Una línea sobre tu día">
-        <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Lo mejor de hoy, lo que aprendí…" />
+        <TextInput className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Lo mejor de hoy, lo que aprendí…" />
       </Field>
       <p className="tiny muted">Tu nota aparece en el Historial y en Mi vida en semanas.</p>
     </Sheet>
@@ -968,11 +968,11 @@ export function MoneySheet({ kind, onClose }: { kind: 'income' | 'expense'; onCl
         <input ref={ref} className="input" type="number" inputMode="decimal" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} />
       </Field>
       <Field label="Concepto">
-        <input className="input" value={concept} onChange={(e) => setConcept(e.target.value)} placeholder={kind === 'income' ? 'Cliente, proyecto…' : 'Renta, herramienta…'} />
+        <TextInput className="input" value={concept} onChange={(e) => setConcept(e.target.value)} placeholder={kind === 'income' ? 'Cliente, proyecto…' : 'Renta, herramienta…'} />
       </Field>
       <div className="grid2">
         <Field label="Categoría (opcional)">
-          <input className="input" value={category} onChange={(e) => setCategory(e.target.value)} />
+          <TextInput className="input" value={category} onChange={(e) => setCategory(e.target.value)} />
         </Field>
         <Field label="Fecha">
           <input className="input" type="date" value={date} max={state.today} onChange={(e) => setDate(e.target.value)} />
@@ -1017,7 +1017,7 @@ function RecurringDefeatSheet({ initialBossId, onClose }: { initialBossId?: stri
       </Field>
       {boss && <p className="small muted">Se supera con: {boss.data.defeatCondition}</p>}
       <Field label="Evidencia (la decisión, lo que entregaste…)">
-        <textarea className="input" value={note} onChange={(e) => setNote(e.target.value)} />
+        <TextArea className="input" value={note} onChange={(e) => setNote(e.target.value)} />
       </Field>
     </Sheet>
   );

@@ -5,7 +5,7 @@ import { resetAndResync, restoreEvent, sync, useGame, useStore, voidEvent } from
 import { updateSettings } from '../lib/actions';
 import { fmtDate } from '../lib/time';
 import { getTheme, setTheme, type Theme } from '../lib/theme';
-import { Field, PageHeader, Tabs, confirmAction, toast } from '../ui/kit';
+import { Field, PageHeader, Tabs, confirmAction, toast, TextInput } from '../ui/kit';
 import { getPrefs, setPrefs, type Prefs } from '../lib/prefs';
 import { sfx } from '../lib/sound';
 import { PUSH_AVAILABLE, disablePush, enablePush, needsInstall, pushSupported, schedulePlanUpload } from '../lib/notifications';
@@ -41,10 +41,10 @@ function Profile() {
     <div className="card">
       <h2>Perfil</h2>
       <Field label="Nombre">
-        <input className="input" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} />
+        <TextInput className="input" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} />
       </Field>
       <Field label="A qué te dedicas">
-        <input className="input" value={d.className} onChange={(e) => setD({ ...d, className: e.target.value })} />
+        <TextInput className="input" value={d.className} onChange={(e) => setD({ ...d, className: e.target.value })} />
       </Field>
       <div className="grid2">
         <Field label="Fecha de nacimiento">
@@ -86,7 +86,7 @@ function Rewards() {
         const t = GAME_CONFIG.titles.find((x) => x.level === l);
         return (
           <Field key={l} label={`Nivel ${l}${t ? ` · ${t.title}` : ''}${state.level.level >= l ? ' ✓' : ''}`}>
-            <input className="input" value={r[String(l)] ?? ''} placeholder="Define tu premio" onChange={(e) => setR({ ...r, [String(l)]: e.target.value })} />
+            <TextInput className="input" value={r[String(l)] ?? ''} placeholder="Define tu premio" onChange={(e) => setR({ ...r, [String(l)]: e.target.value })} />
           </Field>
         );
       })}

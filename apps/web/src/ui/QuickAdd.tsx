@@ -22,7 +22,7 @@ import { completeMission, completeQuick, saveTodo, writeLesson } from '../lib/ac
 import { fmtDate, fmtMoney, newId } from '../lib/time';
 import { appendSpeech } from '../lib/voice';
 import { useVoiceContext } from '../lib/voz';
-import { AttrChips, Chips, DateChips, Field, Sheet, SizeChips, toast, useAutoFocus } from './kit';
+import { AttrChips, Chips, DateChips, Field, Sheet, SizeChips, toast, useAutoFocus, TextArea, TextInput } from './kit';
 import { Icon } from './icons';
 import { openCuentame } from './Cuentame';
 import { useFieldMic } from './MicButton';
@@ -273,7 +273,6 @@ function DidForm({ date, setDate, today, onDone }: QuickFormProps) {
   const [attrSel, setAttr] = useState<AttributeId | null>(null);
   const [saveDaily, setSaveDaily] = useState(false);
   const ref = useAutoFocus<HTMLInputElement>();
-  const mic = useFieldMic((text) => setTitle((prev) => appendSpeech(prev, text)));
   const inf = useInference(title);
   const size = sizeSel ?? inf?.size ?? 'chica';
   const attr = attrSel ?? inf?.attribute ?? 'disciplina';
@@ -315,12 +314,8 @@ function DidForm({ date, setDate, today, onDone }: QuickFormProps) {
   return (
     <>
       <Field label="¿Qué hiciste o vas a hacer?">
-        <div className="row" style={{ gap: 6 }}>
-          <input ref={ref} className="input grow" value={title} placeholder="Fui al gym, cerré una venta…" onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && save()} />
-          {mic.button}
-        </div>
+        <TextInput ref={ref} value={title} placeholder="Fui al gym, cerré una venta…" onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && save()} />
       </Field>
-      {mic.hint}
       {suggestions.length > 0 && (
         <div className="fav-row" style={{ marginTop: -6, marginBottom: 10 }}>
           {suggestions.map((s) => (
@@ -442,7 +437,7 @@ function MoneyForm({ kind, date, setDate, today, onDone }: QuickFormProps & { ki
         <Chips value={Number(amount) || null} onChange={(v) => setAmount(String(v))} options={presets.map((p) => ({ value: p, label: fmtMoney(p, state.settings.currency) }))} />
       </div>
       <Field label="Concepto">
-        <input className="input" value={concept} onChange={(e) => setConcept(e.target.value)} placeholder={kind === 'income' ? 'Cliente, proyecto…' : 'Comida, gasolina…'} />
+        <TextInput className="input" value={concept} onChange={(e) => setConcept(e.target.value)} placeholder={kind === 'income' ? 'Cliente, proyecto…' : 'Comida, gasolina…'} />
       </Field>
       {concepts.length > 0 && (
         <div style={{ marginTop: -4, marginBottom: 12 }}>
@@ -453,7 +448,7 @@ function MoneyForm({ kind, date, setDate, today, onDone }: QuickFormProps & { ki
         <Field label="Categoría">
           <div className="stack">
             {categories.length > 0 && <Chips value={category} onChange={(v) => setCategory(v === category ? '' : v)} options={categories.map((c) => ({ value: c, label: c }))} />}
-            <input className="input" value={category} placeholder="Otra categoría" onChange={(e) => setCategory(e.target.value)} />
+            <TextInput className="input" value={category} placeholder="Otra categoría" onChange={(e) => setCategory(e.target.value)} />
           </div>
         </Field>
       )}
@@ -472,7 +467,6 @@ function LessonQuick({ date, setDate, today, onDone }: QuickFormProps) {
   const [text, setText] = useState('');
   const [missionId, setMissionId] = useState('');
   const ref = useAutoFocus<HTMLTextAreaElement>();
-  const mic = useFieldMic((t) => setText((prev) => appendSpeech(prev, t)));
   const all = list<MissionData>('missions').filter((m) => m.kind !== 'main');
   return (
     <>
@@ -480,12 +474,8 @@ function LessonQuick({ date, setDate, today, onDone }: QuickFormProps) {
         Un fracaso con lección escrita vale {GAME_CONFIG.rewards.lesson} XP.
       </p>
       <Field label="¿Qué aprendí?">
-        <div className="row" style={{ gap: 6, alignItems: 'flex-start' }}>
-          <textarea ref={ref} className="input grow" rows={4} value={text} onChange={(e) => setText(e.target.value)} placeholder="Qué pasó, por qué, y qué haré distinto." />
-          {mic.button}
-        </div>
+        <TextArea ref={ref} rows={4} value={text} onChange={(e) => setText(e.target.value)} placeholder="Qué pasó, por qué, y qué haré distinto." />
       </Field>
-      {mic.hint}
       <Field label="¿En qué misión? (opcional)">
         <select className="input" value={missionId} onChange={(e) => setMissionId(e.target.value)}>
           <option value="">— Ninguna (Inteligencia) —</option>
@@ -523,7 +513,6 @@ function TodoForm({ today, onDone }: QuickFormProps) {
   const tomorrow = addDays(today, 1);
   const [date, setDate] = useState(tomorrow);
   const ref = useAutoFocus<HTMLInputElement>();
-  const mic = useFieldMic((t) => setTitle((prev) => appendSpeech(prev, t)));
   const save = () => {
     if (!title.trim()) return;
     saveTodo({ title: title.trim(), size, attribute: attr, date });
@@ -533,12 +522,8 @@ function TodoForm({ today, onDone }: QuickFormProps) {
   return (
     <>
       <Field label="¿Qué vas a hacer?">
-        <div className="row" style={{ gap: 6 }}>
-          <input ref={ref} className="input grow" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && save()} />
-          {mic.button}
-        </div>
+        <TextInput ref={ref} value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && save()} />
       </Field>
-      {mic.hint}
       <Field label="¿Cuándo?">
         <div className="row wrap" style={{ gap: 6 }}>
           <Chips
@@ -642,7 +627,7 @@ function BodyForm({ date, setDate, today, onDone }: QuickFormProps) {
         </Field>
       </div>
       <Field label="Entrenamiento">
-        <input className="input" value={workout} onChange={(e) => setWorkout(e.target.value)} placeholder="Pierna, correr 5 km…" />
+        <TextInput className="input" value={workout} onChange={(e) => setWorkout(e.target.value)} placeholder="Pierna, correr 5 km…" />
       </Field>
       {recent.length > 0 && (
         <div style={{ marginTop: -4, marginBottom: 12 }}>

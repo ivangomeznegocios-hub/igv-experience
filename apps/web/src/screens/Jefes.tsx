@@ -5,7 +5,7 @@ import { bossHpPercent } from '../lib/narrator';
 import { fmtDate, fmtMoney, newId } from '../lib/time';
 import { BossArt, BossHpBar } from '../ui/BossArt';
 import { Icon } from '../ui/icons';
-import { AttrSelect, Badge, Bar, Empty, Field, PageHeader, Sheet, Tabs, confirmAction } from '../ui/kit';
+import { AttrSelect, Badge, Bar, Empty, Field, PageHeader, Sheet, Tabs, confirmAction, TextInput, TextArea } from '../ui/kit';
 import { startMissionQuest } from '../ui/QuestMode';
 import { openQuickAdd } from '../ui/QuickAdd';
 
@@ -208,10 +208,10 @@ function BossForm({ initial, onClose }: { initial?: Entity<BossData>; onClose: (
       }
     >
       <Field label="Nombre">
-        <input className="input" value={d.name} onChange={(e) => up({ name: e.target.value })} />
+        <TextInput className="input" value={d.name} onChange={(e) => up({ name: e.target.value })} />
       </Field>
       <Field label="Descripción">
-        <textarea className="input" value={d.description} onChange={(e) => up({ description: e.target.value })} />
+        <TextArea className="input" value={d.description} onChange={(e) => up({ description: e.target.value })} />
       </Field>
       <div className="grid2">
         <Field label="Misión principal">
@@ -244,7 +244,7 @@ function BossForm({ initial, onClose }: { initial?: Entity<BossData>; onClose: (
       {d.phases.map((ph, i) => (
         <div key={i} className="card flat" style={{ padding: 10 }}>
           <div className="row">
-            <input className="input" placeholder={`Fase ${i + 1}`} value={ph.title} onChange={(e) => upPhase(i, { title: e.target.value })} />
+            <TextInput className="input" placeholder={`Fase ${i + 1}`} value={ph.title} onChange={(e) => upPhase(i, { title: e.target.value })} />
             <button className="btn icon ghost danger" aria-label="Quitar fase" disabled={d.phases.length <= 1} onClick={() => up({ phases: d.phases.filter((_, j) => j !== i) })}>
               <Icon name="trash" />
             </button>
@@ -365,7 +365,7 @@ function RecurringList() {
             {defeat.data.defeatCondition}
           </p>
           <Field label="Evidencia">
-            <textarea className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="La decisión que tomé / lo que entregué" />
+            <TextArea className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="La decisión que tomé / lo que entregué" />
           </Field>
         </Sheet>
       )}
@@ -403,13 +403,13 @@ function RecurringForm({ initial, onClose }: { initial?: Entity<RecurringBossDat
       }
     >
       <Field label="Nombre">
-        <input className="input" value={d.name} onChange={(e) => up({ name: e.target.value })} />
+        <TextInput className="input" value={d.name} onChange={(e) => up({ name: e.target.value })} />
       </Field>
       <Field label="Descripción">
-        <textarea className="input" value={d.description} onChange={(e) => up({ description: e.target.value })} />
+        <TextArea className="input" value={d.description} onChange={(e) => up({ description: e.target.value })} />
       </Field>
       <Field label="Se supera con">
-        <input className="input" value={d.defeatCondition} onChange={(e) => up({ defeatCondition: e.target.value })} />
+        <TextInput className="input" value={d.defeatCondition} onChange={(e) => up({ defeatCondition: e.target.value })} />
       </Field>
       <Field label="Atributo">
         <AttrSelect value={d.attribute} onChange={(attribute) => up({ attribute })} />

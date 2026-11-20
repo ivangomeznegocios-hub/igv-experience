@@ -5,7 +5,7 @@ import { deleteEntity, saveEntity, useGame } from '../data/store';
 import { completeMission, completeTodo, isDone, saveTodo, uncomplete } from '../lib/actions';
 import { openQuickAdd } from '../ui/QuickAdd';
 import { fmtDate, fmtWeekday, newId } from '../lib/time';
-import { AttrBadge, AttrSelect, Badge, Empty, Field, PageHeader, Sheet, SizeBadge, Tabs, confirmAction } from '../ui/kit';
+import { AttrBadge, AttrSelect, Badge, Empty, Field, PageHeader, Sheet, SizeBadge, Tabs, confirmAction, TextInput, TextArea } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { LessonForm, MissionForm } from '../ui/MissionForm';
 import { startMissionQuest, startTodoQuest } from '../ui/QuestMode';
@@ -195,10 +195,10 @@ function MainQuestForm({ initial, onClose }: { initial?: Entity<MainQuestData>; 
         </Field>
       </div>
       <Field label="Nombre">
-        <input className="input" value={d.title} onChange={(e) => up({ title: e.target.value })} />
+        <TextInput className="input" value={d.title} onChange={(e) => up({ title: e.target.value })} />
       </Field>
       <Field label="Objetivo">
-        <textarea className="input" value={d.goal} onChange={(e) => up({ goal: e.target.value })} />
+        <TextArea className="input" value={d.goal} onChange={(e) => up({ goal: e.target.value })} />
       </Field>
       <p className="tiny muted">Las fases de reto de esta misión suman XP a {ATTRIBUTE_NAMES[d.attribute]}.</p>
     </Sheet>

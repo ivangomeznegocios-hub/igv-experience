@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { TIME_AREA_NAMES, fmtHoursMinutes, type SkillData, type TimeArea } from '@igv/core';
 import { addEvent, useGame, voidEvent } from '../../data/store';
 import { startTimer, useTimer } from '../../lib/timeTimer';
-import { Chips, DateChips, Field, undoToast } from '../kit';
+import { Chips, DateChips, Field, undoToast, TextInput } from '../kit';
 import { Icon } from '../icons';
 import { AREA_HINT, AreaChips } from '../habilidades/shared';
 
@@ -96,7 +96,7 @@ export function TimeQuick({
         </Field>
       )}
       <Field label="Nota (opcional)">
-        <input className="input" value={note} maxLength={1000} onChange={(e) => setNote(e.target.value)} placeholder={area ? AREA_HINT[area] : 'Qué hiciste'} />
+        <TextInput className="input" value={note} maxLength={1000} onChange={(e) => setNote(e.target.value)} placeholder={area ? AREA_HINT[area] : 'Qué hiciste'} />
       </Field>
       {recentNotes.length > 0 && (
         <div style={{ marginTop: -4, marginBottom: 12 }}>

@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { DAY_AREAS, GAME_CONFIG, addDays, dayCloseBonus, isDateString, type DayCheckResult } from '@igv/core';
 import { addEvent, restoreEvent, useGame, voidEvent } from '../data/store';
 import { fmtDate, fmtMoney, fmtWeekday } from '../lib/time';
-import { Badge, Chips, Empty, Field, PageHeader, toast, undoToast } from '../ui/kit';
+import { Badge, Chips, Empty, Field, PageHeader, toast, undoToast, TextInput } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { ScoreRing } from '../ui/HabitBits';
 import { missingLine, useDayReview } from '../ui/DayReview';
@@ -220,7 +220,7 @@ function ClosureCard({ date }: { date: string }) {
           <Chips value={mood} onChange={setMood} size="lg" options={MOODS.map((m, i) => ({ value: i + 1, label: m }))} />
         </Field>
         <Field label="Una línea sobre tu día">
-          <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Lo mejor, lo que aprendí, lo que faltó…" />
+          <TextInput className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Lo mejor, lo que aprendí, lo que faltó…" />
         </Field>
         <button className="btn primary block" disabled={!prev && mood === null && !note.trim()} onClick={save}>
           {prev ? 'Actualizar cierre' : 'Cerrar el día'}

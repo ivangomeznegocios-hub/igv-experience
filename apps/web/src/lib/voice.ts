@@ -334,10 +334,12 @@ export function useDictation(onFinal: (text: string) => void, instance?: Dictati
   return { supported: voiceSupported(), ...state, start, stop, toggle, flush, dictation: d };
 }
 
-/** Compatibilidad: dictado que agrega texto a un campo (usado por el Coach y QuickAdd). */
-export function useVoiceInput(onTranscript: (text: string) => void) {
-  const v = useDictation(onTranscript);
-  return { supported: v.supported, listening: v.listening, interim: v.interim, error: v.error, toggle: v.toggle, stop: v.stop, flush: v.flush };
+/**
+ * Detiene el dictado que esté en curso (en cualquier campo) y espera su último resultado. Útil antes de enviar
+ * un formulario cuyo campo tiene micrófono integrado, para no perder las últimas palabras.
+ */
+export function flushActiveDictation(): Promise<void> {
+  return active ? active.stopAndFlush() : Promise.resolve();
 }
 
 /** Une texto dictado a lo que ya había ("Fui al gym" + "y leí" → "Fui al gym y leí"). */

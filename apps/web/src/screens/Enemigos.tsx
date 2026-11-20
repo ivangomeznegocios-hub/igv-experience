@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { fmtWeekdaysLong, type Entity, type ViceData, type ViceState } from '@igv/core';
 import { addEvent, deleteEntity, saveEntity, useGame, voidEvent } from '../data/store';
 import { fmtDate, newId } from '../lib/time';
-import { Empty, Field, PageHeader, Sheet, confirmAction, undoToast } from '../ui/kit';
+import { Empty, Field, PageHeader, Sheet, confirmAction, undoToast, TextInput, TextArea } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { TrendText, VerdictBadge } from '../ui/HabitBits';
 
@@ -134,13 +134,13 @@ function ViceSheet({ initial, onClose }: { initial: Entity<ViceData> | null; onC
       }
     >
       <Field label="Hábito">
-        <input className="input" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} placeholder="Redes sociales después de las 10 pm" />
+        <TextInput className="input" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} placeholder="Redes sociales después de las 10 pm" />
       </Field>
       <Field label="Contar desde">
         <input className="input" type="date" max={state.today} value={d.startDate} onChange={(e) => setD({ ...d, startDate: e.target.value })} />
       </Field>
       <Field label="Notas">
-        <textarea className="input" value={d.notes ?? ''} onChange={(e) => setD({ ...d, notes: e.target.value })} placeholder="Por qué lo quieres dejar, qué lo dispara…" />
+        <TextArea className="input" value={d.notes ?? ''} onChange={(e) => setD({ ...d, notes: e.target.value })} placeholder="Por qué lo quieres dejar, qué lo dispara…" />
       </Field>
     </Sheet>
   );

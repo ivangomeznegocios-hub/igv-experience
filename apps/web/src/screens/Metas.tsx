@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ATTRIBUTE_NAMES, GAME_CONFIG, type Entity, type GoalData } from '@igv/core';
 import { addEvent, deleteEntity, saveEntity, useGame, voidEvent } from '../data/store';
 import { fmtDate, fmtNum, newId } from '../lib/time';
-import { AttrChips, Badge, Bar, Empty, Field, PageHeader, Sheet, SizeChips, confirmAction, undoToast } from '../ui/kit';
+import { AttrChips, Badge, Bar, Empty, Field, PageHeader, Sheet, SizeChips, confirmAction, undoToast, TextInput } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { GoalPaceLine } from '../ui/Pace';
 
@@ -140,14 +140,14 @@ function GoalSheet({ initial, onClose }: { initial: Entity<Goal> | null; onClose
       }
     >
       <Field label="Meta">
-        <input className="input" value={d.title} onChange={(e) => setD({ ...d, title: e.target.value })} placeholder="Leer 12 libros en 2027" />
+        <TextInput className="input" value={d.title} onChange={(e) => setD({ ...d, title: e.target.value })} placeholder="Leer 12 libros en 2027" />
       </Field>
       <div className="grid2">
         <Field label="Objetivo">
           <input className="input" type="number" min={1} value={d.target} onChange={(e) => setD({ ...d, target: Number(e.target.value) })} />
         </Field>
         <Field label="Unidad">
-          <input className="input" value={d.unit} onChange={(e) => setD({ ...d, unit: e.target.value })} placeholder="libros, km, clientes" />
+          <TextInput className="input" value={d.unit} onChange={(e) => setD({ ...d, unit: e.target.value })} placeholder="libros, km, clientes" />
         </Field>
       </div>
       <Field label="Fecha límite (opcional)">

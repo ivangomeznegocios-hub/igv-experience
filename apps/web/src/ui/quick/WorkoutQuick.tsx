@@ -44,7 +44,7 @@ import {
   type WorkoutDraft,
 } from '../../lib/entreno';
 import { fmtDate } from '../../lib/time';
-import { Chips, DateChips, Field, toast, useAutoFocus } from '../kit';
+import { Chips, DateChips, Field, toast, useAutoFocus, TextInput } from '../kit';
 import { Icon } from '../icons';
 import '../../styles/entreno.css';
 
@@ -326,14 +326,14 @@ export function WorkoutForm({ date, setDate, today, onDone, initial }: WorkoutQu
           <Stepper label="minutos de duración" unit="min" step={5} max={1440} value={draft.minutes ?? undefined} onChange={(v) => patch({ minutes: v ? Math.round(v) : null })} />
         </Field>
         <Field label="Nombre (opcional)">
-          <input className="input" value={draft.title} maxLength={120} placeholder="Pecho y tríceps, fútbol…" onChange={(e) => patch({ title: e.target.value })} />
+          <TextInput className="input" value={draft.title} maxLength={120} placeholder="Pecho y tríceps, fútbol…" onChange={(e) => patch({ title: e.target.value })} />
         </Field>
       </div>
       <Field label="¿Qué tan duro fue?">
         <Chips value={draft.rpe} onChange={(rpe) => patch({ rpe: draft.rpe === rpe ? null : rpe })} options={RPE_OPTIONS} />
       </Field>
       <Field label="Nota (opcional)">
-        <input className="input" value={draft.note} maxLength={2000} placeholder="Cómo te sentiste, molestias, técnica…" onChange={(e) => patch({ note: e.target.value })} />
+        <TextInput className="input" value={draft.note} maxLength={2000} placeholder="Cómo te sentiste, molestias, técnica…" onChange={(e) => patch({ note: e.target.value })} />
       </Field>
       {draft.exercises.length >= 2 && !draft.routineId && (
         <>
@@ -342,7 +342,7 @@ export function WorkoutForm({ date, setDate, today, onDone, initial }: WorkoutQu
           </label>
           {asRoutine && (
             <Field label="Nombre de la rutina">
-              <input className="input" value={routineName} maxLength={120} placeholder={draft.title || 'Pecho y tríceps'} onChange={(e) => setRoutineName(e.target.value)} />
+              <TextInput className="input" value={routineName} maxLength={120} placeholder={draft.title || 'Pecho y tríceps'} onChange={(e) => setRoutineName(e.target.value)} />
             </Field>
           )}
         </>
@@ -418,7 +418,7 @@ export function ExercisePicker({ onPick, onCancel, taken }: { onPick: (def: Exer
         <button type="button" className="btn icon ghost" onClick={onCancel} aria-label="Volver">
           <Icon name="left" />
         </button>
-        <input ref={ref} className="input grow" value={q} placeholder="Buscar: press banca, sentadilla, correr…" onChange={(e) => setQ(e.target.value)} />
+        <TextInput ref={ref} className="input grow" value={q} placeholder="Buscar: press banca, sentadilla, correr…" onChange={(e) => setQ(e.target.value)} />
       </div>
       {!query && (
         <div className="fav-row" style={{ marginBottom: 8 }}>
@@ -484,7 +484,7 @@ function CustomExerciseForm({ name: initialName, existing, onSaved, onCancel }: 
         <b>Ejercicio propio</b>
       </div>
       <Field label="Nombre">
-        <input className="input" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} placeholder="Remo con liga" />
+        <TextInput className="input" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} placeholder="Remo con liga" />
       </Field>
       <Field label="Cómo se mide">
         <Chips value={measure} onChange={setMeasure} options={EXERCISE_MEASURES.map((m) => ({ value: m, label: MEASURE_NAMES[m] }))} />

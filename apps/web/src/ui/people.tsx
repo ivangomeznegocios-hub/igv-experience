@@ -32,7 +32,7 @@ import {
 import { addEvent, deleteEntity, saveEntity, useGame, voidEvent } from '../data/store';
 import { haptic, sfx } from '../lib/sound';
 import { newId } from '../lib/time';
-import { Chips, Collapse, DateChips, Field, Sheet, confirmAction, toast, undoToast, useAutoFocus } from './kit';
+import { Chips, Collapse, DateChips, Field, Sheet, confirmAction, toast, undoToast, useAutoFocus, TextInput, TextArea } from './kit';
 import { Icon } from './icons';
 import { initials } from './Avatar';
 import '../styles/gente.css';
@@ -219,7 +219,7 @@ export function ContactForm({ preselect, date, setDate, today, onDone }: { prese
   // Siempre hay dónde escribir un nombre (para agregar a alguien nuevo); con pocas personas va debajo de sus chips.
   const many = people.length > 6;
   const nameInput = (
-    <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder={many ? 'Buscar o escribir un nombre nuevo' : people.length ? 'Alguien más: escribe su nombre' : 'Nombre de la persona'} />
+    <TextInput className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder={many ? 'Buscar o escribir un nombre nuevo' : people.length ? 'Alguien más: escribe su nombre' : 'Nombre de la persona'} />
   );
 
   return (
@@ -286,7 +286,7 @@ export function ContactForm({ preselect, date, setDate, today, onDone }: { prese
         </Field>
       )}
       <Field label="Nota (opcional)">
-        <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Qué hicieron o de qué hablaron" onKeyDown={(e) => e.key === 'Enter' && save()} />
+        <TextInput className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Qué hicieron o de qué hablaron" onKeyDown={(e) => e.key === 'Enter' && save()} />
       </Field>
       <Field label="¿Cuándo?">
         <DateChips value={date} onChange={setDate} today={today} />
@@ -418,7 +418,7 @@ export function PersonSheet({
       }
     >
       <Field label="Nombre">
-        <input ref={ref} className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Cómo le dices" />
+        <TextInput ref={ref} className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Cómo le dices" />
       </Field>
       <Field label="Círculo">
         <Chips value={circle} onChange={setCircle} options={PEOPLE_CIRCLES.map((c) => ({ value: c, label: CIRCLE_NAMES[c] }))} />
@@ -426,7 +426,7 @@ export function PersonSheet({
       <Field label="Rol">
         <div className="stack">
           {roles.length > 0 && <Chips value={role} onChange={(v) => setRole(v === role ? '' : v)} options={roles.map((r) => ({ value: r.label, label: r.label }))} />}
-          <input className="input" value={role} onChange={(e) => setRole(e.target.value)} placeholder="Otro: madrina, amigo de la prepa…" />
+          <TextInput className="input" value={role} onChange={(e) => setRole(e.target.value)} placeholder="Otro: madrina, amigo de la prepa…" />
         </div>
       </Field>
       <label className="checkbox">
@@ -470,7 +470,7 @@ export function PersonSheet({
           {!bdOk && <span className="tiny red">Fecha inválida</span>}
         </Field>
         <Field label="¿Dónde se conocieron?">
-          <input className="input" value={metWhere} onChange={(e) => setMetWhere(e.target.value)} placeholder="En la prepa, en el trabajo, por un amigo…" />
+          <TextInput className="input" value={metWhere} onChange={(e) => setMetWhere(e.target.value)} placeholder="En la prepa, en el trabajo, por un amigo…" />
         </Field>
         {places.length > 0 && (
           <Field label="Lugar del mapa (opcional)">
@@ -504,7 +504,7 @@ export function PersonSheet({
           </Field>
         )}
         <Field label="Notas">
-          <textarea className="input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Lo que no quieres olvidar" />
+          <TextArea className="input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Lo que no quieres olvidar" />
         </Field>
       </Collapse>
     </Sheet>
@@ -572,7 +572,7 @@ export function FamilyBuilder({ compact = false }: { compact?: boolean }) {
       </div>
       {role && (
         <div className="row" style={{ gap: 8, marginTop: 10 }}>
-          <input ref={input} className="input grow" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} placeholder={`Nombre de tu ${role.toLowerCase()}`} />
+          <TextInput ref={input} className="input grow" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} placeholder={`Nombre de tu ${role.toLowerCase()}`} />
           <button className="btn primary" disabled={!name.trim()} onClick={add}>
             Agregar
           </button>

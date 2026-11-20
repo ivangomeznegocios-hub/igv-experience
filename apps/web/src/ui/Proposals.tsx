@@ -16,7 +16,7 @@ import { useGame } from '../data/store';
 import { fmtDate, fmtMoney } from '../lib/time';
 import { applyProposal, duplicateReason, proposalReady, relDay, undoApplied, type Applied } from '../lib/voz';
 import { Icon } from './icons';
-import { AttrChips, Chips, DateChips, SizeChips, toast } from './kit';
+import { AttrChips, Chips, DateChips, SizeChips, toast, TextInput, TextArea } from './kit';
 import '../styles/voz.css';
 
 /**
@@ -208,7 +208,7 @@ function Editor({ p, today, onChange }: { p: VoiceProposal; today: string; onCha
           </p>
         ) : (
           <>
-            <input className="input" value={p.title} aria-label="Qué hiciste" onChange={(e) => set({ title: e.target.value, missionId: quickMissionId(e.target.value) })} />
+            <TextInput className="input" value={p.title} aria-label="Qué hiciste" onChange={(e) => set({ title: e.target.value, missionId: quickMissionId(e.target.value) })} />
             <SizeChips value={p.size} onChange={(size) => set({ size })} />
             <AttrChips value={p.attribute} onChange={(attribute) => set({ attribute })} />
           </>
@@ -226,8 +226,8 @@ function Editor({ p, today, onChange }: { p: VoiceProposal; today: string; onCha
               ]}
             />
           </div>
-          <input className="input" placeholder="Concepto" value={p.concept} onChange={(e) => set({ concept: e.target.value })} />
-          <input className="input" placeholder="Categoría (opcional)" value={p.category ?? ''} onChange={(e) => set({ category: e.target.value || undefined })} />
+          <TextInput className="input" placeholder="Concepto" value={p.concept} onChange={(e) => set({ concept: e.target.value })} />
+          <TextInput className="input" placeholder="Categoría (opcional)" value={p.category ?? ''} onChange={(e) => set({ category: e.target.value || undefined })} />
         </>
       )}
       {p.kind === 'sleep' && <input className="input" type="number" inputMode="decimal" step="0.25" aria-label="Horas de sueño" value={p.hours || ''} onChange={(e) => set({ hours: num(e.target.value) })} />}
@@ -244,10 +244,10 @@ function Editor({ p, today, onChange }: { p: VoiceProposal; today: string; onCha
           options={[{ id: p.npcId, name: p.name }, ...p.alternatives].map((x) => ({ value: x.id, label: x.name }))}
         />
       )}
-      {p.kind === 'lesson' && <textarea className="input" rows={3} value={p.text} onChange={(e) => set({ text: e.target.value })} />}
+      {p.kind === 'lesson' && <TextArea className="input" rows={3} value={p.text} onChange={(e) => set({ text: e.target.value })} />}
       {p.kind === 'todo' ? (
         <>
-          <input className="input" value={p.title} aria-label="Qué vas a hacer" onChange={(e) => set({ title: e.target.value })} />
+          <TextInput className="input" value={p.title} aria-label="Qué vas a hacer" onChange={(e) => set({ title: e.target.value })} />
           <Chips
             value={[today, addDays(today, 1), addDays(today, 2)].includes(p.date) ? p.date : null}
             onChange={(date) => set({ date })}
