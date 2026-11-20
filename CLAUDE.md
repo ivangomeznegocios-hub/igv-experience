@@ -342,7 +342,7 @@ paralelo sin conflictos (cada uno agrega líneas solo debajo de la suya). Se pue
 
 ```
 pnpm install
-pnpm test                 # reglas del juego + API
+pnpm test                 # reglas del juego + API + dictado (web)
 pnpm typecheck
 pnpm --filter @igv/web build
 cd apps/api && cp .dev.vars.example .dev.vars && pnpm db:migrate:local && pnpm dev   # API + web en :8787
@@ -391,7 +391,7 @@ cd apps/api && pnpm dev:mcp   # servidor MCP en :8788 (misma D1 local)
   - **Estilo de la app** (`lib/themes.ts`, pestaña en `screens/Tienda.tsx`): paletas de color (Grafito, Bosque, Vino, Medianoche = `obsidian`, `emerald`, `crimson`, `royal`) que se desbloquean con oro usando `reward.redeemed` y se eligen en `settings.equipped.skin`. Las auras y emblemas del avatar (la antigua "Armería RPG") se retiraron por verse demasiado fantasía; si había canjes de ellos, la pestaña ofrece anularlos para recuperar el oro. Preferencia del usuario: estética sobria de "vida real", nada otaku.
   - **Celebraciones y feedback** (`ui/fx.tsx`, `lib/sound.ts`): banners de logro desbloqueado, "Avanzaste en el reto" (meta mensual de ingresos), rango de habilidad, día perfecto, misiones del día, y overlays de "Fase completada" / "Reto superado" y subida de nivel con monograma.
   - **Cierre del día** (`CampfireCard` / `CloseDaySheet` en `screens/Hoy.tsx`, evento `day.closed`): resumen del día y una nota.
-  - **Dictado por voz** (`lib/voice.ts`): Web Speech API (`es-MX`) continuo (se reinicia solo tras silencios; en Android se evita repetir resultados), en el botón global "Hablar" (Cuéntame), QuickAdd y Coach, con tarjetas de un toque (`ui/Proposals.tsx`).
+  - **Dictado por voz** (`lib/voice.ts`): Web Speech API (`es-MX`, o el idioma que pidas) continuo (se reinicia solo tras silencios; en Android se evita repetir resultados), en el botón global "Hablar" (Cuéntame) y en **todos los campos de texto libre**: usa siempre `TextInput` / `TextArea` de `ui/kit.tsx` (`ui/VoiceField.tsx`, micrófono chico integrado; `lang="en-US"` para inglés; `voice={false}` lo quita) en lugar de `<input>`/`<textarea>`. Propuestas de un toque en `ui/Proposals.tsx`. Pruebas en `apps/web/test/voice.test.ts`.
 - Registro rápido: `ui/QuickAdd.tsx` (botón + global; `openQuickAdd({ mode, date })` desde cualquier pantalla; `/?accion=gasto` lo abre desde los accesos directos del manifest). Hoja de un día: `ui/DaySheet.tsx`.
 - Preferencias del dispositivo (sonido, vibración, notificaciones) en `localStorage` (`lib/prefs.ts`), no en D1.
 - Coach IA (fase 4; antes "Game Master", las rutas conservan `gm`): `POST /api/gm/ask` (conversar y ACTUAR con las herramientas de

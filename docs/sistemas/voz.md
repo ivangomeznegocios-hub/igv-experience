@@ -76,7 +76,22 @@ catálogo o misión rápida), `income.recorded`, `expense.recorded`, `checkin.mo
 reinicio automático cuando el navegador corta por silencio (máx. 6 en 8 s), modo no continuo en Android (Chrome
 Android repite resultados en continuo), quita repetidos dentro de una sesión, `stopAndFlush()` para no perder las
 últimas palabras al guardar, un solo dictado a la vez, errores claros en español (permiso, sin micrófono, sin
-internet, sin soporte). Si Safari no deja reiniciar sin toque, se detiene sin error. `useVoiceInput` se conserva.
+internet, sin soporte). Si Safari no deja reiniciar sin toque, se detiene sin error. `new Dictation(lang)` /
+`useDictation(onFinal, instance?, lang)` dictan en otro idioma (`en-US` en Aprendizaje). Volver a tocar mientras se
+detiene sigue escuchando; una palabra dicha dos veces seguidas no se descarta (salvo en Android, donde Chrome repite).
+`flushActiveDictation()` detiene el dictado en curso y espera sus últimas palabras (antes de enviar un formulario).
+Pruebas: `apps/web/test/voice.test.ts` (reconocedor simulado; `pnpm --filter @igv/web test`).
+
+## Micrófono en todos los campos de texto (`apps/web/src/ui/VoiceField.tsx`)
+
+`TextInput` y `TextArea` (exportados desde `ui/kit.tsx`) reemplazan a `<input>` de texto y `<textarea>` en toda la app:
+mismos props, más `lang` (idioma del dictado, `es-MX` por defecto) y `voice={false}` para quitarlo. Micrófono chico
+dentro del campo a la derecha; un toque dicta, otro detiene; lo dicho se agrega al final disparando un `input` nativo,
+así que el `onChange` de siempre recibe el valor nuevo. Debajo se ve lo que estás diciendo o el error. No aparece en
+campos de número, fecha, correo, URL, contraseña, teléfono, ni si el navegador no tiene dictado. **Todo campo de texto
+libre nuevo debe usar `TextInput`/`TextArea`.** Sin micrófono a propósito: código de misión, número de póliza,
+teléfono, año, coordenadas, unidad de medida, llaves/secretos de Conectar IA. El campo de monto del "+" conserva su
+micrófono propio (`useFieldMic`) porque interpreta "350 de gasolina".
 
 ## IA (`assistant/tools-voz.ts`)
 
