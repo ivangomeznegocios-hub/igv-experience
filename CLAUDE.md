@@ -279,7 +279,7 @@ Ninguno rompe las reglas de oro: cada uno tiene una prueba de propiedades "agreg
   misión ya contara ese día; deshacer anula ambas. Récord personal sobre un registro previo: +10 XP (`training_record`,
   máx. 1 por ejercicio por día y 3 por día). Análisis con números de `config.training`: 6/10/20 series duras por músculo
   por semana (secundarios 0.5), frecuencia 2×, recuperación 48 h (chicos) / 72 h (grandes), cardio 150 min.
-  `muscleStatus()` deja listo el pintado en el personaje 3D (aún no se pinta). Al marcar la diaria ligada, Hoy ofrece
+  `muscleStatus()` se pinta sobre el personaje 3D (Entrenamiento y Perfil, ver "Personaje 3D"). Al marcar la diaria ligada, Hoy ofrece
   "¿Qué entrenaste?".
 - **Mi gente** (`gente`, `/npcs`, `/npcs/:id`): ficha con `circle`, `role`, dónde/cuándo se conocieron, cumpleaños,
   `startLevel` y `cadenceDays`; `npcType` viejo se mapea a círculo. `npc.interaction` con `channel` y `placeId`; varias
@@ -373,6 +373,17 @@ cd apps/api && pnpm dev:mcp   # servidor MCP en :8788 (misma D1 local)
     los bordes. Mapeo de tonos neutro: los colores se ven como su hex. Qué evitar (ya probado y descartado por
     verse raro): córnea muy abombada (deforma el iris de lado), ojos muy abiertos (mirada fija), comisuras en
     punta (mueca), rayas verticales en las cejas y un borde claro entre pelo y piel.
+  - **Tu cuerpo 3D: músculos y antes / ahora** (solo visualización, sin XP): `engine/muscle-map.ts` (core, con pruebas)
+    dice qué grupo muscular hay en cada punto del cuerpo (`muscleRegionAt(parte, v, ángulo, xn)`) y de qué color va según
+    `muscleStatus` y `config.training` (`musclePaint`: Estado = recuperando 48/72 h > en la meta > trabajado > te falta;
+    Volumen; Recuperación), con `muscleLegend` y `muscleDetail`. El personaje tiene modo músculos (`FigureSpec.muscles`:
+    tinte suave por vértice con bordes difuminados y surco entre músculos; `Figure.paintMuscles` solo repinta) y silueta
+    "antes" (`FigureSpec.ghost`, contorno translúcido). `Stage`: `setMusclePaint`, `setGhost`, `turnTo` (Frente /
+    Espalda) y `onPick` (tocar un músculo). Se ve en Entrenamiento (`ui/MuscleBody.tsx`, reemplaza al mapa 2D, que queda
+    de respaldo si no hay WebGL) y en Perfil (encuadre Cuerpo · Músculos · Rostro). "Antes / ahora"
+    (`engine/physique-compare.ts`: `compareBodies`, `compareChoices`, `formatDelta`): silueta de una fecha anterior sobre
+    el cuerpo actual y diferencias por medida; exacta solo si está medida en las dos fechas, si no "≈"; lo nunca medido
+    no se compara. Detalle en `docs/sistemas/entreno.md`.
   - **Parecido con el usuario**: `DEFAULT_CHARACTER.look` (`packages/core/src/types.ts`) ES su cara, afinada
     contra una foto suya (cara ancha y llena, frente amplia, cejas gruesas y bajas, nariz corta y ancha, copete
     peinado hacia atrás y a su izquierda, barba de uno o dos días). Si guarda otra apariencia en Ajustes, gana la
