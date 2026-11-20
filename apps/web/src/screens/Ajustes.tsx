@@ -302,14 +302,14 @@ function BackupCard() {
 }
 
 function EventLog() {
-  const { events, state } = useGame();
+  const { events, state, byId } = useGame();
   const [n, setN] = useState(20);
   const [showVoided, setShowVoided] = useState(false);
   const list = events
     .filter((e) => showVoided || !e.voidedAt)
     .sort((a, b) => (a.createdAt ?? 0) < (b.createdAt ?? 0) ? 1 : -1)
     .slice(0, n);
-  const describe = (e: (typeof events)[number]) => describeEvent(e, state.settings.currency);
+  const describe = (e: (typeof events)[number]) => describeEvent(e, state.settings.currency, byId);
   return (
     <div className="card">
       <div className="card-head">

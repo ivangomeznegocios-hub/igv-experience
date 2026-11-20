@@ -307,6 +307,85 @@ describe('deshacer: lugares que la IA creó', () => {
   });
 });
 
+describe('deshacer: no borra lo que Iván ya usa por cualquier vía', () => {
+  const e = { DB: fakeD1(), DEV_BYPASS_AUTH: 'true' } as any;
+  const m = (path: string, init?: RequestInit) => app.request(path, init, e);
+  let key = '';
+  const call2 = async (name: string, args: unknown) => {
+    if (!key) key = ((await (await m('/api/ai/keys', json({ name: 'k' }))).json()) as any).token;
+    const res = await mcpApp.request('/mcp', json({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, { authorization: `Bearer ${key}` }), e);
+    const r = ((await res.json()) as any).result;
+    expect(r.isError).toBeFalsy();
+    return r as { content: { text: string }[] };
+  };
+  const idOf = (r: { content: { text: string }[] }) => /Id \[([^\]]+)\]/.exec(r.content[0].text)![1];
+  let seq = 0;
+  const log = (type: string, payload: unknown) =>
+    m('/api/events', json({ id: `evt-ivan-${String(++seq).padStart(4, '0')}`, type, occurredAt: new Date().toISOString(), localDate: '2026-11-19', payload }));
+  const undoLast = async () => {
+    const items = ((await (await m('/api/ai/activity')).json()) as any).items as { id: string; undoneAt: number | null }[];
+    return (await (await m(`/api/ai/activity/${items.find((x) => !x.undoneAt)!.id}/undo`, { method: 'POST' })).json()) as any;
+  };
+  const entity = async (id: string) => ((await (await m('/api/sync?since=0')).json()) as { entities: { id: string; deletedAt: number | null }[] }).entities.find((x) => x.id === id)!;
+
+  it('un tema con frases que Iván agregó (sin tests todavía) se conserva; uno vacío sí se borra', async () => {
+    const topicId = idOf(await call2('guardar_tema', { nombre: 'Inglés' }));
+    const put = await m('/api/entities/li-ivan-0001', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ module: 'learning', kind: 'item', data: { topicId, itemType: 'frase', text: 'Let me get back to you', meaning: 'Te confirmo luego' } }),
+    });
+    expect(put.status).toBe(200);
+    expect(await undoLast()).toMatchObject({ ok: true, kept: 1 });
+    expect((await entity(topicId)).deletedAt).toBeNull();
+
+    const empty = idOf(await call2('guardar_tema', { nombre: 'Francés' }));
+    expect(await undoLast()).toMatchObject({ ok: true, kept: 0 });
+    expect((await entity(empty)).deletedAt).not.toBeNull();
+  });
+
+  it('una persona que solo aparece en visitas (npcIds) o en "Escribirle a…" se conserva', async () => {
+    const sofia = idOf(await call2('guardar_persona', { nombre: 'Sofía', circulo: 'familia' }));
+    await log('place.visited', { placeId: 'place-casa-0001', company: 'familia', npcIds: ['npc-otra-0001', sofia] });
+    expect(await undoLast()).toMatchObject({ ok: true, kept: 1 });
+    expect((await entity(sofia)).deletedAt).toBeNull();
+
+    const beto = idOf(await call2('guardar_persona', { nombre: 'Beto', circulo: 'amigos' }));
+    await log('mission.completed', { missionId: `npc-${beto}`, title: 'Escribirle a Beto', size: 'chica', attribute: 'relaciones', kind: 'npc', npcId: beto });
+    expect(await undoLast()).toMatchObject({ ok: true, kept: 1 });
+    expect((await entity(beto)).deletedAt).toBeNull();
+  });
+
+  it('un hábito a dejar con recaídas y un lugar usado en un contacto se conservan', async () => {
+    const vice = idOf(await call2('guardar_habito', { nombre: 'Refresco' }));
+    await log('vice.relapse', { viceId: vice });
+    expect(await undoLast()).toMatchObject({ ok: true, kept: 1 });
+    expect((await entity(vice)).deletedAt).toBeNull();
+
+    const created = await call2('guardar_lugar', { nombre: 'Casa de mi abuela' });
+    const placeId = /\[([^\]]+)\]\./.exec(created.content[0].text)![1];
+    await log('npc.interaction', { npcId: 'npc-otra-0001', channel: 'persona', placeId });
+    expect(await undoLast()).toMatchObject({ ok: true, kept: 1 });
+    expect((await entity(placeId)).deletedAt).toBeNull();
+  });
+
+  it('un ejercicio propio que Iván volvió a usar se conserva; si solo lo usó el registro de la IA, se borra', async () => {
+    const ex = (nombre: string) => ({ ejercicios: [{ nombre, musculos: ['espalda'], reps: 10, kg: 20 }] });
+    await call2('registrar_entrenamiento', ex('Remo unilateral zxq'));
+    const sync = (await (await m('/api/sync?since=0')).json()) as { entities: { id: string; kind: string; data: any }[] };
+    const exId = sync.entities.find((x) => x.kind === 'exercise' && x.data.name === 'Remo unilateral zxq')!.id;
+    await log('workout.logged', { kind: 'fuerza', exercises: [{ exerciseId: exId, name: 'Remo unilateral zxq', sets: [{ reps: 12, kg: 22 }] }] });
+    expect(await undoLast()).toMatchObject({ ok: true, kept: 1 });
+    expect((await entity(exId)).deletedAt).toBeNull();
+
+    await call2('registrar_entrenamiento', ex('Jalón raro qzx'));
+    const sync2 = (await (await m('/api/sync?since=0')).json()) as { entities: { id: string; kind: string; data: any }[] };
+    const solo = sync2.entities.find((x) => x.kind === 'exercise' && x.data.name === 'Jalón raro qzx')!.id;
+    expect(await undoLast()).toMatchObject({ ok: true, kept: 0 });
+    expect((await entity(solo)).deletedAt).not.toBeNull();
+  });
+});
+
 describe('deshacer: retos iniciados por la IA y orden', () => {
   it('no borra los días que Iván marcó en un reto que la IA creó e inició', async () => {
     const e = { DB: fakeD1(), DEV_BYPASS_AUTH: 'true' } as any;

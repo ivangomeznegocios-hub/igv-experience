@@ -172,7 +172,9 @@ export function checkupTiming(lastDone: string | null, everyMonths: number, toda
   const daysLeft = diffDays(today, nextDue);
   const span = Math.max(1, diffDays(lastDone, nextDue));
   const elapsed = Math.max(0, diffDays(lastDone, today) / span);
-  const status: CheckupStatus = daysLeft < 0 ? 'atrasado' : daysLeft <= soonDays ? 'pronto' : 'al_dia';
+  // En intervalos cortos (p. ej. cada mes) la ventana es a lo más un tercio del intervalo: recién hecho no "toca pronto".
+  const soon = Math.min(soonDays, Math.floor(span / 3));
+  const status: CheckupStatus = daysLeft < 0 ? 'atrasado' : daysLeft <= soon ? 'pronto' : 'al_dia';
   return { nextDue, daysLeft, status, elapsed };
 }
 

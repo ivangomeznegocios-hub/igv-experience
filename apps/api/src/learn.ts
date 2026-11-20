@@ -98,17 +98,21 @@ const QUIZ_SCHEMA = {
   },
 } as const;
 
+/** Lo que manda el modelo no trae límites de largo: se recorta en vez de rechazar todo el test por un campo largo. */
+const clip = (n: number) => z.string().transform((s) => s.slice(0, n));
+const clipList = <T extends z.ZodTypeAny>(item: T, n: number) => z.array(item).transform((a) => a.slice(0, n));
+
 const quizOut = z.object({
-  title: z.string().max(200),
+  title: clip(200),
   questions: z
     .array(
       z.object({
         type: z.enum(QUESTION_TYPES),
-        instruction: z.string().min(1).max(300),
-        prompt: z.string().min(1).max(600),
-        options: z.array(z.string().max(200)).max(6).nullable(),
-        expected: z.string().max(600),
-        tag: z.string().max(40),
+        instruction: z.string().min(1).transform((s) => s.slice(0, 300)),
+        prompt: z.string().min(1).transform((s) => s.slice(0, 600)),
+        options: clipList(clip(200), 6).nullable(),
+        expected: clip(600),
+        tag: clip(40),
       }),
     )
     .min(1),
@@ -158,18 +162,19 @@ const GRADE_SCHEMA = {
 const gradeOut = z.object({
   results: z.array(
     z.object({
-      id: z.string().max(20),
+      id: clip(20),
       correct: z.boolean(),
-      corrected: z.string().max(600).nullable(),
-      wrong: z.string().max(300).nullable(),
-      fix: z.string().max(300).nullable(),
-      tag: z.string().max(40).nullable(),
-      explanation: z.string().max(600).nullable(),
+      corrected: clip(600).nullable(),
+      wrong: clip(300).nullable(),
+      fix: clip(300).nullable(),
+      tag: clip(40).nullable(),
+      explanation: clip(600).nullable(),
     }),
   ),
   estimatedLevel: z.enum(CEFR_LEVELS).nullable().catch(null),
-  feedback: z.string().max(1200),
-  suggestions: z.array(z.object({ text: z.string().min(1).max(300), meaning: z.string().max(300), example: z.string().max(500).nullable(), tags: z.array(z.string().max(40)).max(6) })),
+  feedback: clip(1200),
+  // Las sugerencias vacías se descartan abajo (no tumban la calificación).
+  suggestions: z.array(z.object({ text: clip(300), meaning: clip(300), example: clip(500).nullable(), tags: clipList(clip(40), 6) })),
 });
 
 export type QuizResponse = { title: string; questions: { id: string; type: QuestionType; instruction: string; prompt: string; options: string[] | null; expected: string; tag: string }[] };
