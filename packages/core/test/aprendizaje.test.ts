@@ -6,7 +6,13 @@ import {
   computeLearning,
   englishStarterItems,
   GAME_CONFIG,
+  inferLearningLang,
+  LEARN_API_LIMITS,
+  learnPayloadTexts,
+  learnTopicPayload,
+  learningDueCount,
   learningErrorKey,
+  learningLangName,
   learningSimilarity,
   learningStudyStreak,
   learningWordDiff,
@@ -135,6 +141,13 @@ describe('aprendizaje: tests y errores que repites', () => {
     expect(t.tests.map((x) => x.pct)).toEqual([63, 63, 63]);
   });
 
+  it('los errores con corrección en otra escritura (cirílico) también se agrupan', () => {
+    const evs = [test('2026-11-01', { errors: [err('Спасибо', 'vocabulario', 'спосибо')] }), test('2026-11-02', { errors: [err('спасибо.', 'vocabulario', 'спасиба')] })];
+    const t = lstate(evs, '2026-11-02').topics['lt-en'];
+    expect(t.errors).toHaveLength(1);
+    expect(t.errors[0]).toMatchObject({ correction: 'спасибо.', count: 2, repeated: true });
+  });
+
   it('va "mejorando" si no aparece en los siguientes 2 tests del mismo tipo (las tarjetas y la voz no cuentan)', () => {
     const evs = [test('2026-11-01', { errors: [err('depend on')] }), test('2026-11-02', { errors: [err('depend on')] })];
     evs.push(test('2026-11-03', { source: 'tarjetas' }), test('2026-11-03', { source: 'voz' }), test('2026-11-04'));
@@ -259,6 +272,37 @@ describe('aprendizaje: texto y voz', () => {
     expect(learningErrorKey('Preposiciones', 'Depend on.')).toBe(learningErrorKey(' preposiciones ', 'depend on'));
   });
 
+  it('conserva letras de cualquier escritura: dos frases distintas en cirílico o japonés no son la misma', () => {
+    expect(normalizeLearningText('Привет!')).toBe('привет');
+    expect(normalizeLearningText('Спасибо')).toBe('спасибо');
+    expect(normalizeLearningText('Привет')).not.toBe(normalizeLearningText('Спасибо'));
+    expect(normalizeLearningText('ありがとう。')).toBe('ありがとう');
+    expect(normalizeLearningText('がんばって')).toBe('がんばって'); // las marcas (dakuten) no parten la palabra
+    expect(normalizeLearningText('谢谢，再见')).toBe('谢谢 再见');
+    expect(normalizeLearningText('Straße')).toBe('straße');
+    // La voz califica de verdad: decir otra palabra no es un acierto.
+    expect(learningSimilarity('Привет', 'привет')).toBe(1);
+    expect(learningSimilarity('Привет', 'Спасибо')).toBeLessThan(GAME_CONFIG.learning.voiceClose);
+    expect(learningErrorKey('vocabulario', 'Спасибо')).toBe('vocabulario|спасибо');
+  });
+
+  it('idioma de la voz: se deduce del nombre del tema y se nombra en español', () => {
+    expect(inferLearningLang('Inglés de negocios')).toBe('en-US');
+    expect(inferLearningLang('Francés')).toBe('fr-FR');
+    expect(inferLearningLang('Alemán')).toBe('de-DE');
+    expect(inferLearningLang('Italiano')).toBe('it-IT');
+    expect(inferLearningLang('Portugués')).toBe('pt-BR');
+    expect(inferLearningLang('Japonés')).toBe('ja-JP');
+    expect(inferLearningLang('Chino mandarín')).toBe('zh-CN');
+    expect(inferLearningLang('Coreano')).toBe('ko-KR');
+    expect(inferLearningLang('Ruso')).toBe('ru-RU');
+    expect(inferLearningLang('Finanzas corporativas')).toBeUndefined();
+    expect(learningLangName('fr-FR')).toBe('francés');
+    expect(learningLangName('en-GB')).toBe('inglés');
+    expect(learningLangName('xx-YY')).toBeUndefined();
+    expect(learningLangName(undefined)).toBeUndefined();
+  });
+
   it('similitud: igual = 1, casi = intermedio, distinto = bajo', () => {
     const exp = 'Let me get back to you on that.';
     expect(learningSimilarity(exp, 'let me get back to you on that')).toBe(1);
@@ -339,6 +383,18 @@ describe('aprendizaje: herramientas de IA', () => {
     expect(none.text).toContain('No agregué');
   });
 
+  it('agregar_frase acepta frases en cirílico y no confunde dos distintas', async () => {
+    const store = mk([], [...seed, topic('lt-ru', { name: 'Ruso', lang: 'ru-RU' })]);
+    let seq = 0;
+    store.newId = () => `${String(++seq).padStart(8, '0')}-id`; // ids distintos en los primeros 8 caracteres (como en la app)
+    const r = await call(store, 'agregar_frase', { tema_id: 'lt-ru', frases: [{ texto: 'Спасибо', significado: 'Gracias' }, { texto: 'Привет', significado: 'Hola' }] });
+    expect(r.isError).toBeFalsy();
+    const added = store.allEntities().filter((e) => e.module === 'learning' && e.kind === 'item');
+    expect(added.map((e) => (e.data as LearningItemData).text)).toEqual(['Спасибо', 'Привет']);
+    const again = await call(store, 'agregar_frase', { tema_id: 'lt-ru', frases: [{ texto: 'привет!', significado: 'x' }] });
+    expect(again.text).toContain('No agregué');
+  });
+
   it('agregar_frase pide el tema si hay varios y ninguno es Inglés', async () => {
     const store = mk([], [...seed, topic('lt-a', { name: 'Francés' }), topic('lt-b', { name: 'Finanzas' })]);
     const r = await call(store, 'agregar_frase', { frases: [{ texto: 'Bonjour', significado: 'Hola' }] });
@@ -400,5 +456,34 @@ describe('aprendizaje: herramientas de IA', () => {
     expect((await call(store, 'agregar_frase', { frases: [{ texto: 'Hi', significado: 'Hola' }] }, false)).isError).toBe(true);
     expect((await call(store, 'registrar_test', { aciertos: 1, total: 1 }, false)).isError).toBe(true);
     expect(store.allEvents()).toHaveLength(0);
+  });
+});
+
+describe('aprendizaje: pide tu atención y tests con IA', () => {
+  it('las tarjetas por repasar solo cuentan temas activos (un tema archivado o borrado no pide atención)', () => {
+    const fr = topic('lt-fr', { name: 'Francés', lang: 'fr-FR' });
+    const archived = { ...fr, data: { ...fr.data, archived: true } };
+    const entities = ents(item('e1'), item('f1', 'Bonjour', 'lt-fr'), item('f2', 'Merci', 'lt-fr'));
+    const evs = [review('2026-11-01', 'e1', 'bien'), review('2026-11-01', 'f1', 'bien'), review('2026-11-01', 'f2', 'mal')];
+    const s = lstate(evs, '2026-11-10', [...entities, fr]);
+    expect(learningDueCount(s, [topic(), fr])).toBe(3);
+    const sa = lstate(evs, '2026-11-10', [...entities, archived]);
+    expect(sa.topics['lt-fr'].due).toHaveLength(2); // siguen en el estado (se conservan)…
+    expect(learningDueCount(sa, [topic(), archived])).toBe(1); // …pero no piden atención
+    expect(learningDueCount(s, [topic()])).toBe(1); // tema borrado (ya no está en el catálogo)
+  });
+
+  it('lo que se manda a /api/learn se recorta a sus límites', () => {
+    const long = (n: number) => 'x'.repeat(n);
+    const p = learnTopicPayload({ name: `  ${long(120)} `, topicKind: 'idioma', level: 'B1', goal: long(500) });
+    expect(p.name).toHaveLength(LEARN_API_LIMITS.topicName);
+    expect(p.goal).toHaveLength(LEARN_API_LIMITS.topicGoal);
+    expect(p).toMatchObject({ kind: 'idioma', level: 'B1' });
+    expect(learnTopicPayload({ name: 'Inglés', topicKind: 'idioma', level: null, goal: '  ' })).toEqual({ name: 'Inglés', kind: 'idioma', level: null, goal: null });
+    const texts = learnPayloadTexts([long(250), undefined, '  ', 'Hi', ...Array.from({ length: 60 }, (_, i) => `p${i}`)]);
+    expect(texts).toHaveLength(LEARN_API_LIMITS.texts);
+    expect(texts[0]).toHaveLength(LEARN_API_LIMITS.text);
+    expect(texts[1]).toBe('Hi');
+    expect(texts.every((t) => t.length <= LEARN_API_LIMITS.text)).toBe(true);
   });
 });

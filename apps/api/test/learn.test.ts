@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { validateEvent } from '@igv/core';
+import { learnPayloadTexts, learnTopicPayload, validateEvent } from '@igv/core';
 
 // API de Claude simulada: cada prueba programa la siguiente respuesta.
 const calls: any[] = [];
@@ -97,6 +97,18 @@ describe('tests con IA (/api/learn)', () => {
     expect(res.status).toBe(200);
     expect((await post('quiz', { topic, count: 50 })).status).toBe(400);
     expect((await post('quiz', { count: 5 })).status).toBe(400);
+  });
+
+  it('quiz: lo que arma la app (frases, nombre y meta largos) se recorta y el servidor lo acepta', async () => {
+    next.reply = json(QUIZ);
+    const long = (n: number) => 'a'.repeat(n);
+    const big = { name: long(100), topicKind: 'idioma' as const, level: 'B1', goal: long(400) };
+    const texts = [long(250), 'Hi'];
+    // Sin recortar, el servidor lo rechaza ("Solicitud inválida")…
+    expect((await post('quiz', { topic: { name: big.name, kind: big.topicKind, level: big.level, goal: big.goal }, known: texts })).status).toBe(400);
+    // …recortado con los límites de @igv/core, pasa.
+    const res = await post('quiz', { topic: learnTopicPayload(big), count: 3, known: learnPayloadTexts(texts), learning: learnPayloadTexts(Array.from({ length: 60 }, () => long(300))) });
+    expect(res.status).toBe(200);
   });
 
   it('quiz: formato inesperado → 502; rechazo → 422; error de la API → 502/429 en español', async () => {

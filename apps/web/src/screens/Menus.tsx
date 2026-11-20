@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { learningDueCount, type Entity, type LearningTopicData } from '@igv/core';
 import { useGame } from '../data/store';
 import { PageHeader } from '../ui/kit';
 import { Icon } from '../ui/icons';
@@ -54,7 +55,7 @@ interface Attention {
 }
 
 /** Lo que hoy pide tu atención en cada área (máx. 4, lo más urgente primero). Solo lectura. */
-function attentionItems(state: ReturnType<typeof useGame>['state'], name: (id: string) => string): Attention[] {
+function attentionItems(state: ReturnType<typeof useGame>['state'], name: (id: string) => string, learningTopics: Entity<LearningTopicData>[]): Attention[] {
   const out: Attention[] = [];
   for (const d of state.health.due.filter((x) => x.status === 'atrasado').slice(0, 1)) out.push({ to: '/salud', icon: 'salud-cross', text: `Ya te toca: ${d.name}` });
   for (const b of state.npcs.birthdays.filter((x) => x.inDays <= 3).slice(0, 1))
@@ -63,7 +64,7 @@ function attentionItems(state: ReturnType<typeof useGame>['state'], name: (id: s
   if (npcMission) out.push({ to: `/npcs/${npcMission.npcId}`, icon: 'chat', text: npcMission.title });
   const weak = state.habits.routine.filter((h) => h.dueToday && h.verdict === 'flojo');
   if (weak.length) out.push({ to: '/habitos', icon: 'checklist', text: weak.length === 1 ? `Hábito flojo hoy: ${weak[0].title}` : `${weak.length} hábitos flojos te tocan hoy` });
-  const dueCards = Object.values(state.learning.topics).reduce((s, t) => s + t.due.length, 0);
+  const dueCards = learningDueCount(state.learning, learningTopics);
   if (dueCards) out.push({ to: '/aprendizaje', icon: 'translate', text: `${dueCards} ${dueCards === 1 ? 'tarjeta' : 'tarjetas'} por repasar` });
   return out.slice(0, 4);
 }
@@ -75,7 +76,7 @@ export function Mas() {
   const name = (id: string) => ((byId.get(id)?.data as { name?: string } | undefined)?.name ?? 'alguien').split(' ')[0];
   const books = list('library', 'book').filter((b) => !state.library.finished[b.id] && (b.data as { status: string }).status === 'leyendo').length;
   const vices = list('habits', 'vice');
-  const attention = attentionItems(state, name);
+  const attention = attentionItems(state, name, list<LearningTopicData>('learning', 'topic'));
   const h = state.health;
   const hs = state.habits.summary;
   const today = state.npcs.contactedToday.length;
