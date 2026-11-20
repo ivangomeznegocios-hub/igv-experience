@@ -47,13 +47,13 @@ describe('ciudad: materiales y obras', () => {
     expect(s3.city.inaugurations).toEqual([{ date: d1, districtId: 'fuerza', level: 1, eventId: expect.any(String) }]);
   });
 
-  it('no cuenta si no alcanzan los materiales, si no es el siguiente nivel o si no hay equipo libre', () => {
+  it('no cuenta si no alcanzan los materiales, si el distrito ya tiene obra o si no hay equipo libre', () => {
     const s = play(
       [
         build(START, 'fuerza', 1), // sin materiales
         fuerza(START),
-        build(START, 'fuerza', 2), // no es el siguiente
         build(START, 'fuerza', 1), // este sí
+        build(START, 'fuerza', 1), // doble toque: ya hay obra
         done(START, 'side-x', 'grande', 'carisma', 'side'),
         build(START, 'carisma', 1), // sin equipo libre
       ],
@@ -62,6 +62,25 @@ describe('ciudad: materiales y obras', () => {
     expect(s.city.rejected).toHaveLength(3);
     expect(s.city.works.map((w) => w.districtId)).toEqual(['fuerza']);
     expect(s.city.districts.carisma.blocked).toBe('no_crew');
+  });
+
+  it('anular un registro viejo no tumba en cascada los niveles de después', () => {
+    const d = (n: number) => addDays(START, n);
+    const early = done(d(0), 'side-a', 'media', 'fuerza', 'side'); // 30
+    const events = [
+      early,
+      done(d(0), 'side-b', 'media', 'fuerza', 'side'), // 60 en total
+      build(d(0), 'fuerza', 1), // cuesta 50
+      inaugurate(d(1), 'fuerza', 1),
+      ...[3, 4, 5].map((n) => fuerza(d(n), `side-big-${n}`)), // +300
+      build(d(5), 'fuerza', 2), // cuesta 120
+      inaugurate(d(6), 'fuerza', 2),
+    ];
+    expect(play(events, d(7)).city.districts.fuerza.level).toBe(2);
+    // Desmarcas una misión del primer día: la primera obra ya no alcanzaba, pero la segunda sí cuenta por sí misma.
+    const s = play(events.map((e) => (e.id === early.id ? { ...e, voidedAt: '2026-12-01T00:00:00.000Z' } : e)), d(7));
+    expect(s.city.districts.fuerza.level).toBe(1);
+    expect(s.city.rejected).toHaveLength(2);
   });
 
   it('la producción se junta por día, con tope de almacén, y se recoge', () => {

@@ -83,7 +83,8 @@ export function closeDay(
   const prev = state.dayClosures[date];
   const isToday = date === state.today;
   // Hoy se congela qué diarias tocaban, para que editar tu rutina después no cambie el puntaje de este día.
-  const routine = input.routine ?? (isToday && !state.habits.restDays.has(date) ? state.habits.routine.filter((h) => h.dueToday).map((h) => h.id) : undefined);
+  const routine =
+    input.routine ?? prev?.routine ?? (isToday && !state.habits.restDays.has(date) ? state.habits.routine.filter((h) => h.dueToday).map((h) => h.id) : undefined);
   addEvent('day.closed', { note: input.note.trim(), mood: input.mood ?? undefined, ...(routine?.length ? { routine } : {}) }, { localDate: date });
   if (opts.quiet) return;
   const hadMission = state.missions.activeDays.has(date);

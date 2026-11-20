@@ -187,3 +187,46 @@ describe('rendimiento', () => {
     expect(Date.now() - t0).toBeLessThan(4000);
   });
 });
+
+describe('marcador: arreglos de la revisión', () => {
+  // Rutina de lunes a viernes: sábado y domingo vacíos son días libres.
+  const weekdays = ents.map((e) => (e.module === 'missions' && e.kind === 'daily' ? { ...e, data: { ...(e.data as object), days: [0, 1, 2, 3, 4] } } : e));
+
+  it('una pausa con días libres en medio baja un solo escalón y se recupera al regresar', () => {
+    const won = [0, 1, 2, 3].flatMap((i) => winDay(addDays(START, i))); // lun–jue: impulso 150
+    // vie vacío, sáb y dom libres vacíos, lun vacío: todo es la misma pausa.
+    const back = addDays(START, 8); // martes
+    const s = play(won, back, weekdays);
+    expect(s.days.momentum.pct).toBe(125);
+    expect(s.days.comeback).toEqual({ pausedDays: 4, done: false, restoresPct: 150 });
+    const s2 = play([...won, ...saveDay(back)], addDays(back, 1), weekdays);
+    expect(s2.days.momentum.pct).toBe(150);
+  });
+
+  it('regresar en fin de semana (día libre) también cuenta como regreso', () => {
+    const won = [0, 1, 2].flatMap((i) => winDay(addDays(START, i))); // lun–mié: 125
+    const sunday = addDays(START, 6); // jue y vie vacíos (pausa), sáb libre vacío
+    const s = play(won, sunday, weekdays);
+    expect(s.days.comeback?.restoresPct).toBe(125);
+    const s2 = play([...won, ...saveDay(sunday)], addDays(sunday, 1), weekdays);
+    expect(s2.days.momentum.pct).toBe(125);
+  });
+
+  it('un pendiente de tus 3 que ya hiciste la noche anterior cuenta como hecho (no se queda atorado)', () => {
+    const d = addDays(START, 1);
+    const item = { missionId: 'todo-x', title: 'Mandar propuesta', size: 'media', attribute: 'finanzas', kind: 'todo' };
+    const s = play([ev('plan.set', START, { forDate: d, items: [item] }), done(START, 'todo-x', 'media', 'finanzas', 'todo')], d);
+    expect(s.plans[d].items[0].done).toBe(true);
+    expect(s.days.today!.pending.some((p) => p.missionId === 'todo-x')).toBe(false);
+    expect(s.days.today!.parts.find((p) => p.id === 'plan')).toMatchObject({ done: 1, due: 1 });
+  });
+
+  it('editar la nota de un cierre pasado no descongela su rutina', () => {
+    const d = START;
+    const events = [done(d, 'daily-leer', 'chica', 'inteligencia'), ev('day.closed', d, { note: '', routine: ['daily-leer'] })];
+    const edited = [...events, ev('day.closed', d, { note: 'Editada', mood: 4 })];
+    const s = play(edited, addDays(d, 1));
+    expect(s.days.byDate[d].score).toBe(80);
+    expect(s.dayClosures[d].note).toBe('Editada');
+  });
+});

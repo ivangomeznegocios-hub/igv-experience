@@ -889,7 +889,10 @@ const cerrarDia = tool({
   input: z.object({ nota: z.string().trim().max(2000), animo: z.number().int().min(1).max(5).optional(), fecha: zFecha }),
   async run({ nota, animo, fecha }, store) {
     const date = pastDate(store, fecha);
-    const ev = makeEvent(store, 'day.closed', { note: nota, mood: animo }, date);
+    // Hoy se congela qué diarias tocaban (como en la app), para que editar la rutina después no cambie el puntaje.
+    const snap = date === store.today ? await store.snapshot() : null;
+    const routine = snap?.habits?.routine.filter((h) => h.dueToday).map((h) => h.id) ?? [];
+    const ev = makeEvent(store, 'day.closed', { note: nota, mood: animo, ...(routine.length ? { routine } : {}) }, date);
     await store.addEvents([ev]);
     return ok(`Día cerrado (${date === store.today ? 'hoy' : fmtDay(date)}). Registro [${ev.id}].`, `Cerró el día${nota ? `: ${nota.slice(0, 60)}` : ''}`, { events: [ev.id] });
   },

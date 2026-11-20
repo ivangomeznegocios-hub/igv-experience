@@ -8,8 +8,9 @@ import { addDays, diffDays } from '../../util/dates';
  * Tu ciudad (sistema "ciudad", ver docs/sistemas/ciudad.md). Todo derivado de eventos; nunca da XP ni oro.
  *
  * - Materiales de un distrito = 1 por cada XP de su atributo desde `settings.scoreStart` + lo recogido − lo gastado.
- * - Una obra (`city.build_started`) cuenta solo si: es el siguiente nivel, el distrito no tiene otra obra, hay un
- *   equipo libre y alcanzaban los materiales en esa fecha (en orden cronológico, como los canjes de oro).
+ * - Una obra (`city.build_started`) es siempre el siguiente nivel del distrito y cuenta solo si el distrito no tiene
+ *   otra obra, hay un equipo libre y alcanzaban los materiales en esa fecha (en orden cronológico, como los canjes
+ *   de oro). El nivel que trae el registro es informativo: así anular uno viejo no tumba en cascada los de después.
  * - Termina `days` después; hasta que la inauguras (`city.inaugurated`) el equipo sigue ocupado.
  * - Cada nivel produce `productionPerLevel` materiales al día desde el día siguiente a su inauguración; el
  *   almacén guarda hasta `storageDays` días. `city.collected` recoge todo lo producido.
@@ -164,16 +165,20 @@ export function reduceCity(ctx: Ctx, xp: XpEntry[]): CityState {
       lastCollectedOn = day;
       continue;
     }
-    const { districtId, level } = ev.payload as { districtId: AttributeId; level: number };
+    // El nivel guardado en el registro es solo informativo: una obra siempre es "el siguiente nivel de este
+    // distrito" y una inauguración, "la obra en curso". Así, si un registro viejo deja de contar (lo anulaste o ya
+    // no alcanzaban los materiales), los de después siguen contando por sí mismos en vez de caer en cascada.
+    const { districtId } = ev.payload as { districtId: AttributeId };
     const d = dist[districtId];
     if (!d) {
       rejected.push(ev.id);
       continue;
     }
     if (ev.type === 'city.build_started') {
+      const level = d.level + 1;
       const spec = cfg.levels[level - 1];
       const busy = ATTRIBUTE_IDS.filter((a) => dist[a].work).length;
-      const ok = !!spec && level === d.level + 1 && !d.work && busy < crewsAt(day) && materials(districtId) >= spec.cost;
+      const ok = !!spec && !d.work && busy < crewsAt(day) && materials(districtId) >= spec.cost;
       if (!ok) {
         rejected.push(ev.id);
         continue;
@@ -183,10 +188,11 @@ export function reduceCity(ctx: Ctx, xp: XpEntry[]): CityState {
       continue;
     }
     // city.inaugurated
-    if (!d.work || d.work.level !== level || d.work.readyOn > day) {
+    if (!d.work || d.work.readyOn > day) {
       rejected.push(ev.id);
       continue;
     }
+    const level = d.work.level;
     d.level = level;
     d.history.push({ date: day, level });
     d.work = null;

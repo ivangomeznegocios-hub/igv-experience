@@ -105,7 +105,7 @@ export interface DayCheckContext {
   /** Misión o pendiente completado alguna vez (cualquier día). */
   doneEver(id: string): boolean;
   /** Plan del día ("Tus 3"), si lo hubo. */
-  plan: { items: { missionId: string; title: string }[] } | null;
+  plan: { items: { missionId: string; title: string; done?: boolean }[] } | null;
   /** Desde cuándo cuenta cada diaria de la rutina (id → fecha). */
   habitSince: Record<string, string>;
   currency: string;
@@ -172,6 +172,9 @@ export function routineForDay(c: Pick<DayCheckContext, 'list' | 'weekday' | 'dat
 export function isDailyDone(c: Pick<DayCheckContext, 'doneOn'>, m: Entity<MissionData>): boolean {
   return c.doneOn.has(m.id) || c.doneOn.has(quickMissionId(m.data.title));
 }
+
+/** Una cosa de "tus 3" está hecha si se hizo ese día (o, si solo cuenta una vez, si ya se había hecho; lo dice el motor). */
+const planItemDone = (c: Pick<DayCheckContext, 'doneOn'>, i: { missionId: string; done?: boolean }) => !!i.done || c.doneOn.has(i.missionId);
 
 function todosForDay(c: DayCheckContext): Entity<TodoData>[] {
   return c.list<TodoData>('planner', 'todo').filter((t) => t.data.date === c.date || (c.isToday && t.data.date < c.date && !c.doneEver(t.id)));
@@ -316,9 +319,9 @@ export const DAY_CHECKS: DayCheck[] = [
     question: '¿Cumpliste lo que planeaste?',
     tool: 'completar_mision',
     applies: (c) => !!c.plan?.items.length,
-    progress: (c) => (c.plan?.items.length ? c.plan.items.filter((i) => c.doneOn.has(i.missionId)).length / c.plan.items.length : 1),
-    detail: (c) => `${c.plan!.items.filter((i) => c.doneOn.has(i.missionId)).length}/${c.plan!.items.length}`,
-    pending: (c) => (c.plan?.items ?? []).filter((i) => !c.doneOn.has(i.missionId)).map((i) => i.title),
+    progress: (c) => (c.plan?.items.length ? c.plan.items.filter((i) => planItemDone(c, i)).length / c.plan.items.length : 1),
+    detail: (c) => `${c.plan!.items.filter((i) => planItemDone(c, i)).length}/${c.plan!.items.length}`,
+    pending: (c) => (c.plan?.items ?? []).filter((i) => !planItemDone(c, i)).map((i) => i.title),
   },
   {
     id: 'habitos-dejar',
@@ -387,7 +390,7 @@ export interface DayReviewInput {
   entities: Entity[];
   /** Misión o pendiente completado alguna vez. Si falta, solo se ven los del día. */
   doneEver?: (id: string) => boolean;
-  plan?: { items: { missionId: string; title: string }[] } | null;
+  plan?: { items: { missionId: string; title: string; done?: boolean }[] } | null;
   /** Día de descanso válido. Si falta, basta con que esté marcado ese día. */
   restDay?: boolean;
   habitSince?: Record<string, string>;

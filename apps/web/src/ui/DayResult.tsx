@@ -107,7 +107,7 @@ function DayResult({ date, onClose }: { date: string; onClose: () => void }) {
             <PartsLegend parts={r.parts} />
           </>
         ) : (
-          <p className="muted">Este día es anterior a tu marcador.</p>
+          <p className="muted">{state.days.start ? 'Este día es anterior a tu marcador.' : 'Tu marcador aún no empieza: actívalo en Hoy con "Empezar desde hoy".'}</p>
         )}
 
         <div className="result-earned">

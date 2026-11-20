@@ -9,6 +9,7 @@ import { openDayResult } from './DayResult';
 import { Icon } from './icons';
 import { Chips, Field, Sheet, TextInput, undoToast } from './kit';
 import { getQuickEntry } from './QuickAdd';
+import { openPlanSheet } from './DayPlan';
 import '../styles/mesa.css';
 
 type DeckOpts = { date: string; closeOnly?: boolean };
@@ -87,7 +88,8 @@ function DayDeck({ date, closeOnly, onClose }: DeckOpts & { onClose: () => void 
           date={date}
           onClosed={() => {
             onClose();
-            openDayResult(date);
+            // Sin marcador activo no hay puntaje que mostrar: basta el aviso del cierre.
+            if (state.days.start && date >= state.days.start) openDayResult(date);
           }}
         />
       )}
@@ -133,7 +135,9 @@ function DeckCard({
       {!done && (
         <div className="deck-body">
           {ui.Inline && <ui.Inline date={date} check={check} />}
-          {!ui.Inline && quick && <quick.Form date={date} setDate={setD} today={today} onDone={() => undefined} />}
+          {/* Al guardar, el formulario avanza a la siguiente tarjeta (aunque lo registrado no complete la revisión,
+              p. ej. tiempo que no es de trabajo): así no se queda lleno invitando a guardar dos veces. */}
+          {!ui.Inline && quick && <quick.Form date={date} setDate={setD} today={today} onDone={onNext} />}
           {action && (
             <button className="btn primary" onClick={() => action.run(args)}>
               {action.label}
@@ -186,7 +190,8 @@ export function ClosureForm({ date, onClosed }: { date: string; onClosed: () => 
       <button
         className="btn primary block"
         onClick={() => {
-          closeDay(state, date, { note, mood }, { quiet: true });
+          const scored = !!state.days.start && date >= state.days.start;
+          closeDay(state, date, { note, mood }, scored ? { quiet: true } : { onPlanTomorrow: (t) => setTimeout(() => openPlanSheet(t), 350) });
           onClosed();
         }}
       >

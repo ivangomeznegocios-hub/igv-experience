@@ -329,12 +329,15 @@ export interface Game {
 
 /**
  * Una sola proyección por cambio para toda la app (antes, cada componente que llamaba `useGame()` volvía a
- * calcular el juego completo; en Hoy eran 20+ veces por toque).
+ * calcular el juego completo; en Hoy eran 20+ veces por toque). Lo derivado se guarda por `version` + `today`;
+ * `store` NO va en la caché: cambia sin subir la versión (ready, status, pendientes) y cada componente debe ver
+ * el actual.
  */
-let gameCache: { version: number; today: string; game: Game } | null = null;
+type GameCore = Omit<Game, 'store'>;
+let gameCache: { version: number; today: string; core: GameCore } | null = null;
 
-function buildGame(store: Snapshot): Game {
-  if (gameCache && gameCache.version === store.version && gameCache.today === store.today) return gameCache.game;
+function buildCore(store: Snapshot): GameCore {
+  if (gameCache && gameCache.version === store.version && gameCache.today === store.today) return gameCache.core;
   const events = [...store.events.values()];
   const entities = [...store.entities.values()].filter((e) => !e.deletedAt);
   const state = project({ events, entities, today: store.today });
@@ -350,15 +353,16 @@ function buildGame(store: Snapshot): Game {
     // Copia: hay pantallas que ordenan el resultado en su lugar.
     return out.slice() as Entity<D>[];
   };
-  const game = { state, events, entities, byId, list, store };
-  gameCache = { version: store.version, today: store.today, game };
-  return game;
+  const core = { state, events, entities, byId, list };
+  gameCache = { version: store.version, today: store.today, core };
+  return core;
 }
 
 export function useGame(): Game {
   const store = useStore();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  return useMemo(() => buildGame(store), [store.version, store.today]);
+  const core = useMemo(() => buildCore(store), [store.version, store.today]);
+  return useMemo(() => ({ ...core, store }), [core, store]);
 }
 
 /** Proyección en una fecha pasada (fotos de atributos al inicio/fin de temporada). */

@@ -279,8 +279,13 @@ export function reduceDays(
     const pct = pctOf(steps, winRun);
     out[r.d] = { date: r.d, score: r.score, status: r.status, parts: r.parts, pct, empty: r.isEmpty, minimumDone: r.minDone };
 
-    // Regreso: el primer día después de una pausa.
-    const returning = inPause && r.status !== 'pause';
+    // Durante una pausa, los días vacíos (también los libres) siguen siendo parte de ella: el regreso es el
+    // primer día en que registras algo. Así una pausa completa baja un solo escalón y se puede recuperar.
+    if (inPause && r.isEmpty && r.status !== 'pause' && r.d !== today) {
+      pausedDays++;
+      continue;
+    }
+    const returning = inPause && !r.isEmpty;
     if (returning) {
       inPause = false;
       const active = missions.activeDays.has(r.d);
