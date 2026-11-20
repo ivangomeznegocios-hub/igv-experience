@@ -15,6 +15,7 @@ import {
   renderOverview,
   runAssistantTool,
   skillCategory,
+  skillNameEdit,
   splitTimerSpan,
   timeAverages,
   timeByArea,
@@ -202,6 +203,17 @@ describe('lo que sabes hacer', () => {
     expect(guessSkillCategory('Algo raro')).toBe('otro');
     // La categoría guardada gana.
     expect(skillCategory({ name: 'Inglés', attribute: 'inteligencia', category: 'oficio' })).toBe('oficio');
+  });
+
+  it('al escribir el nombre de una habilidad nueva, adivina categoría y atributo sin pisar lo que elegiste', () => {
+    // Nada elegido: categoría y atributo salen del nombre.
+    expect(skillNameEdit('Guitarra', { category: false, attribute: false })).toEqual({ name: 'Guitarra', category: 'arte', attribute: 'creatividad' });
+    // Elegiste Disciplina y luego corriges el nombre: el atributo no se toca (la XP de sus rangos va a donde elegiste).
+    const fix = skillNameEdit('Guitarra eléctrica', { category: false, attribute: true });
+    expect(fix).toEqual({ name: 'Guitarra eléctrica', category: 'arte' });
+    expect('attribute' in fix).toBe(false);
+    // Elegiste la categoría: solo cambia el nombre.
+    expect(skillNameEdit('Guitarra', { category: true, attribute: false })).toEqual({ name: 'Guitarra' });
   });
 
   it('agrupa por categoría en el orden fijo', () => {

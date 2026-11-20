@@ -6,8 +6,10 @@ import {
   addDays,
   dayCloseBonus,
   frequentMissions,
+  isDailyDone,
   isInRoutine,
   pickForDate,
+  quickMissionId,
   weekStart,
   weekday,
   type AttributeId,
@@ -228,17 +230,23 @@ function RoutineCard() {
   const dailies = list<MissionData>('missions', 'daily');
   const routine = dailies.filter((m) => isInRoutine(m.data, wd));
   const doneToday = new Set(state.missions.completedToday);
+  // Igual que Hábitos y "¿Cómo fue tu día?": lo registrado como "Hice algo" con el mismo título cuenta para la diaria.
+  const isDone = (m: Entity<MissionData>) => isDailyDone({ doneOn: doneToday }, m);
   const low = state.energy.low;
   const suitable = (m: Entity<MissionData>) => !low || m.data.size === 'chica' || !!m.data.recovery;
-  const ordered = [...routine].sort((a, b) => Number(doneToday.has(a.id)) - Number(doneToday.has(b.id)) || Number(suitable(b)) - Number(suitable(a)));
-  const doneCount = routine.filter((m) => doneToday.has(m.id)).length;
+  const ordered = [...routine].sort((a, b) => Number(isDone(a)) - Number(isDone(b)) || Number(suitable(b)) - Number(suitable(a)));
+  const doneCount = routine.filter(isDone).length;
   const perfect = routine.length > 0 && doneCount === routine.length;
   const others = dailies.filter((m) => !routine.includes(m));
   const [showOthers, setShowOthers] = useState(false);
-  const toggle = (m: Entity<MissionData>) => (doneToday.has(m.id) ? uncomplete(m.id, state.today, m.data.title) : completeMission(m));
+  const toggle = (m: Entity<MissionData>) => {
+    if (!isDone(m)) completeMission(m);
+    // Desmarcar lo que la marcó: la diaria o su "Hice algo" del mismo título.
+    else uncomplete(doneToday.has(m.id) ? m.id : quickMissionId(m.data.title), state.today, m.data.title);
+  };
 
   const row = (m: Entity<MissionData>) => {
-    const done = doneToday.has(m.id);
+    const done = isDone(m);
     const isBounty = state.bounty.today?.missionId === m.id;
     return (
       <SwipeRow key={m.id} onRight={done ? undefined : () => completeMission(m)}>
@@ -307,7 +315,8 @@ function RoutineCard() {
 
 function FavoritesSection() {
   const { state, events, list } = useGame();
-  const routineIds = new Set(list<MissionData>('missions', 'daily').filter((m) => isInRoutine(m.data, weekday(state.today))).map((m) => m.id));
+  // La rutina ya está en su tarjeta: tampoco se repite como "Hice algo" con el mismo título (contaría doble).
+  const routineIds = new Set(list<MissionData>('missions', 'daily').filter((m) => isInRoutine(m.data, weekday(state.today))).flatMap((m) => [m.id, quickMissionId(m.data.title)]));
   const favs = useMemo(() => frequentMissions(events, state.today, 60, 12).filter((f) => !routineIds.has(f.missionId)), [events, state.today, routineIds]);
   if (!favs.length) return null;
   const doneToday = new Set(state.missions.completedToday);
@@ -319,14 +328,16 @@ function FavoritesSection() {
       </div>
       <div className="fav-row">
         {favs.map((f) => {
-          const done = doneToday.has(f.missionId);
+          // Un "Hice algo" con el título de una diaria es esa diaria: se marca una sola vez (no cuenta doble).
+          const d = dailies.find((x) => x.id === f.missionId || quickMissionId(x.data.title) === f.missionId);
+          const doneId = [f.missionId, d?.id, d && quickMissionId(d.data.title)].find((id): id is string => !!id && doneToday.has(id));
+          const done = !!doneId;
           return (
             <button
               key={f.missionId}
               className={`fav ${done ? 'done' : ''}`}
               onClick={() => {
-                if (done) return uncomplete(f.missionId, state.today, f.title);
-                const d = dailies.find((x) => x.id === f.missionId);
+                if (doneId) return uncomplete(doneId, state.today, f.title);
                 if (d) completeMission(d);
                 else completeQuick(f.title, f.size as MissionSize, f.attribute as AttributeId);
               }}

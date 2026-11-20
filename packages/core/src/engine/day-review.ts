@@ -177,6 +177,11 @@ function todosForDay(c: DayCheckContext): Entity<TodoData>[] {
   return c.list<TodoData>('planner', 'todo').filter((t) => t.data.date === c.date || (c.isToday && t.data.date < c.date && !c.doneEver(t.id)));
 }
 
+/** Áreas de "Tu tiempo" que cuentan como trabajo en la revisión del día (la oficina va en "trabajo"). */
+export const WORK_TIME_AREAS: readonly string[] = ['trabajo', 'proyecto'];
+/** Registros de tiempo de trabajo del día (el tiempo con tu gente, de ocio, traslados… no responde "¿cuánto trabajaste?"). */
+const workTime = (c: DayCheckContext) => c.of<{ minutes: number; area?: string }>('time.logged').filter((e) => WORK_TIME_AREAS.includes(String(e.payload.area)));
+
 const touchesPeople = (e: GameEvent) => {
   const p = (e.payload ?? {}) as { npcId?: unknown; npcIds?: unknown };
   return e.type === 'npc.interaction' || (typeof p.npcId === 'string' && p.npcId !== '') || (Array.isArray(p.npcIds) && p.npcIds.length > 0);
@@ -240,14 +245,15 @@ export const DAY_CHECKS: DayCheck[] = [
     question: '¿Cuánto tiempo estuviste en la oficina o trabajando, y en qué?',
     types: ['time.logged'],
     applies: (c) => c.weekday < 5 && !c.restDay,
+    progress: (c) => (workTime(c).length ? 1 : 0),
     detail: (c) => {
-      const min = c.of<{ minutes: number }>('time.logged').reduce((s, e) => s + (e.payload.minutes || 0), 0);
+      const min = workTime(c).reduce((s, e) => s + (e.payload.minutes || 0), 0);
       if (!min) return null;
       const h = Math.floor(min / 60);
       const m = min % 60;
       return h ? `${h} h${m ? ` ${m} min` : ''}` : `${m} min`;
     },
-    skipLabel: 'Hoy no trabajé',
+    skipLabel: 'No trabajé',
     tool: 'registrar_tiempo',
   }),
   {
@@ -556,7 +562,8 @@ export function dayReviewInputFromState(state: GameState, events: GameEvent[], e
     entities,
     doneEver: (id) => (state.missions.completions[id]?.count ?? 0) > 0,
     plan: state.plans[date] ?? null,
-    restDay: state.streak.restDays.has(date),
+    // El mismo descanso que usan los hábitos: registrar algo más ese día no le quita lo de descanso.
+    restDay: state.habits.restDays.has(date),
     habitSince: Object.fromEntries(state.habits.routine.map((h) => [h.id, h.since])),
     xp: state.xp.ledger.reduce((s, e) => (e.date === date ? s + e.amount : s), 0),
     currency: state.settings.currency,

@@ -196,14 +196,15 @@ function Menu({ date, setDate, today, onPick, onClose }: DateProps & { onPick: (
           </div>
           <div className="fav-row" style={{ marginBottom: 14 }}>
             {favs.map((f) => {
-              const done = doneOn(f.missionId);
+              // Un "Hice algo" con el título de una diaria es esa diaria: se marca una sola vez (no cuenta doble).
+              const d = dailies.find((x) => x.id === f.missionId || quickMissionId(x.data.title) === f.missionId);
+              const done = doneOn(f.missionId) || (!!d && (doneOn(d.id) || doneOn(quickMissionId(d.data.title))));
               return (
                 <button
                   key={f.missionId}
                   className={`fav ${done ? 'done' : ''}`}
                   disabled={done}
                   onClick={() => {
-                    const d = dailies.find((x) => x.id === f.missionId);
                     if (d) completeMission(d, date);
                     else completeQuick(f.title, f.size as MissionSize, f.attribute as AttributeId, date);
                   }}
