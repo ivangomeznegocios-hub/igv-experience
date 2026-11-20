@@ -64,7 +64,7 @@ export default function Salud() {
       />
       <Hero />
       {active.length === 0 ? (
-        <Suggestions onboarding />
+        <Suggestions onboarding onNew={() => setSheet({ type: 'edit' })} />
       ) : (
         <>
           <DueCard checkups={byId} onDone={(id) => setSheet({ type: 'done', id })} onLast={(id) => setSheet({ type: 'last', id })} onOpen={(id) => setSheet({ type: 'edit', id })} />
@@ -323,7 +323,7 @@ function Upcoming({ checkups, onOpen, onNew }: { checkups: Entity<CheckupData>[]
   );
 }
 
-function Suggestions({ onboarding = false }: { onboarding?: boolean }) {
+function Suggestions({ onboarding = false, onNew }: { onboarding?: boolean; onNew?: () => void }) {
   const { state, list } = useGame();
   const all = list<CheckupData>('health', 'checkup');
   const known = new Set(all.map((c) => c.data.suggestionId).filter(Boolean) as string[]);
@@ -347,7 +347,12 @@ function Suggestions({ onboarding = false }: { onboarding?: boolean }) {
       {pending.map((s) => (
         <SuggestionRow key={s.id} s={s} />
       ))}
-      {!pending.length && <Empty>Ya activaste todas las recomendaciones.</Empty>}
+      {!pending.length && <Empty>{onboarding && all.length ? 'Tus chequeos están en pausa: reactívalos en "Pausados".' : 'Ya activaste todas las recomendaciones.'}</Empty>}
+      {onNew && (
+        <button className="btn block" style={{ marginTop: 8 }} onClick={onNew}>
+          <Icon name="plus" /> Crear un chequeo propio
+        </button>
+      )}
       {!state.settings.birthDate && fits.some((s) => s.ageText) && (
         <div className="salud-note">
           <Icon name="calendar" />

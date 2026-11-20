@@ -54,6 +54,14 @@ describe('salud: fechas y estados', () => {
     expect(checkupTiming('2020-01-01', 0, TODAY, soon)).toMatchObject({ status: 'al_dia', nextDue: null });
   });
 
+  it('un chequeo mensual recién hecho queda al día (la ventana de "pronto" es a lo más un tercio del intervalo)', () => {
+    const soon = GAME_CONFIG.health.soonDays;
+    expect(checkupTiming(TODAY, 1, TODAY, soon)).toMatchObject({ status: 'al_dia', daysLeft: 30 });
+    expect(checkupTiming('2026-10-30', 1, TODAY, soon)).toMatchObject({ status: 'al_dia', daysLeft: 11 });
+    expect(checkupTiming('2026-10-29', 1, TODAY, soon)).toMatchObject({ status: 'pronto', daysLeft: 10 });
+    expect(checkupTiming('2026-10-19', 1, TODAY, soon)).toMatchObject({ status: 'pronto', daysLeft: 0 });
+  });
+
   it('la fecha siguiente sale del último registro o de la fecha anotada a mano (la más nueva)', () => {
     const ents = [...seed, checkup('chk-a', { lastDone: '2026-02-01' }), checkup('chk-b', { lastDone: '2026-10-01' }), checkup('chk-c')];
     const s = run([doneEv('2026-03-10', 'chk-a'), doneEv('2026-03-10', 'chk-b')], TODAY, { entities: ents });
@@ -263,6 +271,31 @@ describe('salud: herramientas de IA', () => {
     expect(c.isError).toBeFalsy();
     expect((await call(store, 'guardar_chequeo', { nombre: 'audiometria' })).isError).toBe(true);
     expect((await call(store, 'guardar_chequeo', { recomendacion: 'vista', ultima_vez: '2027-01-01' })).isError).toBe(true);
+  });
+
+  it('guardar_chequeo con el id de una recomendación ya activada edita la suya (no la pisa) y deja "prev" para deshacer', async () => {
+    const id = suggestionCheckupId('dental');
+    const mine = {
+      ...checkup(id, { name: 'Limpieza dental', everyMonths: 4, size: 'grande', notes: 'Dra. López', lastDone: '2026-08-01', active: false, suggestionId: 'dental' }),
+      sort: 5,
+      createdAt: 1000,
+    };
+    const store = mk([], [...seed, mine]);
+    const r = await call(store, 'guardar_chequeo', { id: 'dental', notas: 'Consultorio nuevo' });
+    expect(r.isError).toBeFalsy();
+    expect(r.text).toContain('Chequeo actualizado');
+    const saved = store.allEntities().find((e) => e.id === id)!;
+    expect(saved).toMatchObject({ sort: 5, createdAt: 1000 });
+    expect(saved.data).toMatchObject({ everyMonths: 4, size: 'grande', notes: 'Consultorio nuevo', lastDone: '2026-08-01', active: false });
+    expect(r.refs?.entities).toHaveLength(1);
+    expect(r.refs?.entities[0].prev?.data).toMatchObject({ notes: 'Dra. López', everyMonths: 4 });
+
+    // Sin activar todavía: el id de la recomendación la crea con sus valores.
+    const fresh = mk();
+    const c = await call(fresh, 'guardar_chequeo', { id: 'dental', ultima_vez: '2026-06-01' });
+    expect(c.text).toContain('Chequeo agregado');
+    expect(c.refs?.entities[0].prev).toBeNull();
+    expect(fresh.allEntities().find((e) => e.id === id)?.data).toMatchObject({ everyMonths: 6, lastDone: '2026-06-01', suggestionId: 'dental' });
   });
 
   it('registrar_medicion: guarda y da contexto con el rango de referencia', async () => {

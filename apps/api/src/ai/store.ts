@@ -1,4 +1,4 @@
-import { and, desc, asc, eq, gte, inArray, isNull, lte, max, sql, type SQL } from 'drizzle-orm';
+import { and, desc, asc, eq, gte, inArray, isNull, lte, max, or, sql, type SQL } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { aiActivity, entities, events, serverMeta } from '@igv/db';
 import {
@@ -18,7 +18,7 @@ import {
   type EventQuery,
   type GameEvent,
 } from '@igv/core';
-import { ensureSeeded, rowToEntity, rowToEvent } from '../repo';
+import { ensureSeeded, rowToEntity, rowToEvent, runChunked } from '../repo';
 import { randomId } from './crypto';
 
 const SNAPSHOT_KEY = 'ai_snapshot';
@@ -122,14 +122,16 @@ export class D1AssistantStore implements AssistantStore {
     return snap;
   }
 
+  /** En un solo lote (transacción de D1): o se guardan todos o ninguno, nunca a medias. */
   async addEvents(list: GameEvent[]): Promise<void> {
     const now = Date.now();
-    for (const e of list) {
-      await this.db
+    const stmts = list.map((e) =>
+      this.db
         .insert(events)
         .values({ id: e.id, type: e.type, occurredAt: e.occurredAt, localDate: e.localDate, payload: JSON.stringify(e.payload ?? {}), voidedAt: null, createdAt: e.createdAt ?? now, updatedAt: now })
-        .onConflictDoNothing();
-    }
+        .onConflictDoNothing(),
+    );
+    await runChunked(this.db, stmts);
   }
 
   async putEntity(e: Entity): Promise<Entity> {
@@ -207,8 +209,11 @@ export async function undoActivity(d1: D1Database, id: string): Promise<{ ok: bo
   for (const ev of ownEvents) if (!keep.ids.has(ev.id)) await store.voidEvent(ev.id);
   for (const evId of refs.voided ?? []) await store.restoreEvent(evId);
 
+  // Elementos de esta acción que aún no se revisan (no cuentan como "de Iván" al ver si otro depende de ellos).
+  const pending = new Set(refs.entities.map((x) => x.id));
   // En orden inverso: si se editó dos veces lo mismo, queda la versión original.
   for (const ent of [...refs.entities].reverse()) {
+    pending.delete(ent.id);
     const [cur] = await db.select().from(entities).where(eq(entities.id, ent.id));
     const current = cur ? rowToEntity(cur) : null;
     if (ent.savedAt !== undefined) {
@@ -230,7 +235,7 @@ export async function undoActivity(d1: D1Database, id: string): Promise<{ ok: bo
       continue;
     }
     const guard = current ? UNDO_GUARDS[`${current.module}/${current.kind}`] : undefined;
-    const used = guard ? (await store.events({ types: guard.types, match: { [guard.key]: ent.id } })).some((e) => !own.has(e.id)) : false;
+    const used = guard ? await usedByIvan(d1, guard, ent.id, own, pending) : false;
     if (used && current) {
       // Tiene registros de Iván: metas y retos se archivan (su XP depende de que existan); lo demás se queda.
       if (guard!.archive) await store.putEntity({ ...current, data: { ...current.data, archived: true } });
@@ -244,20 +249,76 @@ export async function undoActivity(d1: D1Database, id: string): Promise<{ ok: bo
 }
 
 /**
+ * Un registro que apunta al elemento: `key` = campo del payload con su id. Con `list`, el campo es una lista: de ids
+ * (p. ej. `npcIds`) o, con `key`, de objetos que traen el id en ese campo (p. ej. `exercises[].exerciseId`).
+ */
+interface UndoRef {
+  types: string[];
+  key?: string;
+  list?: string;
+}
+
+interface UndoGuard {
+  refs: UndoRef[];
+  /** Elementos del catálogo que cuelgan de él (p. ej. las frases de un tema): si queda alguno, tampoco se borra. */
+  children?: { module: string; kind: string; key: string };
+  archive: boolean;
+}
+
+/**
  * Elementos que la IA creó y en los que Iván registró algo después: deshacer no los borra. `archive` = se archivan
  * (metas y retos: su XP depende de la entidad); si no, se quedan tal cual (lugares, chequeos, personas, frases…).
+ * Cada uno lista TODOS los registros que lo usan (los mismos que cuenta el motor), no solo el principal.
  */
-const UNDO_GUARDS: Record<string, { types: string[]; key: string; archive: boolean }> = {
-  'goals/goal': { types: ['goal.progress'], key: 'goalId', archive: true },
-  'challenges/challenge': { types: ['challenge.started', 'challenge.checked'], key: 'challengeId', archive: true },
-  'map/place': { types: ['place.visited', 'map.status_changed'], key: 'placeId', archive: false },
-  'npcs/npc': { types: ['npc.interaction'], key: 'npcId', archive: false },
-  'health/checkup': { types: ['health.checkup_done'], key: 'checkupId', archive: false },
-  'learning/topic': { types: ['learning.test_taken'], key: 'topicId', archive: false },
-  'learning/item': { types: ['learning.reviewed'], key: 'itemId', archive: false },
-  'library/book': { types: ['library.progress', 'library.note', 'library.finished'], key: 'bookId', archive: false },
-  'skills/skill': { types: ['skill.rank_unlocked', 'time.logged'], key: 'skillId', archive: false },
+const UNDO_GUARDS: Record<string, UndoGuard> = {
+  'goals/goal': { refs: [{ types: ['goal.progress'], key: 'goalId' }], archive: true },
+  'challenges/challenge': { refs: [{ types: ['challenge.started', 'challenge.checked'], key: 'challengeId' }], archive: true },
+  'map/place': { refs: [{ types: ['place.visited', 'map.status_changed', 'npc.interaction', 'workout.logged'], key: 'placeId' }], archive: false },
+  'npcs/npc': {
+    refs: [
+      { types: ['npc.interaction', 'mission.completed'], key: 'npcId' },
+      { types: ['place.visited'], list: 'npcIds' },
+    ],
+    archive: false,
+  },
+  'habits/vice': { refs: [{ types: ['vice.relapse'], key: 'viceId' }], archive: false },
+  'health/checkup': { refs: [{ types: ['health.checkup_done'], key: 'checkupId' }], archive: false },
+  'learning/topic': { refs: [{ types: ['learning.test_taken'], key: 'topicId' }], children: { module: 'learning', kind: 'item', key: 'topicId' }, archive: false },
+  'learning/item': { refs: [{ types: ['learning.reviewed'], key: 'itemId' }], archive: false },
+  'library/book': { refs: [{ types: ['library.progress', 'library.note', 'library.finished'], key: 'bookId' }], archive: false },
+  'skills/skill': { refs: [{ types: ['skill.rank_unlocked', 'time.logged'], key: 'skillId' }], archive: false },
+  'training/exercise': { refs: [{ types: ['workout.logged'], list: 'exercises', key: 'exerciseId' }], archive: false },
 };
+
+/**
+ * ¿Iván ya usó este elemento? Algún registro vigente que no sea de la propia acción lo referencia, o (para un tema)
+ * tiene elementos que no se van a borrar con esta acción. Una consulta para los registros y otra para los hijos.
+ */
+async function usedByIvan(d1: D1Database, guard: UndoGuard, id: string, own: Set<string>, pending: Set<string>): Promise<boolean> {
+  const db = drizzle(d1);
+  const field = (k: string) => `$.${k}`;
+  const conds = guard.refs.map((r) => {
+    const hit = r.list
+      ? sql`EXISTS (SELECT 1 FROM json_each(${events.payload}, ${field(r.list)}) AS j WHERE ${r.key ? sql`json_extract(j.value, ${field(r.key)})` : sql`j.value`} = ${id})`
+      : sql`json_extract(${events.payload}, ${field(r.key!)}) = ${id}`;
+    return and(inArray(events.type, r.types), hit)!;
+  });
+  // Los de la propia acción ya se anularon (salvo días de retos protegidos): basta con uno más que ellos.
+  const rows = await db
+    .select({ id: events.id })
+    .from(events)
+    .where(and(isNull(events.voidedAt), or(...conds)))
+    .limit(own.size + 1);
+  if (rows.some((r) => !own.has(r.id))) return true;
+  const c = guard.children;
+  if (!c) return false;
+  const kids = await db
+    .select({ id: entities.id })
+    .from(entities)
+    .where(and(isNull(entities.deletedAt), eq(entities.module, c.module), eq(entities.kind, c.kind), sql`json_extract(${entities.data}, ${field(c.key)}) = ${id}`))
+    .limit(pending.size + 1);
+  return kids.some((k) => !pending.has(k.id));
+}
 
 /**
  * Retos de N días: un día marcado depende de que el intento siga vivo. Si la IA inició o marcó días de un intento

@@ -315,7 +315,10 @@ const guardarChequeo = tool({
         const sug = suggestionById(i.id);
         if (!sug) throw new ToolError(`No encontré el chequeo "${i.id}". Consulta los ids con ver_salud.`);
         id = suggestionCheckupId(sug.id);
-        base = checkupFromSuggestion(sug);
+        // Id de una recomendación ("dental"): si ya la activó, se edita la suya (no se pisa con los valores de fábrica).
+        const ex = catalog.find((c) => c.id === id);
+        if (ex && ex.module === 'health' && ex.kind === 'checkup') prev = ex as Entity<CheckupData>;
+        else base = checkupFromSuggestion(sug);
       } else {
         prev = e as Entity<CheckupData>;
         id = e.id;
@@ -324,7 +327,7 @@ const guardarChequeo = tool({
       const sug = suggestionById(i.recomendacion)!;
       id = suggestionCheckupId(sug.id);
       const e = catalog.find((c) => c.id === id);
-      if (e && e.module === 'health') prev = e as Entity<CheckupData>;
+      if (e && e.module === 'health' && e.kind === 'checkup') prev = e as Entity<CheckupData>;
       else base = checkupFromSuggestion(sug);
     } else {
       if (!i.nombre) throw new ToolError('Para crear un chequeo manda "nombre" (y de preferencia categoria y cada_meses), o "recomendacion" para activar una recomendada.');

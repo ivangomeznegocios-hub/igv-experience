@@ -93,8 +93,21 @@ export interface CoachAction {
 }
 
 /** El plan gratis permite 50 consultas a D1 por invocación: se deja margen para registrar la bitácora. */
+const D1_QUERY_LIMIT = 50;
 const QUERY_BUDGET = 40;
 const MAX_TOOL_CALLS = 12;
+/**
+ * Peor caso de una herramienta que escribe: lo fijo (catálogo, foto recalculada, lecturas y la bitácora) más una
+ * consulta por elemento de cada lista que recibe (personas, frases, ejercicios…). Si no cabe en lo que queda, no
+ * se empieza: pasar el límite a media escritura dejaría registros guardados sin bitácora ni "Deshacer".
+ */
+const WRITE_RESERVE = 12;
+function writeQueryCost(input: unknown): number {
+  let n = WRITE_RESERVE;
+  if (input && typeof input === 'object') for (const v of Object.values(input)) if (Array.isArray(v)) n += v.length;
+  return n;
+}
+const WRITE_TOOLS = new Set(ASSISTANT_TOOLS.filter((t) => t.writes).map((t) => t.name));
 
 gmRoute.post('/ask', async (c) => {
   if (!c.env.ANTHROPIC_API_KEY) return c.json({ error: 'El Coach no está activado: falta el secreto ANTHROPIC_API_KEY.' }, 503);
@@ -136,7 +149,8 @@ gmRoute.post('/ask', async (c) => {
 
   /** Ejecuta una herramienta sin dejar que un error inesperado tumbe la conversación. */
   const runTool = async (use: Anthropic.Beta.BetaToolUseBlock): Promise<Anthropic.Beta.BetaToolResultBlockParam> => {
-    if (++toolCalls > MAX_TOOL_CALLS || queries.count >= QUERY_BUDGET) {
+    const need = WRITE_TOOLS.has(use.name) ? writeQueryCost(use.input) : 0;
+    if (++toolCalls > MAX_TOOL_CALLS || queries.count >= QUERY_BUDGET || queries.count + need > D1_QUERY_LIMIT) {
       return { type: 'tool_result', tool_use_id: use.id, is_error: true, content: 'Llegaste al límite de acciones por mensaje. Dile a Iván qué quedó hecho y que te pida el resto en otro mensaje.' };
     }
     let r: Awaited<ReturnType<typeof runAssistantTool>>;

@@ -3,7 +3,7 @@ import { fakeD1 } from './fake-d1';
 
 // API de Claude simulada: primero pide una herramienta y luego responde con texto.
 const calls: any[] = [];
-const mode = { failSecond: false };
+const mode = { failSecond: false, script: null as any[] | null };
 vi.mock('@anthropic-ai/sdk', async (orig) => {
   const actual = await orig<typeof import('@anthropic-ai/sdk')>();
   class FakeAnthropic extends actual.default {
@@ -13,6 +13,7 @@ vi.mock('@anthropic-ai/sdk', async (orig) => {
         messages: {
           create: async (req: any) => {
             calls.push(structuredClone(req));
+            if (mode.script) return mode.script[calls.length - 1] ?? { stop_reason: 'end_turn', content: [{ type: 'text', text: 'Listo.' }] };
             if (calls.length === 1) {
               return { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'tu_1', name: 'completar_mision', input: { mision_id: 'daily-entrenar' } }] };
             }
@@ -133,5 +134,66 @@ describe('Coach en modo dictado (botón Hablar)', () => {
     const env = { DB: fakeD1(), DEV_BYPASS_AUTH: 'true', ANTHROPIC_API_KEY: 'sk-test' } as any;
     expect((await ask(app, env, { question: 'x', mode: 'otro' })).status).toBe(400);
     expect((await ask(app, env, { question: 'x', mode: 'dictado', readOnly: true })).status).toBe(400);
+  });
+});
+
+/** Como D1 en el plan gratis de Workers: pasar de `max` consultas en una invocación falla. */
+function limitedD1(d1: D1Database, limit: { n: number; max: number }): D1Database {
+  return new Proxy(d1, {
+    get(target, prop, receiver) {
+      if (prop === 'prepare') {
+        return (sql: string) => {
+          if (++limit.n > limit.max) throw new Error('Too many API requests by single worker invocation.');
+          return target.prepare(sql);
+        };
+      }
+      const v = Reflect.get(target, prop, receiver);
+      return typeof v === 'function' ? v.bind(target) : v;
+    },
+  });
+}
+
+describe('Coach: límite de consultas a D1', () => {
+  it('no empieza una escritura que no cabe en las 50 consultas: nada queda a medias ni sin "Deshacer"', async () => {
+    calls.length = 0;
+    const app = (await import('../src/index')).default;
+    const limit = { n: 0, max: Infinity };
+    const env = { DB: limitedD1(fakeD1(), limit), DEV_BYPASS_AUTH: 'true', ANTHROPIC_API_KEY: 'sk-test' } as any;
+    const put = (id: string, module: string, kind: string, data: Record<string, unknown>) =>
+      app.request(`/api/entities/${id}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ module, kind, data }) }, env);
+    const people = Array.from({ length: 20 }, (_, i) => `npc-p${String(i).padStart(2, '0')}`);
+    for (const [i, id] of people.entries()) await put(id, 'npcs', 'npc', { name: `Persona ${i}`, circle: 'amigos' });
+    await put('lt-ingles', 'learning', 'topic', { name: 'Inglés', topicKind: 'idioma' });
+    const frases = Array.from({ length: 25 }, (_, i) => ({ texto: `Phrase number ${i}`, significado: `Frase ${i}` }));
+    mode.script = [
+      {
+        stop_reason: 'tool_use',
+        content: [
+          { type: 'tool_use', id: 'tu_a', name: 'registrar_contacto', input: { personas: people, canal: 'persona' } },
+          { type: 'tool_use', id: 'tu_b', name: 'agregar_frase', input: { tema_id: 'lt-ingles', frases } },
+        ],
+      },
+    ];
+    try {
+      limit.n = 0;
+      limit.max = 50;
+      const res = await app.request('/api/gm/ask', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ question: 'Registra todo', history: [] }) }, env);
+      expect(limit.n).toBeLessThanOrEqual(50);
+      limit.max = Infinity;
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { actions: { tool: string; activityId: string }[] };
+      // Los 20 contactos sí cabían (y quedan con su "Deshacer"); las 25 frases ya no: ni se empiezan.
+      expect(body.actions.map((a) => a.tool)).toEqual(['registrar_contacto']);
+      const results = calls[1].messages.at(-1).content;
+      expect(results[0]).toMatchObject({ tool_use_id: 'tu_a', is_error: false });
+      expect(results[1]).toMatchObject({ tool_use_id: 'tu_b', is_error: true });
+      expect(results[1].content).toContain('límite');
+      const sync = (await (await app.request('/api/sync?since=0', {}, env)).json()) as { events: { type: string }[]; entities: { module: string; kind: string }[] };
+      expect(sync.events.filter((e) => e.type === 'npc.interaction')).toHaveLength(20);
+      expect(sync.entities.filter((e) => e.module === 'learning' && e.kind === 'item')).toHaveLength(0);
+    } finally {
+      mode.script = null;
+      limit.max = Infinity;
+    }
   });
 });

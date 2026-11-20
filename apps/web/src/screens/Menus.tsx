@@ -62,7 +62,7 @@ function attentionItems(state: ReturnType<typeof useGame>['state'], name: (id: s
     out.push({ to: `/npcs/${b.npcId}`, icon: 'cake', text: b.inDays === 0 ? `Hoy cumple ${name(b.npcId)}` : `${name(b.npcId)} cumple en ${b.inDays} ${b.inDays === 1 ? 'día' : 'días'}` });
   const npcMission = state.npcs.generatedMissions[0];
   if (npcMission) out.push({ to: `/npcs/${npcMission.npcId}`, icon: 'chat', text: npcMission.title });
-  const weak = state.habits.routine.filter((h) => h.dueToday && h.verdict === 'flojo');
+  const weak = state.habits.routine.filter((h) => h.dueToday && !h.doneToday && h.verdict === 'flojo');
   if (weak.length) out.push({ to: '/habitos', icon: 'checklist', text: weak.length === 1 ? `Hábito flojo hoy: ${weak[0].title}` : `${weak.length} hábitos flojos te tocan hoy` });
   const dueCards = learningDueCount(state.learning, learningTopics);
   if (dueCards) out.push({ to: '/aprendizaje', icon: 'translate', text: `${dueCards} ${dueCards === 1 ? 'tarjeta' : 'tarjetas'} por repasar` });

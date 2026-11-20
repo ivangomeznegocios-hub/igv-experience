@@ -186,6 +186,27 @@ describe('tests con IA (/api/learn)', () => {
     expect(calls[0].output_config.format.schema.required).toContain('suggestions');
   });
 
+  it('grade: un campo largo o una sugerencia vacía del modelo se recortan o descartan, no tumban la calificación', async () => {
+    next.reply = json({
+      results: [{ id: 'q1', correct: false, corrected: 'x'.repeat(700), wrong: 'w'.repeat(400), fix: 'f'.repeat(400), tag: 'gramatica', explanation: 'e'.repeat(800) }],
+      estimatedLevel: 'B1',
+      feedback: 'b'.repeat(1500),
+      suggestions: [
+        { text: '', meaning: 'vacía', example: null, tags: [] },
+        { text: 'It depends on the scope.', meaning: 'm'.repeat(400), example: null, tags: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] },
+      ],
+    });
+    const res = await post('grade', { topic, questions: [{ id: 'q1', type: 'responder', instruction: 'Responde', prompt: 'Why?', answer: 'a'.repeat(580) }] });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(body.feedback).toHaveLength(1200);
+    expect(body.results[0].corrected).toHaveLength(600);
+    expect(body.results[0].fix).toHaveLength(300);
+    expect(body.suggestions).toHaveLength(1);
+    expect(body.suggestions[0].meaning).toHaveLength(300);
+    expect(body.suggestions[0].tags).toHaveLength(6);
+  });
+
   it('grade: temas que no son idioma no llevan nivel CEFR y valida tamaños', async () => {
     next.reply = json({ results: [], estimatedLevel: 'C1', feedback: 'ok', suggestions: [] });
     const res = await post('grade', { topic: { name: 'Finanzas', kind: 'materia' }, questions: [{ id: 'q1', type: 'responder', instruction: 'Responde', prompt: '¿Qué es el EBITDA?', answer: 'Utilidad antes de…' }] });

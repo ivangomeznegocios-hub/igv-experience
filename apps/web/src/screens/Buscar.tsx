@@ -36,7 +36,7 @@ const ROUTES: Record<string, { label: string; to: string; icon: string }> = {
 };
 
 export default function Buscar() {
-  const { entities, events, state } = useGame();
+  const { entities, events, state, byId } = useGame();
   const [q, setQ] = useState('');
   const [day, setDay] = useState<string | null>(null);
   const ref = useAutoFocus<HTMLInputElement>();
@@ -56,12 +56,12 @@ export default function Buscar() {
       .slice(0, 40);
     const evs = events
       .filter((e) => !e.voidedAt)
-      .map((e) => ({ e, text: describeEvent(e, state.settings.currency), raw: norm(JSON.stringify(e.payload ?? {})) }))
+      .map((e) => ({ e, text: describeEvent(e, state.settings.currency, byId), raw: norm(JSON.stringify(e.payload ?? {})) }))
       .filter((x) => x.raw.includes(needle))
       .sort((a, b) => (a.e.localDate < b.e.localDate ? 1 : -1))
       .slice(0, 60);
     return { ents, evs };
-  }, [needle, entities, events, state.settings.currency]);
+  }, [needle, entities, events, byId, state.settings.currency]);
   return (
     <>
       <PageHeader title="Buscar" />
