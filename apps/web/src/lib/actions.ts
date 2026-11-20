@@ -77,12 +77,15 @@ export function writeLesson(text: string, mission: Entity<MissionData> | null, d
 export function closeDay(
   state: GameState,
   date: string,
-  input: { note: string; mood: number | null },
-  opts: { onPlanTomorrow?: (tomorrow: string) => void } = {},
+  input: { note: string; mood: number | null; routine?: string[] },
+  opts: { onPlanTomorrow?: (tomorrow: string) => void; quiet?: boolean } = {},
 ) {
   const prev = state.dayClosures[date];
-  addEvent('day.closed', { note: input.note.trim(), mood: input.mood ?? undefined }, { localDate: date });
   const isToday = date === state.today;
+  // Hoy se congela qué diarias tocaban, para que editar tu rutina después no cambie el puntaje de este día.
+  const routine = input.routine ?? (isToday && !state.habits.restDays.has(date) ? state.habits.routine.filter((h) => h.dueToday).map((h) => h.id) : undefined);
+  addEvent('day.closed', { note: input.note.trim(), mood: input.mood ?? undefined, ...(routine?.length ? { routine } : {}) }, { localDate: date });
+  if (opts.quiet) return;
   const hadMission = state.missions.activeDays.has(date);
   const bonus = !prev && hadMission ? dayCloseBonus(date, GAME_CONFIG.goldBonus.dayCloseOptions) : 0;
   if (bonus) toast(`Día cerrado. Bono sorpresa: +${bonus} de oro.`, 'xp');

@@ -138,6 +138,11 @@ const QUICK_ENTRIES: QuickEntry[] = [
   { mode: 'rest', icon: 'moon', label: 'Día de descanso', Form: RestForm, tile: false },
 ];
 
+/** Un formulario del registro rápido por su modo (lo usa la baraja del día para incrustarlo). */
+export function getQuickEntry(mode: string): QuickEntry | undefined {
+  return QUICK_ENTRIES.find((e) => e.mode === mode);
+}
+
 function QuickSheet({ initial, today, onClose }: { initial: Opts; today: string; onClose: () => void }) {
   const [mode, setMode] = useState<QuickMode>(initial.mode ?? 'menu');
   const [date, setDate] = useState(initial.date ?? today);

@@ -1,7 +1,9 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect, type ReactNode } from 'react';
 import { BrowserRouter, NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { onStoreError, sync, useGame, useStore } from './data/store';
 import { ActionDock } from './ui/ActionDock';
+import { DayDeckHost } from './ui/DayDeck';
+import { DayResultHost } from './ui/DayResult';
 import { Fx } from './ui/fx';
 import { QuestMode } from './ui/QuestMode';
 import { QuickAdd } from './ui/QuickAdd';
@@ -165,6 +167,32 @@ function SkinSync() {
   return null;
 }
 
+/** La mesa (Hoy) usa todo el ancho en computadora; las demás pantallas, una columna. */
+function Main({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation();
+  return <main className={`main ${pathname === '/' ? 'wide' : ''}`}>{children}</main>;
+}
+
+/**
+ * El título de la pestaña dice cómo va tu día (sirve con la app abierta en la computadora): es el único aviso, y
+ * no es una notificación.
+ */
+function TabTitle() {
+  const { state } = useGame();
+  const t = state.days.today;
+  useEffect(() => {
+    const base = 'IGV EXPERIENCE';
+    if (!t) {
+      document.title = base;
+      return;
+    }
+    const lead = t.status === 'won' ? '✓ Día ganado' : `${t.score}/100`;
+    const extra = state.days.comeback && !state.days.comeback.done ? ' · Regresaste' : !t.closed && t.status === 'won' ? ' · Cierra tu día' : '';
+    document.title = `${lead}${extra} · ${base}`;
+  }, [t, state.days.comeback]);
+  return null;
+}
+
 function ScrollTop() {
   const { pathname } = useLocation();
   useEffect(() => {
@@ -186,7 +214,7 @@ export default function App() {
       <ScrollTop />
       <div className="app">
         <Nav />
-        <main className="main">
+        <Main>
           <StatusBanner />
           {!store.ready ? (
             <div className="empty" style={{ paddingTop: 80 }}>
@@ -259,7 +287,7 @@ export default function App() {
               </Routes>
             </Suspense>
           )}
-        </main>
+        </Main>
       </div>
       <Fx />
       <Toasts />
@@ -268,6 +296,9 @@ export default function App() {
       {store.ready && <QuickAdd />}
       <ActionDock />
       {store.ready && <PlanSheet />}
+      {store.ready && <DayDeckHost />}
+      {store.ready && <DayResultHost />}
+      {store.ready && <TabTitle />}
       {store.ready && <RecordWatcher />}
       {store.ready && <NotificationsSync />}
       {store.ready && <SkinSync />}
