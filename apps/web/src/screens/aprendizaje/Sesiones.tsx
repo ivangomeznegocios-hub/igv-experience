@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   GAME_CONFIG,
+  LEARN_API_LIMITS,
+  inferLearningLang,
+  learnPayloadTexts,
+  learnTopicPayload,
   learningErrorKey,
+  learningLangName,
   learningSimilarity,
   learningWordDiff,
   normalizeLearningText,
@@ -26,8 +31,10 @@ const L = GAME_CONFIG.learning;
 const SESSION_XP = GAME_CONFIG.missionXp[L.sessionSize];
 
 export const isLanguage = (t: Entity<LearningTopicData>) => t.data.topicKind === 'idioma';
-export const voiceLang = (t: Entity<LearningTopicData>) => (isLanguage(t) ? t.data.lang || 'en-US' : 'es-MX');
-const langName = (t: Entity<LearningTopicData>) => (isLanguage(t) ? (/^en/i.test(voiceLang(t)) ? 'inglés' : t.data.name.toLowerCase()) : 'tus palabras');
+/** Idioma de la voz: el elegido en el tema; si no tiene, el que se deduce de su nombre ("Francés" → fr-FR); si no, inglés. */
+export const voiceLang = (t: Entity<LearningTopicData>) => (isLanguage(t) ? t.data.lang || inferLearningLang(t.data.name) || 'en-US' : 'es-MX');
+/** Nombre del idioma en español ("inglés", "francés"…) según la voz del tema. */
+export const langName = (t: Entity<LearningTopicData>) => (isLanguage(t) ? (learningLangName(voiceLang(t)) ?? t.data.name.toLowerCase()) : 'tus palabras');
 
 function shuffle<T>(xs: T[]): T[] {
   const a = [...xs];
@@ -89,9 +96,12 @@ function XpNote({ hadSession }: { hadSession: boolean }) {
 /** Nuevas que todavía caben hoy (máximo `newPerSession` al día). */
 export const newLeftToday = (st: LearningTopicState | undefined) => Math.min(st?.fresh.length ?? 0, Math.max(0, L.newPerSession - (st?.newToday ?? 0)));
 
+/** Tope de tarjetas por sesión: el resumen (`learning.test_taken`) admite hasta 200; lo que sobra queda para otra sesión. */
+const MAX_SESSION_CARDS = 200;
+
 function cardQueue(st: LearningTopicState | undefined, mode: 'due' | 'new' | 'hard' | 'all', allIds: string[]): string[] {
   if (!st) return mode === 'all' ? shuffle(allIds).slice(0, 20) : [];
-  if (mode === 'due') return [...st.due, ...st.fresh.slice(0, newLeftToday(st))];
+  if (mode === 'due') return [...st.due, ...st.fresh.slice(0, newLeftToday(st))].slice(0, MAX_SESSION_CARDS);
   if (mode === 'new') return st.fresh.slice(0, L.newPerSession);
   if (mode === 'hard') return shuffle([...st.struggling, ...st.learning]).slice(0, 15);
   return shuffle(allIds).slice(0, 20);
@@ -328,7 +338,15 @@ export function VozSession({ topic, onClose }: { topic: Entity<LearningTopicData
       addEvent('learning.reviewed', { itemId: it.id, result: v === 'ok' ? 'bien' : v === 'close' ? 'dude' : 'mal' });
     }
   };
-  const mic = useListen(lang, evaluate);
+  /** Tarjeta para la que se abrió el micrófono: si el resultado llega tarde (ya en la siguiente), se ignora. */
+  const listeningFor = useRef<string | null>(null);
+  const mic = useListen(lang, (said) => {
+    if (it && listeningFor.current === it.id) evaluate(said);
+  });
+  const listen = (action: () => void) => {
+    listeningFor.current = it?.id ?? null;
+    action();
+  };
 
   const finished = queue.length > 0 && idx >= queue.length;
   const save = useCallback(() => {
@@ -353,11 +371,13 @@ export function VozSession({ topic, onClose }: { topic: Entity<LearningTopicData
     if (finished) save();
   }, [finished, save]);
   const close = () => {
+    listeningFor.current = null;
     mic.stop();
     save();
     onClose();
   };
   const next = () => {
+    listeningFor.current = null;
     mic.stop();
     setAttempt(null);
     setTyped('');
@@ -455,7 +475,7 @@ export function VozSession({ topic, onClose }: { topic: Entity<LearningTopicData
           </>
         ) : mic.supported ? (
           <>
-            <button className={`lrn-mic ${mic.listening ? 'on' : ''}`} onClick={mic.toggle} aria-label={mic.listening ? 'Detener' : 'Hablar'}>
+            <button className={`lrn-mic ${mic.listening ? 'on' : ''}`} onClick={() => listen(mic.toggle)} aria-label={mic.listening ? 'Detener' : 'Hablar'}>
               <Icon name={mic.listening ? 'stop' : 'mic'} />
             </button>
             <div className="lrn-interim">{mic.listening ? mic.interim || 'Te escucho…' : 'Toca y dilo'}</div>
@@ -484,7 +504,7 @@ export function VozSession({ topic, onClose }: { topic: Entity<LearningTopicData
                 className="btn"
                 onClick={() => {
                   setAttempt(null);
-                  mic.start();
+                  listen(mic.start);
                 }}
               >
                 <Icon name="mic" /> Repetir
@@ -521,8 +541,9 @@ const FOCUS = [
 ];
 const TYPE_NAMES: Record<string, string> = { traducir: 'Traducir', completar: 'Completar', opcion: 'Elegir', corregir: 'Corregir', responder: 'Responder' };
 
+/** El tema para /api/learn, recortado a los límites del servidor (si no, el test responde "Solicitud inválida"). */
 export function topicInput(t: Entity<LearningTopicData>): LearnTopicInput {
-  return { name: t.data.name, kind: t.data.topicKind, level: t.data.level ?? null, goal: t.data.goal ?? null };
+  return learnTopicPayload(t.data);
 }
 
 function errorMessage(e: unknown): string {
@@ -558,7 +579,7 @@ export function TestSession({ topic, onClose }: { topic: Entity<LearningTopicDat
   const start = async () => {
     setStep({ s: 'loading' });
     try {
-      const pick = (ids: string[] = []) => ids.map(textOf).filter((x): x is string => !!x).slice(0, 40);
+      const pick = (ids: string[] = []) => learnPayloadTexts(ids.map(textOf));
       const quiz = await learnApi.quiz({
         topic: topicInput(topic),
         count,
@@ -568,7 +589,7 @@ export function TestSession({ topic, onClose }: { topic: Entity<LearningTopicDat
         errors: (st0?.errors ?? [])
           .filter((e) => !e.improving)
           .slice(0, 15)
-          .map((e) => ({ tag: e.tag, answer: e.answer.slice(0, 200), correction: e.correction.slice(0, 200), count: e.count })),
+          .map((e) => ({ tag: e.tag.slice(0, LEARN_API_LIMITS.tag), answer: e.answer.slice(0, LEARN_API_LIMITS.text), correction: e.correction.slice(0, LEARN_API_LIMITS.text), count: e.count })),
       });
       setAnswers({});
       setIdx(0);

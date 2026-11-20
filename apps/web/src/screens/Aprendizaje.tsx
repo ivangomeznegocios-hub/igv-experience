@@ -6,7 +6,9 @@ import {
   LEARNING_TEST_SOURCE_NAMES,
   LEARNING_TOPIC_KIND_NAMES,
   LEARNING_TOPIC_KINDS,
+  LEARNING_VOICE_LANGS,
   englishStarterItems,
+  inferLearningLang,
   normalizeLearningText,
   parseLearningLine,
   type Entity,
@@ -22,7 +24,7 @@ import { fmtDate, newId } from '../lib/time';
 import { speak, speakSupported } from '../lib/vozIdioma';
 import { AttrChips, Badge, Bar, Collapse, Field, PageHeader, Sheet, Tabs, confirmAction, toast, undoToast } from '../ui/kit';
 import { Icon } from '../ui/icons';
-import { TarjetasSession, TestSession, VozSession, isLanguage, newLeftToday, voiceLang, type SessionKind } from './aprendizaje/Sesiones';
+import { TarjetasSession, TestSession, VozSession, isLanguage, langName, newLeftToday, voiceLang, type SessionKind } from './aprendizaje/Sesiones';
 import '../styles/aprendizaje.css';
 
 const L = GAME_CONFIG.learning;
@@ -30,6 +32,11 @@ const SESSION_XP = GAME_CONFIG.missionXp[L.sessionSize];
 const PREF_KEY = 'igv.aprendizaje.tema';
 const ITEM_TAGS = ['negociación', 'juntas', 'presentaciones', 'small talk', 'negocios', 'vocabulario', 'gramática', 'phrasal verbs', 'pronunciación'];
 const ITEM_TYPE_NAMES: Record<string, string> = { frase: 'Frase', palabra: 'Palabra', concepto: 'Concepto' };
+/** Nombre de un idioma de voz para los chips ("fr-FR" → "Francés"); un código fuera de la lista se muestra tal cual. */
+const voiceLabel = (code: string) => {
+  const n = LEARNING_VOICE_LANGS.find((l) => l.code === code)?.name;
+  return n ? n.charAt(0).toUpperCase() + n.slice(1) : code;
+};
 const isEnglish = (t: Entity<LearningTopicData>) => isLanguage(t) && /^(ingles|english)\b/.test(normalizeLearningText(t.data.name));
 
 function readPref(): string | null {
@@ -567,8 +574,8 @@ function ItemSheet({ topic, value, items, onClose }: { topic: Entity<LearningTop
           {card && card.status !== 'nuevo' ? ` · ${card.reviews} repasos · ${card.due && card.due > state.today ? `siguiente ${fmtDate(card.due)}` : 'toca repasar'}` : ''}
         </p>
       )}
-      <Field label={lang ? `En ${/^en/i.test(voiceLang(topic)) ? 'inglés' : topic.data.name.toLowerCase()}` : 'Concepto'}>
-        <input className="input" value={d.text} lang={lang ? voiceLang(topic) : 'es'} autoCapitalize="off" onChange={(e) => setD({ ...d, text: e.target.value })} />
+      <Field label={lang ? `En ${langName(topic)}` : 'Concepto'}>
+        <input className="input" value={d.text} maxLength={300} lang={lang ? voiceLang(topic) : 'es'} autoCapitalize="off" onChange={(e) => setD({ ...d, text: e.target.value })} />
       </Field>
       {dup && <p className="small" style={{ color: 'var(--flame)', marginTop: -6 }}>Ya la tienes: "{dup.data.text}".</p>}
       <Field label={lang ? 'Qué significa (español)' : 'Qué es / cómo lo explicarías'}>
@@ -602,7 +609,9 @@ function ItemSheet({ topic, value, items, onClose }: { topic: Entity<LearningTop
 }
 
 function TopicSheet({ topic, existing, onClose, onSaved }: { topic: Entity<LearningTopicData> | null; existing: Entity<LearningTopicData>[]; onClose: () => void; onSaved: (id: string) => void }) {
-  const [d, setD] = useState<LearningTopicData>(topic?.data ?? { name: '', topicKind: 'idioma', level: null, goal: '', lang: 'en-US' });
+  // Sin idioma de voz de entrada: se deduce del nombre ("Francés" → francés) hasta que eliges uno.
+  const [d, setD] = useState<LearningTopicData>(topic?.data ?? { name: '', topicKind: 'idioma', level: null, goal: '' });
+  const voice = d.lang || inferLearningLang(d.name) || 'en-US';
   const dup = existing.find((t) => t.id !== topic?.id && normalizeLearningText(t.data.name) === normalizeLearningText(d.name));
   const save = () => {
     const id = topic?.id ?? `lt-${newId().replace(/-/g, '').slice(0, 8)}`;
@@ -610,7 +619,7 @@ function TopicSheet({ topic, existing, onClose, onSaved }: { topic: Entity<Learn
       ...d,
       name: d.name.trim(),
       goal: d.goal?.trim() || undefined,
-      lang: d.topicKind === 'idioma' ? d.lang || (/ingl|english/i.test(d.name) ? 'en-US' : undefined) : undefined,
+      lang: d.topicKind === 'idioma' ? voice : undefined,
       level: d.level?.trim() || null,
     };
     saveEntity<LearningTopicData>({ id, module: 'learning', kind: 'topic', data, sort: topic?.sort });
@@ -642,7 +651,7 @@ function TopicSheet({ topic, existing, onClose, onSaved }: { topic: Entity<Learn
       }
     >
       <Field label="Nombre">
-        <input className="input" value={d.name} placeholder="Ej. Inglés, Francés, Finanzas corporativas" onChange={(e) => setD({ ...d, name: e.target.value })} />
+        <input className="input" value={d.name} maxLength={80} placeholder="Ej. Inglés, Francés, Finanzas corporativas" onChange={(e) => setD({ ...d, name: e.target.value })} />
       </Field>
       {dup && <p className="small" style={{ color: 'var(--flame)', marginTop: -6 }}>Ya tienes un tema con ese nombre.</p>}
       <Field label="Tipo">
@@ -667,8 +676,19 @@ function TopicSheet({ topic, existing, onClose, onSaved }: { topic: Entity<Learn
           <input className="input" value={d.level ?? ''} maxLength={12} placeholder="Básico, intermedio…" onChange={(e) => setD({ ...d, level: e.target.value })} />
         )}
       </Field>
+      {d.topicKind === 'idioma' && (
+        <Field label="Voz (para escuchar y practicar en voz alta)">
+          <div className="chips">
+            {[...LEARNING_VOICE_LANGS.map((l) => l.code as string), ...(LEARNING_VOICE_LANGS.some((l) => l.code === voice) ? [] : [voice])].map((code) => (
+              <button key={code} type="button" className={`chip ${voice === code ? 'on' : ''}`} onClick={() => setD({ ...d, lang: code })}>
+                {voiceLabel(code)}
+              </button>
+            ))}
+          </div>
+        </Field>
+      )}
       <Field label="¿Para qué lo aprendes?">
-        <input className="input" value={d.goal ?? ''} placeholder="Ej. Negociar y presentar en inglés" onChange={(e) => setD({ ...d, goal: e.target.value })} />
+        <input className="input" value={d.goal ?? ''} maxLength={300} placeholder="Ej. Negociar y presentar en inglés" onChange={(e) => setD({ ...d, goal: e.target.value })} />
       </Field>
       <Field label="La XP de practicar suma a">
         <AttrChips value={d.attribute ?? (L.attribute as 'inteligencia')} onChange={(attribute) => setD({ ...d, attribute })} />

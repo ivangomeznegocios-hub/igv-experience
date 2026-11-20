@@ -372,6 +372,14 @@ export function computeLearning(input: LearningInput): LearningState & { session
   };
 }
 
+/**
+ * Tarjetas por repasar hoy, solo de los temas activos del catálogo: las de un tema archivado (o borrado) no se pueden
+ * repasar desde Aprendizaje, así que no deben pedir atención.
+ */
+export function learningDueCount(state: Pick<LearningState, 'topics'>, topics: readonly Entity<LearningTopicData>[]): number {
+  return topics.filter((t) => !t.data.archived).reduce((s, t) => s + (state.topics[t.id]?.due.length ?? 0), 0);
+}
+
 /** Reductor del motor: estado de aprendizaje + XP (práctica del día por tema e hitos de "Lo sé"). */
 export function reduceLearning(ctx: Ctx): LearningState {
   const topicsAll = entitiesOf<LearningTopicData>(ctx, 'learning', 'topic');

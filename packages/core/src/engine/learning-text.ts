@@ -2,6 +2,7 @@
  * Aprendizaje: utilidades de texto puras (sin DOM). Las usan el motor (errores que repites), la práctica en voz
  * alta (comparar lo que dijiste con lo esperado) y el registro rápido de frases.
  */
+import type { LearningTopicData } from '../types';
 
 const CONTRACTIONS: [RegExp, string][] = [
   [/\bwon't\b/g, 'will not'],
@@ -20,7 +21,8 @@ const CONTRACTIONS: [RegExp, string][] = [
 
 /**
  * Forma comparable de un texto: minúsculas, sin acentos ni puntuación, contracciones del inglés expandidas
- * ("I'll" = "I will") y espacios simples.
+ * ("I'll" = "I will") y espacios simples. Conserva letras y números de cualquier escritura (cirílico, japonés,
+ * chino, griego, árabe…): solo quita lo que no es letra, marca ni número.
  */
 export function normalizeLearningText(s: string): string {
   let t = (s ?? '')
@@ -31,9 +33,10 @@ export function normalizeLearningText(s: string): string {
   for (const [re, rep] of CONTRACTIONS) t = t.replace(re, rep);
   return t
     .replace(/'/g, '')
-    .replace(/[^a-z0-9ñ\s]/g, ' ')
+    .replace(/[^\p{L}\p{M}\p{N}\s]/gu, ' ')
     .replace(/\s+/g, ' ')
-    .trim();
+    .trim()
+    .normalize('NFC');
 }
 
 /** Llave de un error para agruparlo con sus repeticiones: etiqueta + corrección normalizadas. */
@@ -114,4 +117,74 @@ export function parseLearningLine(line: string): { text: string; meaning: string
   const m = s.match(/^(.*?)\s*(?:=|\||\t|\s—\s|\s–\s|\s-\s)\s*(.*)$/);
   if (!m) return { text: s, meaning: '' };
   return { text: m[1].trim(), meaning: m[2].trim() };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Idioma de la voz (escuchar, practicar en voz alta y dictar)
+// ---------------------------------------------------------------------------------------------
+
+/** Idiomas para la voz de un tema (código BCP-47 y su nombre en español). */
+export const LEARNING_VOICE_LANGS = [
+  { code: 'en-US', name: 'inglés' },
+  { code: 'fr-FR', name: 'francés' },
+  { code: 'de-DE', name: 'alemán' },
+  { code: 'it-IT', name: 'italiano' },
+  { code: 'pt-BR', name: 'portugués' },
+  { code: 'ja-JP', name: 'japonés' },
+  { code: 'zh-CN', name: 'chino' },
+  { code: 'ko-KR', name: 'coreano' },
+  { code: 'ru-RU', name: 'ruso' },
+] as const;
+
+const LANG_BY_NAME: [RegExp, string][] = [
+  [/(^| )(ingl|english)/, 'en-US'],
+  [/(^| )(franc|french)/, 'fr-FR'],
+  [/(^| )(aleman|german|deutsch)/, 'de-DE'],
+  [/(^| )italian/, 'it-IT'],
+  [/(^| )portug/, 'pt-BR'],
+  [/(^| )(japon|japanese)/, 'ja-JP'],
+  [/(^| )(chino|mandarin|chinese)/, 'zh-CN'],
+  [/(^| )(corean|korean)/, 'ko-KR'],
+  [/(^| )(ruso|russian)/, 'ru-RU'],
+];
+
+/** Idioma de la voz que se deduce del nombre del tema ("Francés" → fr-FR), o undefined si no se reconoce. */
+export function inferLearningLang(name: string): string | undefined {
+  const n = normalizeLearningText(name);
+  return LANG_BY_NAME.find(([re]) => re.test(n))?.[1];
+}
+
+/** Nombre en español de un código de voz ("fr-FR" → "francés"), o undefined si no está en la lista. */
+export function learningLangName(code: string | undefined): string | undefined {
+  const base = (code ?? '').toLowerCase().split('-')[0];
+  return base ? LEARNING_VOICE_LANGS.find((l) => l.code.toLowerCase().split('-')[0] === base)?.name : undefined;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Lo que se manda a /api/learn (tests con IA)
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Límites de lo que acepta /api/learn (`apps/api/src/learn.ts`). La app recorta antes de mandar: una frase o una
+ * meta larga nunca debe hacer que el test responda "Solicitud inválida".
+ */
+export const LEARN_API_LIMITS = { topicName: 80, topicLevel: 20, topicGoal: 300, text: 200, tag: 40, texts: 40 } as const;
+
+/** El tema como lo pide /api/learn, recortado a sus límites. */
+export function learnTopicPayload(t: Pick<LearningTopicData, 'name' | 'topicKind' | 'level' | 'goal'>) {
+  return {
+    name: t.name.trim().slice(0, LEARN_API_LIMITS.topicName),
+    kind: t.topicKind,
+    level: t.level?.trim().slice(0, LEARN_API_LIMITS.topicLevel) || null,
+    goal: t.goal?.trim().slice(0, LEARN_API_LIMITS.topicGoal) || null,
+  };
+}
+
+/** Frases para /api/learn: sin vacías, máximo `texts` y cada una recortada a `text` caracteres. */
+export function learnPayloadTexts(texts: readonly (string | null | undefined)[]): string[] {
+  return texts
+    .map((x) => (x ?? '').trim())
+    .filter(Boolean)
+    .slice(0, LEARN_API_LIMITS.texts)
+    .map((x) => x.slice(0, LEARN_API_LIMITS.text));
 }
