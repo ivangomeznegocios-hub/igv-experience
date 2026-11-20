@@ -27,6 +27,7 @@ export { challengeAttempts, challengeDayNumber } from './engine/modules/challeng
 export type { DayPlan, PlanItem } from './engine/modules/plans';
 export * from './engine/insights';
 export * from './engine/physique';
+export * from './engine/physique-compare';
 export type { GoalState } from './engine/modules/goals';
 export type { ViceState } from './engine/modules/vices';
 export type { LibraryState } from './engine/modules/library';
@@ -48,6 +49,7 @@ export type { NotesState, PendingNote } from './engine/modules/notes';
 // [[entreno]]
 export * from './training/library';
 export * from './engine/training';
+export * from './engine/muscle-map';
 export { TRAINING_SETTINGS_ID, RECORD_METRIC, epley1rm, resolveExercise, muscleSetsOf, exerciseDefFromEntity, guessWorkoutKind, measureFromSets } from './engine/modules/training';
 export type { TrainingState, TrainingSummary, Workout, ResolvedExercise, ExerciseRecord, ExerciseTop, MuscleAggregate, RecordMark } from './engine/modules/training';
 export * from './assistant/tools-entreno';
