@@ -98,3 +98,22 @@
 .btn.icon.vz-field-mic { width: 42px; min-height: 42px; flex: none; }
 /* Con el micrófono encima del "+", el final de cada pantalla debe poder subir por encima de ambos. */
 @media (max-width: 999px) { body:has(.vz-fab) .main { padding-bottom: calc(160px + env(safe-area-inset-bottom)); } }
+
+/* Campos con micrófono integrado (ui/VoiceField.tsx: TextInput / TextArea) */
+.vf { position: relative; display: block; min-width: 0; flex: 1 1 auto; }
+.row > .vf { flex: 1 1 auto; }
+.vf.has-mic > .input { padding-right: 40px; }
+.vf-mic {
+  position: absolute; right: 4px; top: 4px; width: 34px; height: 34px; min-height: 0;
+  display: grid; place-items: center; padding: 0; border: 0; border-radius: 9px; cursor: pointer;
+  background: transparent; color: var(--muted); -webkit-tap-highlight-color: transparent;
+}
+.vf-mic svg { width: 17px; height: 17px; stroke-width: 2; }
+.vf-mic:hover { color: var(--gold); }
+.vf-mic:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+.vf-mic.on { color: #fff; background: var(--red); }
+.vf-mic.on::after { content: ''; position: absolute; inset: -3px; border-radius: 11px; border: 2px solid var(--red); opacity: 0.5; animation: vz-pulse 1.4s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) { .vf-mic.on::after { animation: none; } }
+.vf.listening > .input { border-color: var(--red); box-shadow: 0 0 0 3px color-mix(in srgb, var(--red) 18%, transparent); }
+.vf-hint { display: block; font-size: 12px; color: var(--muted); margin-top: 4px; font-style: italic; overflow-wrap: anywhere; }
+.vf-hint.err { color: var(--red); font-style: normal; }

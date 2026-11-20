@@ -57,7 +57,7 @@ export const VOICE_ERRORS: Record<VoiceErrorCode, string> = {
   permission: 'Permite el micrófono para dictar: toca el candado junto a la dirección → Micrófono → Permitir. En iPhone, activa también Dictado en Ajustes → General → Teclado.',
   'no-mic': 'No encontré un micrófono. Revisa que no lo esté usando otra app.',
   network: 'El dictado de este navegador necesita internet. Usa el micrófono de tu teclado o escribe; se guarda igual.',
-  language: 'Este navegador no tiene dictado en español.',
+  language: 'Este navegador no tiene dictado en ese idioma.',
   other: 'No pude usar el micrófono. Intenta de nuevo.',
 };
 
@@ -89,6 +89,9 @@ export class Dictation {
   private listeners = new Set<() => void>();
   private onFinalCb: ((text: string) => void) | null = null;
 
+  /** `lang`: idioma del dictado (es-MX por defecto; en-US para frases en inglés). */
+  constructor(readonly lang = 'es-MX') {}
+
   get state(): VoiceState {
     return this.snap;
   }
@@ -117,9 +120,12 @@ export class Dictation {
   private emitFinal(raw: string) {
     let t = raw.replace(/\s+/g, ' ').trim();
     if (!t) return;
-    // Algunos navegadores repiten lo anterior dentro de la misma sesión: solo se agrega lo nuevo.
+    // Algunos navegadores (Chrome Android) repiten lo anterior dentro de la misma sesión: solo se agrega lo nuevo.
+    // Repetir exactamente lo mismo solo se descarta en Android (en otros navegadores puede ser que lo dijiste dos veces).
     const prev = this.sessionFinal;
-    if (prev && t.toLowerCase().startsWith(prev.toLowerCase())) t = t.slice(prev.length).trim();
+    const low = t.toLowerCase();
+    const p = prev.toLowerCase();
+    if (prev && (low.length > p.length ? low.startsWith(p) : low === p && isAndroid())) t = t.slice(prev.length).trim();
     this.sessionFinal = raw.replace(/\s+/g, ' ').trim();
     if (!t) return;
     this.gotFinalSinceStop = true;
@@ -142,7 +148,16 @@ export class Dictation {
     }
     if (active && active !== this) active.abort();
     active = this;
-    if (this.rec) return true;
+    if (this.rec) {
+      // Volviste a tocar mientras se estaba deteniendo: sigue escuchando (se reinicia al cerrar la sesión).
+      if (!this.want) {
+        this.want = true;
+        this.fatal = false;
+        this.stopInterim = '';
+        this.set({ listening: true });
+      }
+      return true;
+    }
     this.want = true;
     this.fatal = false;
     this.restarts = [];
@@ -160,7 +175,7 @@ export class Dictation {
 
   private spawn(Ctor: SpeechCtor) {
     const rec = new Ctor();
-    rec.lang = 'es-MX';
+    rec.lang = this.lang;
     rec.continuous = !isAndroid();
     rec.interimResults = true;
     rec.maxAlternatives = 1;
@@ -295,9 +310,12 @@ export class Dictation {
  * Dictado para un campo o pantalla. `onFinal` recibe cada pedazo de texto definitivo.
  * Pasa `instance` para compartir un dictado ya iniciado (p. ej. el botón global "Hablar").
  */
-export function useDictation(onFinal: (text: string) => void, instance?: Dictation) {
+export function useDictation(onFinal: (text: string) => void, instance?: Dictation, lang = 'es-MX') {
   const own = useRef<Dictation | null>(null);
-  if (!instance && !own.current) own.current = new Dictation();
+  if (!instance && (!own.current || own.current.lang !== lang)) {
+    own.current?.abort();
+    own.current = new Dictation(lang);
+  }
   const d = instance ?? own.current!;
   const cb = useRef(onFinal);
   cb.current = onFinal;

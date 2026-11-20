@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ATTRIBUTE_IDS, ATTRIBUTE_NAMES, MISSION_SIZE_NAMES, MISSION_SIZES, GAME_CONFIG, addDays, type AttributeId, type MissionSize } from '@igv/core';
 import { Icon } from './icons';
 
+export { TextInput, TextArea, appendToField } from './VoiceField';
+
 export function Bar({ value, max = 1, tone, size, label }: { value: number; max?: number; tone?: string; size?: 'sm' | 'lg'; label?: ReactNode }) {
   const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
   return (
