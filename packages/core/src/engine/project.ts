@@ -46,6 +46,9 @@ import { reduceHealth, type HealthState } from './modules/health';
 // [[habitos]]
 import { reduceHabits, type HabitsState } from './habits';
 
+// [[marcador]]
+import { reduceDays, type DaysState } from './modules/days';
+
 
 export interface ProjectInput {
   events: GameEvent[];
@@ -117,6 +120,8 @@ export interface GameState {
   // [[habitos]]
   /** Hábitos de la rutina (cumplimiento, rachas, tendencia) y sugerencias "Hazlo hábito". Solo análisis. */
   habits: HabitsState;
+  /** Puntaje del día, días ganados e impulso (sistema "marcador"). */
+  days: DaysState;
 
 }
 
@@ -216,6 +221,9 @@ export function project(input: ProjectInput): GameState {
   // [[habitos]]
   const habits = reduceHabits(ctx, { missions, streak });
 
+  // [[marcador]] puntaje del día e impulso (no da XP)
+  const days = reduceDays(ctx, { missions, plans, habits, dayClosures, seasons });
+
   const achievements = reduceAchievements(ctx, { missions, streak, lessons, bosses, money, map, seasons });
   const attributes = reduceAttributes(ctx, xp);
   // El oro se calcula al final: depende de toda la XP ganada.
@@ -278,6 +286,7 @@ export function project(input: ProjectInput): GameState {
 
     // [[habitos]]
     habits,
+    days,
 
   };
 }

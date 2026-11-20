@@ -310,6 +310,34 @@ export const GAME_CONFIG = {
     viceTrendDelta: 1,
   },
 
+  // [[marcador]]
+  /**
+   * Puntaje del día (0–100): cómo te fue, no cuánto registraste. Cada parte pesa lo que dice `weights`; si una
+   * parte no aplica ese día (sin rutina, sin plan, nada que registrar), su peso se reparte entre las demás.
+   * No da XP: decide si el día se ganó (y, más adelante, cuánto oro multiplica el impulso).
+   */
+  dayScore: {
+    weights: { routine: 50, plan: 25, log: 15, close: 10 },
+    /** Puntaje mínimo para ganar el día. */
+    winThreshold: 70,
+    /** Revisiones de "¿Cómo fue tu día?" que cuentan como registro (lista fija para no recalcular el historial sin querer). */
+    logChecks: ['sueno', 'gastos', 'gente', 'tiempo', 'habitos-dejar'],
+    /** Días vacíos seguidos (ya terminados) a partir de los cuales es una pausa: neutra, sin pendientes. */
+    pauseMinDays: 2,
+  },
+  /**
+   * Impulso: multiplicador (en %) del oro por días ganados seguidos. Nunca toca la XP. Un día no ganado baja un
+   * escalón (no a cero); descanso, día salvado y día libre lo mantienen; una pausa completa baja un solo escalón.
+   */
+  momentum: {
+    steps: [
+      { wins: 0, pct: 100 },
+      { wins: 2, pct: 125 },
+      { wins: 4, pct: 150 },
+      { wins: 7, pct: 175 },
+      { wins: 14, pct: 200 },
+    ],
+  },
 
   /** Meta mensual inicial del Dragón Financiero (MXN). Editable en la app. */
   defaultMonthlyGoal: 100_000,

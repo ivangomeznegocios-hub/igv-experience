@@ -84,3 +84,7 @@ export type { HealthState, CheckupState, HealthDueItem, CheckupDone, HealthMetri
 export * from './engine/habits';
 export * from './engine/day-review';
 
+
+// [[marcador]]
+export type { DaysState, DayResult, DayStatus, DayPart, DayPartId, PendingItem, TodayResult, MomentumState } from './engine/modules/days';
+export * from './engine/next-play';

@@ -87,7 +87,12 @@ export const EVENT_SCHEMAS = {
 
   // --- Inmersión ---
   /** Cierre del día: una línea de reflexión. No da XP. */
-  'day.closed': z.object({ note: z.string().max(2000).default(''), mood: z.number().int().min(1).max(5).optional() }),
+  'day.closed': z.object({
+    note: z.string().max(2000).default(''),
+    mood: z.number().int().min(1).max(5).optional(),
+    /** Diarias que tocaban ese día al cerrarlo: congela el puntaje aunque después edites tu rutina. */
+    routine: z.array(id).max(50).optional(),
+  }),
   /** Misión sorpresa del día (se sortea en el dispositivo y se guarda para que el historial no cambie). */
   'bounty.drawn': z.object({ missionId: id, title: z.string().min(1).max(300), size, attribute: attr }),
   /** Canje de un premio real en la tienda (se paga con oro, nunca con XP). */

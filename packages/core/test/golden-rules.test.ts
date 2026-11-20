@@ -23,7 +23,7 @@ function randomEvent(r: () => number, date: string) {
     case 11: return ev('reward.redeemed', date, { rewardId: 'r1', name: 'Cena', cost: Math.floor(r() * 50) + 1 });
     case 12: return ev('library.finished', date, { bookId: `b${Math.floor(r() * 3)}`, title: 'Libro', size: 'media', attribute: 'inteligencia' });
     case 13: return ev('vice.relapse', date, { viceId: 'v1' });
-    case 14: return ev('day.closed', date, { note: 'ok' });
+    case 14: return ev('day.closed', date, r() < 0.5 ? { note: 'ok' } : { note: 'ok', routine: ['daily-leer', 'daily-hijo'] });
     case 15: return ev('body.logged', date, { weightKg: 80 });
     case 16: return ev('challenge.started', date, { challengeId: 'ch-1' });
     case 17: return ev('challenge.checked', date, { challengeId: 'ch-1' });
@@ -53,6 +53,20 @@ describe('reglas de oro', () => {
         expect(s.xp.ledger.every((e) => e.amount > 0)).toBe(true);
         prev = s;
       }
+    }
+  });
+
+  it('el marcador del día (puntaje e impulso) nunca cambia la XP ni los atributos', () => {
+    const scored = seed.map((e) => (e.id === 'settings' ? { ...e, data: { ...(e.data as object), scoreStart: '2026-11-23' } } : e));
+    for (let seedN = 1; seedN <= 6; seedN++) {
+      const r = rng(seedN * 7);
+      const events = Array.from({ length: 80 }, () => randomEvent(r, addDays('2026-11-23', Math.floor(r() * 60))));
+      const a = run(events, '2027-01-31');
+      const b = run(events, '2027-01-31', { entities: scored });
+      expect(b.xp.total).toBe(a.xp.total);
+      expect(b.attributes).toEqual(a.attributes);
+      expect(b.days.start).toBe('2026-11-23');
+      expect(Object.values(b.days.byDate).every((d) => d.score >= 0 && d.score <= 100)).toBe(true);
     }
   });
 
