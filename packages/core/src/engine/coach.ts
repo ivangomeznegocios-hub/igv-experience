@@ -2,6 +2,7 @@ import { GAME_CONFIG, type GameConfigInput } from '../config/game';
 import {
   COACH_GOAL_NAMES,
   MEAL_LIMIT_TAGS,
+  BODY_AREAS,
   BODY_AREA_NAMES,
   type BodyArea,
   type CoachGoal,
@@ -14,7 +15,7 @@ import {
   type WorkoutPlace,
 } from '../types';
 import { EXERCISE_BY_ID, MUSCLES, type ExerciseDef } from '../training/library';
-import { addDays, ageOn, diffDays, weekStart, weekday } from '../util/dates';
+import { addDays, ageOn, diffDays, toLocalDate, weekStart, weekday } from '../util/dates';
 import type { GameState } from './project';
 import type { CoachLogs, MealEntry } from './modules/coach';
 import type { ExerciseRecord, Workout } from './modules/training';
@@ -44,6 +45,9 @@ const round = (n: number, d = 0) => Math.round(n * 10 ** d) / 10 ** d;
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 const DAY_NAMES = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 const DAY_SHORT = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+/** Nombre de una zona del cuerpo (una zona desconocida, de una versión futura, se muestra tal cual). */
+const areaName = (a: string) => (BODY_AREA_NAMES[a as BodyArea] ?? a).toLowerCase();
+const isBodyArea = (a: unknown): a is BodyArea => (BODY_AREAS as readonly unknown[]).includes(a);
 
 export type PhaseKey = 'adaptacion' | 'base' | 'progreso' | 'descarga';
 
@@ -120,7 +124,7 @@ export function coachProfile(state: GameState): CoachProfile {
     waistCm,
     waistToHeight: waistCm && heightCm ? round(waistCm / heightCm, 2) : null,
     targetWeightKg: cs.targetWeightKg ?? null,
-    limitations: cs.limitations ?? [],
+    limitations: [...new Set((cs.limitations ?? []).filter(isBodyArea))],
     where: state.training.settings.where ?? state.training.summary.usualWhere ?? null,
     missing,
   };
@@ -145,15 +149,16 @@ export interface PlanPhase {
   nextPhaseIn: number | null;
 }
 
-/** Sesiones de entrenamiento (cualquier tipo) por lunes de la semana. */
+/**
+ * Días distintos con entrenamiento (de cualquier tipo) por lunes de la semana. Fuerza y caminata el mismo día
+ * cuentan como UN día: así seguir el "extra opcional" de cardio no adelanta el plan.
+ */
 function sessionsByWeek(workouts: Workout[], today: string): Map<string, number> {
   const out = new Map<string, number>();
   const days = new Set<string>();
   for (const w of workouts) {
-    if (w.date > today) continue;
-    const key = `${w.date}|${w.kind}`;
-    if (days.has(key)) continue;
-    days.add(key);
+    if (w.date > today || days.has(w.date)) continue;
+    days.add(w.date);
     const k = weekStart(w.date);
     out.set(k, (out.get(k) ?? 0) + 1);
   }
@@ -195,21 +200,23 @@ export function planPhase(state: GameState, cfg: Cfg = DEFAULT_CFG): PlanPhase {
   const inPhase = (k: 'adaptacion' | 'base' | 'progreso') => tw - P[k].from + 1;
   if (key === 'progreso' && inPhase('progreso') % cc.deloadEvery === 0) {
     key = 'descarga';
-    reason = `Llevas ${cc.deloadEvery - 1} semanas de progreso seguidas: esta semana baja el volumen para que el cuerpo asimile y vuelvas más fuerte.`;
+    reason = `Llevas ${cc.deloadEvery - 1} semanas de progreso seguidas: esta semana menos series, más reserva y un poco menos de peso para que el cuerpo asimile y vuelvas más fuerte.`;
   } else if (key === 'adaptacion') reason = `Semana ${inPhase('adaptacion')} de adaptación: pocas series y lejos del fallo para que tendones, articulaciones y técnica se acostumbren.`;
   else if (key === 'base') reason = `Semana ${inPhase('base')} de base: 3 series en lo principal, construyendo técnica y hábito.`;
   else reason = `Progreso: subes peso o repeticiones cada semana que puedas, con ${P.progreso.rir[0]}–${P.progreso.rir[1]} repeticiones en reserva.`;
 
-  // Semana ligera: el check-in de la semana pasada dijo que fue demasiado, sin energía o con molestias.
+  // Semana ligera: el check-in de la semana pasada dijo que fue demasiado, sin energía o con molestias. Es la misma
+  // fase con una serie menos y una rep más de reserva, sin subir peso (ver phaseParams y progressionFor).
   const last = state.coach.checkins[addDays(cur, -7)];
   let light = false;
   if (last && key !== 'descarga' && (last.effort >= 5 || last.energy <= 2 || last.pain.length > 0)) {
     light = true;
+    const what = 'una serie menos, una rep más de reserva y sin subir peso';
     reason = last.pain.length
-      ? `Semana ligera: en tu check-in dijiste que te molesta ${last.pain.map((a) => BODY_AREA_NAMES[a].toLowerCase()).join(' y ')}. Bajamos carga y evitamos lo que la fuerza.`
+      ? `Semana ligera: en tu check-in dijiste que te molesta ${last.pain.map(areaName).join(' y ')}. Va ${what}, y evito lo que carga esa zona.`
       : last.effort >= 5
-        ? 'Semana ligera: tu check-in dijo que el plan se sintió demasiado. Bajamos una serie y te dejas más reps en reserva.'
-        : 'Semana ligera: llegaste sin energía la semana pasada. Bajamos volumen para recuperar.';
+        ? `Semana ligera: tu check-in dijo que el plan se sintió demasiado. Va ${what}.`
+        : `Semana ligera: llegaste sin energía la semana pasada. Va ${what} para que recuperes.`;
   }
   const nextPhaseIn = key === 'adaptacion' ? P.base.from - tw : key === 'base' ? P.progreso.from - tw : null;
   return { key, name: P[key].name, trainedWeeks: tw, weekNumber, startDate: start, light, reason, nextPhaseIn };
@@ -437,20 +444,23 @@ export const JOINT_STRESS: Record<BodyArea, string[]> = {
 const HOME_EQUIPMENT = new Set<Equipment>(['corporal', 'mancuerna', 'banda', 'kettlebell']);
 
 function stresses(exerciseId: string, areas: readonly BodyArea[]): BodyArea[] {
-  return areas.filter((a) => JOINT_STRESS[a].includes(exerciseId));
+  // `?.`: una zona que esta versión no conoce (de una versión futura) no carga nada.
+  return areas.filter((a) => JOINT_STRESS[a]?.includes(exerciseId));
 }
+
+/** El ejercicio se puede hacer donde entrenas: fuera del gym solo peso corporal, mancuernas, banda o kettlebell. */
+const fitsPlace = (e: ExerciseDef, where: WorkoutPlace | null) => !where || where === 'gym' || HOME_EQUIPMENT.has(e.equipment);
+
+/** Cabe con tu lugar y tus molestias (la misma regla para las opciones del plan y para el ejercicio que cambiaste). */
+const fitsYou = (e: ExerciseDef | undefined, where: WorkoutPlace | null, avoid: readonly BodyArea[]): e is ExerciseDef => !!e && fitsPlace(e, where) && stresses(e.id, avoid).length === 0;
 
 /** Opciones de un patrón que caben con tu equipo y tus molestias (en orden de preferencia). */
 export function patternOptions(slot: string, opts: { where: WorkoutPlace | null; avoid: readonly BodyArea[]; beginner: boolean; favorites?: string[] }): ExerciseDef[] {
   const p = PATTERNS[slot];
   if (!p) return [];
-  const home = !!opts.where && opts.where !== 'gym';
   const base = opts.beginner ? [...p.beginner, ...p.standard] : [...p.standard, ...p.beginner];
   const all = [...new Set(base)];
-  const ok = (id: string) => {
-    const e = EXERCISE_BY_ID.get(id);
-    return !!e && (!home || HOME_EQUIPMENT.has(e.equipment)) && stresses(id, opts.avoid).length === 0;
-  };
+  const ok = (id: string) => fitsYou(EXERCISE_BY_ID.get(id), opts.where, opts.avoid);
   // Lo que ya usas (favoritos) va primero: así el plan sigue tus marcas y la progresión tiene historial.
   const fav = (opts.favorites ?? []).filter((id) => all.includes(id) && ok(id));
   return [...new Set([...fav, ...all.filter(ok)])].map((id) => EXERCISE_BY_ID.get(id)!);
@@ -509,10 +519,19 @@ export interface PrescribedSession {
   adjustments: string[];
 }
 
+/**
+ * Números de la fase. La semana ligera es la MISMA fase con una serie menos (mín. 1) y una rep más de reserva: conserva
+ * rangos, cardio, días de fuerza y ejercicios (la descarga, en cambio, usa sus propios números).
+ */
 function phaseParams(phase: PlanPhase, cfg: Cfg) {
-  const base = cfg.coach.phases[phase.light ? 'descarga' : phase.key];
-  return base;
+  const p = cfg.coach.phases[phase.key];
+  if (!phase.light) return p;
+  return { ...p, sets: Math.max(1, p.sets - 1), accessorySets: Math.max(1, p.accessorySets - 1), rir: [p.rir[0] + 1, p.rir[1] + 1] };
 }
+
+/** Semana o día en que NO se sube: descarga, semana ligera o día ligero (sueño, energía o molestias). */
+export type EaseMode = 'descarga' | 'semana' | 'dia';
+const EASE_LABEL: Record<EaseMode, string> = { descarga: 'Semana de descarga', semana: 'Semana ligera', dia: 'Hoy vas ligero' };
 
 function increment(e: ExerciseDef, compound: boolean, cfg: Cfg): number {
   const inc = cfg.coach.increments;
@@ -524,11 +543,15 @@ function increment(e: ExerciseDef, compound: boolean, cfg: Cfg): number {
 
 const roundTo = (n: number, step: number) => Math.round(n / step) * step;
 
-/** Doble progresión con tu historial: qué peso, reps o segundos toca hoy. */
+/**
+ * Doble progresión con tu historial: qué peso, reps o segundos toca hoy. Con `ease` (descarga, semana ligera o día
+ * ligero) NUNCA sube: pide como máximo lo de la vez pasada (dentro del tope del rango) con el mismo peso, o un poco
+ * menos en la descarga; el veredicto no se calcula contra el rango de esa semana.
+ */
 export function progressionFor(
   e: ExerciseDef,
   rec: ExerciseRecord | undefined,
-  rx: { reps: [number, number] | null; seconds: [number, number] | null; rir: [number, number]; compound: boolean },
+  rx: { reps: [number, number] | null; seconds: [number, number] | null; rir: [number, number]; compound: boolean; ease?: EaseMode },
   today: string,
   cfg: Cfg = DEFAULT_CFG,
 ): { targetKg: number | null; targetReps: number | null; targetSec: number | null; progression: Progression; note: string } {
@@ -544,8 +567,13 @@ export function progressionFor(
   }
   const days = diffDays(rec.lastDate, today);
   const last = rec.lastSets;
+  const ease = rx.ease ? EASE_LABEL[rx.ease] : null;
   if (e.measure === 'tiempo' && rx.seconds) {
     const best = Math.max(...last.map((s) => s.sec ?? 0));
+    if (ease) {
+      const target = best > 0 ? Math.min(best, rx.seconds[1]) : rx.seconds[0];
+      return { targetKg: null, targetReps: null, targetSec: target, progression: 'mantener', note: best ? `${ease}: la vez pasada aguantaste ${best} s; hoy ${target} s, sin buscar más.` : '' };
+    }
     const target = clamp(best >= rx.seconds[1] ? rx.seconds[1] : best + 5, rx.seconds[0], rx.seconds[1]);
     return { targetKg: null, targetReps: null, targetSec: target, progression: best >= rx.seconds[1] ? 'mantener' : 'subir', note: best ? `La vez pasada aguantaste ${best} s: hoy busca ${target} s.` : '' };
   }
@@ -554,6 +582,10 @@ export function progressionFor(
     if (!reps.length || !rx.reps) return { targetKg: null, targetReps: rx.reps?.[1] ?? null, targetSec: null, progression: 'repetir', note: '' };
     const min = Math.min(...reps);
     const max = Math.max(...reps);
+    if (ease) {
+      const target = Math.min(min, rx.reps[1]);
+      return { targetKg: null, targetReps: target, targetSec: null, progression: 'mantener', note: `${ease}: la vez pasada ${reps.join(', ')} reps. Hoy ${target} en cada serie, sin buscar más.` };
+    }
     if (min >= rx.reps[1])
       return {
         targetKg: null,
@@ -572,9 +604,25 @@ export function progressionFor(
   const minReps = Math.min(...repsAtTop);
   const step = increment(e, rx.compound, cfg);
   const lastText = `${work.length}×${repsAtTop.join('/')} con ${topKg} kg`;
+  // Un poco menos de peso (~stalePct), nunca más que la vez pasada.
+  const lighter = Math.min(topKg, Math.max(step, roundTo(topKg * cfg.coach.stalePct, step === 1 ? 0.5 : step / 2)));
+  // Sin subir: como máximo las reps de la vez pasada (y el tope del rango).
+  const easeReps = rx.reps ? Math.min(minReps, rx.reps[1]) : null;
   if (days > cfg.coach.staleDays) {
-    const kg = Math.max(step, roundTo(topKg * cfg.coach.stalePct, step === 1 ? 0.5 : step / 2));
-    return { targetKg: kg, targetReps: rx.reps?.[0] ?? null, targetSec: null, progression: 'retomar', note: `Hace ${days} días que no lo haces (${lastText}): retoma con ${kg} kg y sube desde ahí.` };
+    return { targetKg: lighter, targetReps: ease ? easeReps : rx.reps?.[0] ?? null, targetSec: null, progression: 'retomar', note: `Hace ${days} días que no lo haces (${lastText}): retoma con ${lighter} kg${ease ? ', sin buscar más esta semana' : ' y sube desde ahí'}.` };
+  }
+  if (ease) {
+    const descarga = rx.ease === 'descarga';
+    const kg = descarga ? lighter : topKg;
+    return {
+      targetKg: kg,
+      targetReps: easeReps,
+      targetSec: null,
+      progression: 'mantener',
+      note: descarga
+        ? `${ease}: la vez pasada ${lastText}. Hoy ${kg} kg${easeReps ? ` × ${easeReps}` : ''}, sin buscar más.`
+        : `${ease}: la vez pasada ${lastText}. Hoy el mismo peso${easeReps ? ` y ${easeReps} reps` : ''}, sin buscar más: así te dejas una rep más en reserva.`,
+    };
   }
   if (!rx.reps) return { targetKg: topKg, targetReps: null, targetSec: null, progression: 'repetir', note: '' };
   if (minReps >= rx.reps[1]) {
@@ -609,9 +657,11 @@ export function prescribeSession(key: SessionKey, sc: SessionContext, cfg: Cfg =
   const pp = phaseParams(sc.phase, cfg);
   const cc = cfg.coach;
   const beginner = (sc.level === 'sedentario' || sc.level === 'principiante') && sc.phase.key !== 'progreso';
-  const strengthFocus = sc.goal === 'fuerza' && sc.phase.key === 'progreso' && !sc.phase.light;
-  const holdKey = (sc.phase.light ? 'descarga' : sc.phase.key) as keyof typeof cc.holdSeconds;
-  const hold = cc.holdSeconds[holdKey] as readonly number[];
+  // La semana ligera conserva los rangos de su fase (también los de fuerza); la descarga usa los suyos.
+  const strengthFocus = sc.goal === 'fuerza' && sc.phase.key === 'progreso';
+  const hold = cc.holdSeconds[sc.phase.key] as readonly number[];
+  // Semana de descarga, semana ligera o día ligero: la progresión no sube.
+  const ease: EaseMode | undefined = sc.phase.key === 'descarga' ? 'descarga' : sc.phase.light ? 'semana' : sc.light ? 'dia' : undefined;
   const exercises: PrescribedExercise[] = [];
   const used = new Set<string>();
   let minutes = cc.warmupMinutes;
@@ -621,7 +671,9 @@ export function prescribeSession(key: SessionKey, sc: SessionContext, cfg: Cfg =
     const options = patternOptions(slot, { where: sc.where, avoid: sc.avoid, beginner, favorites: sc.favorites }).filter((e) => !used.has(e.id));
     const swap = sc.swaps[slot];
     const swapped = swap ? EXERCISE_BY_ID.get(swap) : undefined;
-    const ex = swapped && !used.has(swapped.id) && stresses(swapped.id, sc.avoid).length === 0 ? swapped : options[0];
+    // El cambio se respeta si cabe con tu lugar y tus molestias y no lo usa ya otro patrón; si no, la primera opción
+    // (el cambio queda guardado: vuelve cuando entrenes donde sí cabe).
+    const ex = fitsYou(swapped, sc.where, sc.avoid) && !used.has(swapped.id) ? swapped : options[0];
     if (!ex) continue;
     const compound = pat.compound && ex.measure !== 'tiempo';
     let sets = compound ? pp.sets : pp.accessorySets;
@@ -644,8 +696,11 @@ export function prescribeSession(key: SessionKey, sc: SessionContext, cfg: Cfg =
             : [pp.compoundReps[0], pp.compoundReps[1]]
           : [pp.reps[0], pp.reps[1]];
     const seconds: [number, number] | null = ex.measure === 'tiempo' ? [hold[0], hold[1]] : null;
-    const prog = progressionFor(ex, sc.records[ex.id], { reps: repsRange, seconds, rir, compound }, sc.today, cfg);
+    const prog = progressionFor(ex, sc.records[ex.id], { reps: repsRange, seconds, rir, compound, ease }, sc.today, cfg);
     used.add(ex.id);
+    // Sin subir puede tocar menos que el mínimo del rango (lo de la vez pasada): el rango que se muestra lo incluye.
+    const shownReps: [number, number] | null = repsRange && prog.targetReps !== null && prog.targetReps < repsRange[0] ? [prog.targetReps, repsRange[1]] : repsRange;
+    const shownSec: [number, number] | null = seconds && prog.targetSec !== null && prog.targetSec < seconds[0] ? [prog.targetSec, seconds[1]] : seconds;
     exercises.push({
       slot,
       slotLabel: pat.label,
@@ -655,19 +710,23 @@ export function prescribeSession(key: SessionKey, sc: SessionContext, cfg: Cfg =
       equipment: ex.equipment,
       compound,
       sets,
-      reps: repsRange,
-      seconds,
+      reps: shownReps,
+      seconds: shownSec,
       rir,
       restSec,
       ...prog,
       cue: pat.cue,
       muscles: ex.primary,
-      alternatives: patternOptions(slot, { where: sc.where, avoid: sc.avoid, beginner, favorites: [] })
-        .filter((o) => o.id !== ex.id)
-        .slice(0, 5)
-        .map((o) => ({ id: o.id, name: o.name })),
+      alternatives: [],
     });
   }
+  // Alternativas: solo lo que de verdad se puede elegir (cabe con tu lugar y molestias) y que no está ya en esta sesión
+  // en ningún patrón. Así elegir una siempre se respeta y no repite un ejercicio de la sesión.
+  for (const e of exercises)
+    e.alternatives = patternOptions(e.slot, { where: sc.where, avoid: sc.avoid, beginner, favorites: [] })
+      .filter((o) => !used.has(o.id))
+      .slice(0, 5)
+      .map((o) => ({ id: o.id, name: o.name }));
   const warmup = [
     '5 min de caminata, bici o elíptica suave.',
     'Movilidad: 10 círculos de cadera, 10 de hombro y 10 sentadillas sin peso.',
@@ -727,11 +786,33 @@ function strengthDaysOf(cs: CoachSettings, level: CoachLevel, phaseMax: number, 
   const def = (cfg.coach.defaultDays[level] ?? [0, 2, 4]) as readonly number[];
   const days = [...new Set((cs.days?.length ? cs.days : def).filter((d) => d >= 0 && d <= 6))].sort((a, b) => a - b);
   if (days.length <= phaseMax) return days;
-  // Más días de los que pide la fase: se reparten para no entrenar fuerza dos días seguidos si se puede.
-  const out: number[] = [];
-  const step = days.length / phaseMax;
-  for (let i = 0; i < phaseMax; i++) out.push(days[Math.floor(i * step)]);
-  return out;
+  // Más días de los que pide la fase: de todas las combinaciones (máx. 35), la que deja más descanso entre días de
+  // fuerza, contando el cruce domingo → lunes. Se comparan los huecos de menor a mayor (el más corto primero); en
+  // empate, la que tiene menos días seguidos de fuerza, y luego la primera (los días más temprano).
+  let best = days.slice(0, phaseMax);
+  let bestKey: number[] | null = null;
+  const better = (a: number[], b: number[]) => {
+    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] > b[i];
+    return false;
+  };
+  const pick = (from: number, acc: number[]) => {
+    if (acc.length === phaseMax) {
+      const gaps = acc.map((d, i) => (i + 1 < acc.length ? acc[i + 1] : acc[0] + 7) - d);
+      let run = 0;
+      let longest = 0;
+      for (const g of [...gaps, ...gaps]) longest = Math.max(longest, (run = g === 1 ? run + 1 : 0));
+      // Más grande es mejor: huecos de menor a mayor y, al final, la racha de días seguidos (en negativo).
+      const key = [...[...gaps].sort((a, b) => a - b), -Math.min(longest, gaps.length)];
+      if (!bestKey || better(key, bestKey)) {
+        bestKey = key;
+        best = acc;
+      }
+      return;
+    }
+    for (let i = from; i <= days.length - (phaseMax - acc.length); i++) pick(i + 1, [...acc, days[i]]);
+  };
+  if (phaseMax > 0) pick(0, []);
+  return best;
 }
 
 export function stepsTarget(logs: CoachLogs, today: string, cs: CoachSettings, goal: CoachGoal, cfg: Cfg = DEFAULT_CFG): number {
@@ -857,15 +938,22 @@ export function nutritionDay(logs: CoachLogs, date: string, t: NutritionTargets)
   const proteinG = pg.length ? Math.round(pg.reduce((s, m) => s + m.proteinG!, 0)) : null;
   const kcal = kc.length ? Math.round(kc.reduce((s, m) => s + m.kcal!, 0)) : null;
   const water = logs.water[date] ?? 0;
-  const any = meals.length > 0 || water > 0;
-  const proteinOk = proteinG !== null && t.proteinG ? proteinG >= t.proteinG * 0.9 : proteinMeals >= t.meals.protein;
+  const ate = meals.length > 0;
+  const any = ate || water > 0;
+  // Proteína: cuenta el MEJOR de los dos criterios (comidas con proteína —etiqueta o ≥ 20 g— o los gramos anotados),
+  // así anotar los gramos de una comida nunca baja el día ni desmarca la proteína.
+  const gramsRatio = proteinG !== null && t.proteinG ? proteinG / t.proteinG : 0;
+  const mealsRatio = proteinMeals / t.meals.protein;
+  const byGrams = gramsRatio > 0 && gramsRatio >= mealsRatio;
+  const proteinOk = gramsRatio >= 0.9 || mealsRatio >= 1;
   const score = any
     ? Math.round(
-        (proteinG !== null && t.proteinG ? Math.min(1, proteinG / t.proteinG) : Math.min(1, proteinMeals / t.meals.protein)) * 30 +
+        Math.min(1, Math.max(gramsRatio, mealsRatio)) * 30 +
           Math.min(1, veggieMeals / t.meals.veggies) * 25 +
           Math.min(1, fruitMeals / t.meals.fruit) * 10 +
           Math.min(1, water / t.waterGlasses) * 20 +
-          (limitCount === 0 ? 15 : limitCount === 1 ? 7 : 0),
+          // Sin comidas registradas no se sabe si hubo ultraprocesados: esos puntos no se dan.
+          (!ate ? 0 : limitCount === 0 ? 15 : limitCount === 1 ? 7 : 0),
       )
     : null;
   const checks = [
@@ -873,12 +961,12 @@ export function nutritionDay(logs: CoachLogs, date: string, t: NutritionTargets)
       key: 'proteina',
       label: 'Proteína',
       done: proteinOk,
-      detail: proteinG !== null && t.proteinG ? `${proteinG} de ${t.proteinG} g` : `en ${proteinMeals} de ${t.meals.protein} comidas`,
+      detail: byGrams ? `${proteinG} de ${t.proteinG} g` : `en ${proteinMeals} de ${t.meals.protein} comidas${proteinG ? ` (${proteinG} g anotados)` : ''}`,
     },
     { key: 'verduras', label: 'Verduras', done: veggieMeals >= t.meals.veggies, detail: `en ${veggieMeals} de ${t.meals.veggies} comidas` },
     { key: 'fruta', label: 'Fruta', done: fruitMeals >= t.meals.fruit, detail: fruitMeals ? `${fruitMeals} ${fruitMeals === 1 ? 'vez' : 'veces'}` : 'aún no' },
     { key: 'agua', label: 'Agua', done: water >= t.waterGlasses, detail: `${water} de ${t.waterGlasses} vasos` },
-    { key: 'limitar', label: 'Sin ultraprocesados ni refresco', done: limitCount === 0, detail: limitCount ? `${limitCount} ${limitCount === 1 ? 'vez' : 'veces'}` : 'bien' },
+    { key: 'limitar', label: 'Sin ultraprocesados ni refresco', done: ate && limitCount === 0, detail: limitCount ? `${limitCount} ${limitCount === 1 ? 'vez' : 'veces'}` : ate ? 'bien' : 'sin comidas' },
   ];
   let tip: string | null = null;
   const pick = (k: keyof typeof FOOD_IDEAS, n = 3) => {
@@ -987,7 +1075,7 @@ export function weekReview(state: GameState, ws: string, cfg: Cfg = DEFAULT_CFG)
   let verdictText: string;
   if (ci && (ci.effort >= 5 || ci.energy <= 2 || ci.pain.length)) {
     verdict = 'bajar';
-    verdictText = 'La próxima semana va más ligera: una serie menos y más reserva. Primero recuperarte.';
+    verdictText = 'La próxima semana va más ligera: una serie menos, una rep más de reserva y sin subir peso. Primero recuperarte.';
   } else if (strengthDone >= Math.min(cfg.coach.advanceMinSessions, sdays.length) && compliance >= 70 && (!ci || ci.effort <= 4)) {
     verdict = 'subir';
     verdictText = 'Cumpliste: la próxima semana subes peso o repeticiones donde llegaste al tope.';
@@ -1052,12 +1140,16 @@ export interface CoachPlan {
 }
 
 const TZ_HOUR = new Map<string, Intl.DateTimeFormat>();
-function localHour(nowIso: string, tz: string): number {
+/** Hora y minuto locales (h23). */
+function localTime(nowIso: string, tz: string): { h: number; m: number } {
   let f = TZ_HOUR.get(tz);
-  if (!f) TZ_HOUR.set(tz, (f = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hourCycle: 'h23' })));
-  const h = Number(f.formatToParts(new Date(nowIso)).find((p) => p.type === 'hour')?.value);
-  return Number.isFinite(h) ? h : 12;
+  if (!f) TZ_HOUR.set(tz, (f = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: 'numeric', hourCycle: 'h23' })));
+  const parts = f.formatToParts(new Date(nowIso));
+  const h = Number(parts.find((p) => p.type === 'hour')?.value);
+  const m = Number(parts.find((p) => p.type === 'minute')?.value);
+  return { h: Number.isFinite(h) ? h : 12, m: Number.isFinite(m) ? m : 0 };
 }
+const localHour = (nowIso: string, tz: string): number => localTime(nowIso, tz).h;
 
 const MOTIVATION = [
   'La constancia le gana a la intensidad.',
@@ -1087,10 +1179,11 @@ export function coachPlan(state: GameState, nowIso: string, cfg: Cfg = DEFAULT_C
 
   // ---- Lo de hoy: sueño, cómo te sientes y molestias ----
   const rd = state.coach.readiness[today];
-  const readiness = rd ? { energy: rd.energy, soreness: rd.soreness, pain: rd.pain } : null;
+  // Solo zonas que esta versión conoce: una de una versión futura no se puede evitar ni nombrar en el plan.
+  const readiness = rd ? { energy: rd.energy, soreness: rd.soreness, pain: [...new Set(rd.pain.filter(isBodyArea))] } : null;
   const sleepHours = state.energy.sleepHours;
   const painToday = readiness?.pain ?? [];
-  const avoid = [...new Set([...profile.limitations, ...painToday, ...(state.coach.checkins[addDays(ws, -7)]?.pain ?? [])])];
+  const avoid = [...new Set([...profile.limitations, ...painToday, ...(state.coach.checkins[addDays(ws, -7)]?.pain ?? []).filter(isBodyArea)])];
   const veryLow = (sleepHours !== null && sleepHours < cc.sleep.veryLow) || (readiness !== null && readiness.energy <= cc.readiness.restEnergy);
   const low = !veryLow && ((sleepHours !== null && sleepHours < cc.sleep.low) || (readiness !== null && (readiness.energy <= cc.readiness.lightEnergy || readiness.soreness >= 3)));
 
@@ -1107,29 +1200,6 @@ export function coachPlan(state: GameState, nowIso: string, cfg: Cfg = DEFAULT_C
   const restDay = sdays.includes(6) ? [0, 1, 2, 3, 4, 5, 6].filter((d) => !sdays.includes(d)).at(-1) ?? -1 : 6;
   const cardioDays = [0, 1, 2, 3, 4, 5, 6].filter((d) => !sdays.includes(d) && d !== restDay);
   const perCardioDay = cardioDays.length ? clamp(Math.ceil(cardioTarget / cardioDays.length / 5) * 5, 20, 60) : 0;
-  const week: PlanDay[] = Array.from({ length: 7 }, (_, d) => {
-    const date = addDays(ws, d);
-    const dayW = weekWorkouts.filter((w) => w.date === date);
-    const si = sdays.indexOf(d);
-    const kind: PlanDay['kind'] = si >= 0 ? 'fuerza' : cardioDays.includes(d) ? 'cardio' : 'descanso';
-    const key = si >= 0 ? sessionAt(si) : null;
-    return {
-      date,
-      weekday: d,
-      label: DAY_NAMES[d],
-      short: DAY_SHORT[d],
-      kind,
-      sessionKey: key,
-      title: key ? SESSION_TEMPLATES[key].title : kind === 'cardio' ? `Cardio ${perCardioDay} min` : 'Descanso',
-      minutes: key ? sessionMinutes : kind === 'cardio' ? perCardioDay : null,
-      isToday: date === today,
-      past: date < today,
-      didStrength: dayW.some(isStrength),
-      didCardio: dayW.some(isCardio),
-      doneTitles: dayW.map((w) => w.title),
-    };
-  });
-
   // ---- Sesión de hoy ----
   const statusNow = muscleStatus(tr.summary, nowIso, cfg);
   const sctx: SessionContext = {
@@ -1151,8 +1221,15 @@ export function coachPlan(state: GameState, nowIso: string, cfg: Cfg = DEFAULT_C
   const behind = strengthDoneCount < plannedUpToToday;
   const todayIsStrength = sdays.includes(wd);
   const remainingSessions = Math.max(0, sdays.length - strengthDoneCount);
+  /**
+   * Días de esta semana en que el motor receta fuerza con lo que llevas hecho: día del plan o, si no, solo cuando ya vas
+   * atrasado (la misma regla que decide la sesión de hoy). Sirve para saber a qué día cae una sesión recorrida.
+   */
+  const trainsOn = (d: number) => sdays.includes(d) || strengthDoneCount < sdays.filter((x) => x <= d).length;
   const adjustments: string[] = [];
   let session: PrescribedSession;
+  /** La sesión de hoy se recorre porque los músculos clave no se han recuperado: desde qué día y hora ya se puede. */
+  let movedTo: { date: string; time: string; why: string } | null = null;
   const cardioLeft = Math.max(0, cardioTarget - cardioDone);
   const cardioToday = (min: number, title = 'Cardio'): PrescribedSession => {
     const c = cardioFor(min, sctx);
@@ -1167,6 +1244,27 @@ export function coachPlan(state: GameState, nowIso: string, cfg: Cfg = DEFAULT_C
       cooldown: ['Termina con 3–5 min suaves y estira pantorrillas y cadera.'],
       estMinutes: min,
       adjustments: [],
+    };
+  };
+  const okH = cc.readyWithinHours;
+  /**
+   * Si los músculos clave de una sesión siguen recuperándose (les faltan más de `readyWithinHours`), desde qué día y
+   * hora ya se puede hacer: el momento exacto (redondeado al minuto hacia arriba, nunca antes); si eso ya es de noche,
+   * desde el día siguiente. Null si ya se puede.
+   */
+  const notReadyFor = (keys: MuscleId[]) => {
+    const notReady = keys.filter((m) => statusNow[m].state === 'recuperando' && statusNow[m].hoursToReady > okH);
+    if (!notReady.length) return null;
+    const maxH = Math.max(...notReady.map((m) => statusNow[m].hoursToReady));
+    const readyMs = Math.max(...notReady.map((m) => Date.parse(statusNow[m].readyAt ?? nowIso)));
+    const okMs = Math.max(Date.parse(nowIso), Math.ceil((readyMs - okH * 3_600_000) / 60_000) * 60_000);
+    const at = localTime(new Date(okMs).toISOString(), cfg.timezone);
+    const okDate = toLocalDate(okMs, cfg.timezone);
+    const many = notReady.length > 1;
+    return {
+      date: at.h >= cc.lateHour ? addDays(okDate, 1) : okDate,
+      time: `${at.h}:${String(at.m).padStart(2, '0')}`,
+      why: `${notReady.map((m) => MUSCLES[m].name).join(' y ')} ${many ? 'siguen' : 'sigue'} recuperándose (lista${many ? 's' : ''} en ${maxH} h)`,
     };
   };
   if (strengthDoneToday) {
@@ -1184,27 +1282,26 @@ export function coachPlan(state: GameState, nowIso: string, cfg: Cfg = DEFAULT_C
       estMinutes: 30,
       adjustments: [sleepHours !== null && sleepHours < cc.sleep.veryLow ? `Dormiste ${sleepHours} h: entrenar pesado así sube el riesgo de lesión y rinde poco.` : 'Dijiste que estás sin energía: hoy recuperar es lo que más suma.'],
     };
-  } else if (remainingSessions > 0 && (todayIsStrength || behind)) {
-    const tmpl = SESSION_TEMPLATES[nextKey];
-    const notReady = tmpl.key.filter((m) => statusNow[m].state === 'recuperando' && statusNow[m].hoursToReady > 12);
-    if (notReady.length) {
+  } else if (remainingSessions > 0 && trainsOn(wd)) {
+    const pending = notReadyFor(SESSION_TEMPLATES[nextKey].key);
+    if (pending) {
       session = cardioToday(perCardioDay || 30);
-      adjustments.push(
-        `${notReady.map((m) => MUSCLES[m].name).join(' y ')} ${notReady.length > 1 ? 'siguen' : 'sigue'} recuperándose (lista${notReady.length > 1 ? 's' : ''} en ${Math.max(...notReady.map((m) => statusNow[m].hoursToReady))} h): hoy cardio y ${lowerFirst(tmpl.title)} mañana.`,
-      );
+      // La sesión cae el día en que ya se puede o en el siguiente en que toque fuerza (el texto se arma abajo).
+      movedTo = pending;
       session.adjustments = adjustments;
     } else {
       session = prescribeSession(nextKey, { ...sctx, light: low }, cfg);
-      if (low) adjustments.push(sleepHours !== null && sleepHours < cc.sleep.low ? `Dormiste ${sleepHours} h: hoy una serie menos y te dejas una repetición más en reserva.` : 'Llegas cansado o adolorido: hoy una serie menos y más reserva. Lo importante es no faltar.');
+      if (low) adjustments.push(sleepHours !== null && sleepHours < cc.sleep.low ? `Dormiste ${sleepHours} h: hoy una serie menos, una repetición más en reserva y sin subir peso.` : 'Llegas cansado o adolorido: hoy una serie menos, una repetición más en reserva y sin subir peso. Lo importante es no faltar.');
       if (painToday.length)
         adjustments.push(
-          `Te molesta ${painToday.map((a) => BODY_AREA_NAMES[a].toLowerCase()).join(' y ')}: quité lo que la carga. Si el dolor es punzante, te despierta o dura más de 1–2 semanas, ve con un médico o fisioterapeuta.`,
+          `Te molesta ${painToday.map(areaName).join(' y ')}: quité lo que la carga. Si el dolor es punzante, te despierta o dura más de 1–2 semanas, ve con un médico o fisioterapeuta.`,
         );
       if (!todayIsStrength && behind) adjustments.push(`Hoy no estaba planeada, pero vas ${strengthDoneCount} de ${sdays.length}: si puedes, hazla hoy.`);
-      if (hour >= 20) adjustments.push('Ya es tarde: si no te da, haz solo los 3 primeros ejercicios. Algo es mejor que nada.');
+      if (hour >= cc.lateHour) adjustments.push('Ya es tarde: si no te da, haz solo los 3 primeros ejercicios. Algo es mejor que nada.');
       session.adjustments = adjustments;
     }
-  } else if (cardioDays.includes(wd) || cardioLeft > 0) {
+  } else if (wd !== restDay && (cardioDays.includes(wd) || cardioLeft > 0)) {
+    // El día libre sigue libre aunque falte cardio (ahí la caminata es opcional, en el texto del descanso).
     session = cardioLeft > 0 ? cardioToday(Math.max(20, Math.min(perCardioDay || 30, Math.ceil(cardioLeft / 5) * 5))) : cardioToday(20, 'Caminata ligera');
   } else {
     session = {
@@ -1221,22 +1318,108 @@ export function coachPlan(state: GameState, nowIso: string, cfg: Cfg = DEFAULT_C
     };
   }
 
-  // Siguiente sesión de fuerza (para "mañana te toca…").
-  let next: CoachPlan['today']['next'] = null;
+  // ---- Lo que sigue esta semana, en el orden real (si faltas o se recorre una sesión, lo pendiente se recorre) ----
+  const lastDay = addDays(ws, 6);
+  const moved = movedTo;
+  // Día en que cae la sesión recorrida: el primero desde que los músculos están listos en que el motor sí receta fuerza
+  // (día del plan, o uno fuera del plan solo si ese día ya irías atrasado). Null si se pasa a la semana que entra.
+  let movedDay: string | null = null;
+  if (moved)
+    for (let d = moved.date; d <= lastDay; d = addDays(d, 1))
+      if (trainsOn(weekday(d))) {
+        movedDay = d;
+        break;
+      }
+  // Días que toman las sesiones pendientes: hoy (si hoy toca fuerza o se recorrió a más tarde hoy), el día al que se
+  // recorrió y los días de fuerza desde ahí (los de antes no: los músculos aún no estarían listos).
+  const slots: string[] = [];
   if (remainingSessions > 0) {
-    const futureDays = sdays.filter((d) => d > wd);
-    const left = strengthDoneToday ? remainingSessions : session.kind === 'fuerza' ? remainingSessions - 1 : remainingSessions;
-    if (left > 0 && futureDays.length) {
-      const idx = strengthDoneCount + (session.kind === 'fuerza' ? 1 : 0);
-      const k = sessionAt(Math.min(idx, sdays.length - 1));
-      next = { date: addDays(ws, futureDays[0]), title: SESSION_TEMPLATES[k].title, key: k };
+    if (session.kind === 'fuerza' || movedDay === today) slots.push(today);
+    const from = moved && moved.date > today ? (movedDay ?? addDays(lastDay, 1)) : addDays(today, 1);
+    if (movedDay && movedDay > today) slots.push(movedDay);
+    for (const d of sdays) {
+      const date = addDays(ws, d);
+      if (date >= from && !slots.includes(date)) slots.push(date);
     }
+    slots.sort();
   }
-  if (!next) {
+  const slotKey = new Map<string, SessionKey>();
+  slots.slice(0, remainingSessions).forEach((date, i) => slotKey.set(date, sessionAt(Math.min(strengthDoneCount + i, sdays.length - 1))));
+
+  // Siguiente sesión de fuerza (para "mañana te toca…"): la primera pendiente que no es la de hoy.
+  let next: CoachPlan['today']['next'] = null;
+  const nextSlot = [...slotKey.entries()].find(([date]) => !(date === today && session.kind === 'fuerza'));
+  if (nextSlot) next = { date: nextSlot[0], title: SESSION_TEMPLATES[nextSlot[1]].title, key: nextSlot[1] };
+  if (!next && sdays.length) {
+    // La semana que entra con lo que llevas registrado: su fase puede ser otra (p. ej. de cuerpo completo a torso/pierna).
     const nws = addDays(ws, 7);
-    const k = order.length === 2 ? order[((weekIndex + 1) * sdays.length) % 2] : order[0];
-    if (sdays.length) next = { date: addDays(nws, sdays[0]), title: SESSION_TEMPLATES[k].title, key: k };
+    const nPhase = planPhase({ ...state, today: nws }, cfg);
+    const nDays = strengthDaysOf(cs, profile.level, phaseParams(nPhase, cfg).maxStrengthDays, cfg);
+    const nOrder = sessionOrder(nDays.length);
+    const nIndex = Math.floor(diffDays(weekStart(nPhase.startDate), nws) / 7);
+    const k = nOrder.length === 2 ? nOrder[(nIndex * nDays.length) % 2] : nOrder[0];
+    const first = addDays(nws, nDays[0] ?? sdays[0]);
+    // Solo se retrasa si los músculos de ESA sesión (no los de la que quedó pendiente esta semana) siguen
+    // recuperándose: entonces va el primer día de fuerza de esa semana desde que ya se pueda.
+    const wait = notReadyFor(SESSION_TEMPLATES[k].key);
+    const from = wait && wait.date > first ? wait.date : first;
+    const date = nDays.map((d) => addDays(nws, d)).find((d) => d >= from) ?? from;
+    next = { date, title: SESSION_TEMPLATES[k].title, key: k };
   }
+  if (moved && next) {
+    const what = lowerFirst(next.title);
+    adjustments.push(
+      next.date === today
+        ? `${moved.why}: por ahora cardio; ${what} a partir de las ${moved.time}.`
+        : `${moved.why}: hoy cardio y ${what} ${next.date === addDays(today, 1) ? 'mañana' : `el ${DAY_NAMES[weekday(next.date)].toLowerCase()}`}.`,
+    );
+  }
+
+  const week: PlanDay[] = Array.from({ length: 7 }, (_, d) => {
+    const date = addDays(ws, d);
+    const dayW = weekWorkouts.filter((w) => w.date === date);
+    const planned = sdays.includes(d);
+    let kind: PlanDay['kind'] = planned ? 'fuerza' : cardioDays.includes(d) ? 'cardio' : 'descanso';
+    // Días pasados: su lugar fijo en la semana. Hoy y lo que sigue: lo que de verdad toca.
+    let key: SessionKey | null = planned ? sessionAt(sdays.indexOf(d)) : null;
+    let title: string | null = null;
+    let minutes: number | null = null;
+    if (date === today && strengthDoneToday) {
+      if (planned) key = sessionAt(Math.max(0, strengthDoneCount - 1));
+    } else if (date >= today) {
+      const k = slotKey.get(date);
+      if (k) {
+        kind = 'fuerza';
+        key = k;
+      } else if (planned && date === today) {
+        // Hoy tocaba fuerza pero no va (se recorrió, recuperación o ya completaste la semana): lo que sí toca.
+        kind = session.kind === 'descanso' ? 'descanso' : 'cardio';
+        key = null;
+        title = session.title;
+        minutes = session.estMinutes || null;
+      } else if (planned) {
+        // Día de fuerza que ya no lleva sesión (los músculos aún no estarían listos o ya completaste la semana).
+        kind = (moved && date < moved.date) || cardioLeft > 0 ? 'cardio' : 'descanso';
+        key = null;
+      }
+    }
+    const cardioMin = perCardioDay || 30;
+    return {
+      date,
+      weekday: d,
+      label: DAY_NAMES[d],
+      short: DAY_SHORT[d],
+      kind,
+      sessionKey: key,
+      title: title ?? (key ? SESSION_TEMPLATES[key].title : kind === 'cardio' ? `Cardio ${cardioMin} min` : 'Descanso'),
+      minutes: title ? minutes : key ? sessionMinutes : kind === 'cardio' ? cardioMin : null,
+      isToday: date === today,
+      past: date < today,
+      didStrength: dayW.some(isStrength),
+      didCardio: dayW.some(isCardio),
+      doneTitles: dayW.map((w) => w.title),
+    };
+  });
 
   // ---- Metas de la semana ----
   const stepsT = stepsTarget(state.coach, today, cs, profile.goal, cfg);
@@ -1265,13 +1448,18 @@ export function coachPlan(state: GameState, nowIso: string, cfg: Cfg = DEFAULT_C
   const lastWeek = weekReview(state, prevWs, cfg);
 
   // ---- Por qué el plan es así ----
+  const mainReps = profile.goal === 'fuerza' && phase.key === 'progreso' ? cc.strengthCompoundReps : pp.compoundReps;
   const why = [
     phase.reason,
     `${sdays.length} ${sdays.length === 1 ? 'día' : 'días'} de fuerza (${sdays.map((d) => DAY_SHORT[d]).join(', ')}) con ${sdays.length <= 3 ? 'cuerpo completo: cada músculo 2–3 veces por semana, lo que mejor funciona al empezar' : 'torso y pierna: cada músculo 2 veces por semana'}.`,
-    `${pp.sets} series en los ejercicios principales, ${pp.compoundReps[0]}–${pp.compoundReps[1]} repeticiones, dejando ${pp.rir[0]}–${pp.rir[1]} en reserva: suficiente estímulo sin acabar molido.`,
-    'Sobrecarga progresiva: cuando haces el tope del rango en todas las series, subes peso; si no, repites el peso y buscas una repetición más.',
+    `${pp.sets} ${pp.sets === 1 ? 'serie' : 'series'} en los ejercicios principales, ${mainReps[0]}–${mainReps[1]} repeticiones, dejando ${pp.rir[0]}–${pp.rir[1]} en reserva: suficiente estímulo sin acabar molido.`,
+    phase.key === 'descarga'
+      ? 'Esta semana no subes: repites las reps de la vez pasada con un poco menos de peso. La que sigue vuelves a progresar.'
+      : phase.light
+        ? 'Esta semana no subes peso ni reps: repites lo de la vez pasada. La que sigue vuelves a progresar.'
+        : 'Sobrecarga progresiva: cuando haces el tope del rango en todas las series, subes peso; si no, repites el peso y buscas una repetición más.',
     `Cardio: ${cardioTarget} min a la semana (la OMS pide 150–300) y ${stepsT.toLocaleString('es-MX')} pasos al día.`,
-    profile.limitations.length ? `Evito ejercicios que cargan ${profile.limitations.map((a) => BODY_AREA_NAMES[a].toLowerCase()).join(', ')}.` : '',
+    profile.limitations.length ? `Evito ejercicios que cargan ${profile.limitations.map(areaName).join(', ')}.` : '',
     `Objetivo: ${COACH_GOAL_NAMES[profile.goal].toLowerCase()}.`,
   ].filter(Boolean);
 
@@ -1309,7 +1497,7 @@ export function coachPlan(state: GameState, nowIso: string, cfg: Cfg = DEFAULT_C
     const daysLeft = 6 - wd;
     message =
       mood === 'serio'
-        ? `Vas ${strengthDoneCount} de ${sdays.length} sesiones y quedan ${daysLeft + 1} días. Hoy toca ${session.title} (~${session.estMinutes} min): ponte las pilas.`
+        ? `Vas ${strengthDoneCount} de ${sdays.length} sesiones y ${daysLeft === 0 ? 'hoy es el último día' : `quedan ${daysLeft + 1} días`}. Hoy toca ${session.title} (~${session.estMinutes} min): ponte las pilas.`
         : `Hoy toca ${session.title} (~${session.estMinutes} min): ${SESSION_TEMPLATES[session.key as SessionKey].focus.toLowerCase()}. ${motivation}`;
     actions.push({ kind: 'sesion', label: `Empezar ${lowerFirst(session.title)}`, detail: `${session.exercises.length} ejercicios · ~${session.estMinutes} min` });
     if (session.adjustments.length) extra.push(...session.adjustments.slice(0, 2));

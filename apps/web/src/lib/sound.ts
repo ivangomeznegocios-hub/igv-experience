@@ -8,6 +8,18 @@ function audio(): AudioContext | null {
   return ctx;
 }
 
+/**
+ * Crea o reanuda el audio compartido DENTRO de un toque: iOS deja suspendido un audio que nace fuera de un gesto,
+ * así que lo que suena después solo (p. ej. el fin de un descanso) necesita que se haya desbloqueado antes.
+ */
+export function unlockAudio() {
+  try {
+    audio();
+  } catch {
+    /* sin audio */
+  }
+}
+
 function tone(freq: number, start: number, dur: number, gain = 0.08, type: OscillatorType = 'triangle', endFreq?: number) {
   const a = audio();
   if (!a) return;
@@ -81,6 +93,11 @@ export const sfx = {
   undo() {
     if (!getPrefs().sound) return;
     tone(440, 0, 0.12, 0.05, 'triangle', 330);
+  },
+  /** Fin del descanso entre series: un tono suave. */
+  restDone() {
+    if (!getPrefs().sound) return;
+    tone(880, 0, 0.5, 0.08, 'sine');
   },
 };
 

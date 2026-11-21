@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { ATTRIBUTE_IDS, ATTRIBUTE_NAMES, MISSION_SIZE_NAMES, MISSION_SIZES, GAME_CONFIG, addDays, type AttributeId, type MissionSize } from '@igv/core';
 import { Icon } from './icons';
 
@@ -74,12 +74,40 @@ export function Sheet({ open, onClose, title, children, actions }: { open: boole
   );
 }
 
+/** Título + un campo (input, select, TextInput/TextArea). Para un grupo de botones usa `FieldGroup`. */
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="field">
+    <label className="field" onClick={keepLabelFromPressing}>
       <span>{label}</span>
       {children}
     </label>
+  );
+}
+
+/**
+ * Un `<label>` le pasa el toque de su texto a su primer control. Si ese control es un botón (chips, − / +), tocar el
+ * título o un texto de ayuda lo presionaría (p. ej. restar un paso o elegir la primera opción). Esto lo evita donde
+ * todavía haya botones dentro de un `Field`; los toques en los propios controles funcionan igual.
+ */
+function keepLabelFromPressing(e: { target: EventTarget | null; currentTarget: HTMLLabelElement; preventDefault: () => void }) {
+  const target = e.target as Element | null;
+  if (!target?.closest || target.closest('button, input, select, textarea, a, [contenteditable="true"]')) return;
+  // Dentro de otro <label> (el del número de un Stepper), ese decide.
+  if (target.closest('label') !== e.currentTarget) return;
+  if (e.currentTarget.control?.tagName === 'BUTTON') e.preventDefault();
+}
+
+/**
+ * Como `Field`, pero para un grupo de botones (chips, escala 1–5, − / +, día): no es un `<label>`, así que tocar el
+ * título no presiona ningún botón. El nombre del grupo lo lee el lector de pantalla por `aria-labelledby`.
+ */
+export function FieldGroup({ label, children }: { label: string; children: ReactNode }) {
+  const id = useId();
+  return (
+    <div className="field" role="group" aria-labelledby={id}>
+      <span id={id}>{label}</span>
+      {children}
+    </div>
   );
 }
 

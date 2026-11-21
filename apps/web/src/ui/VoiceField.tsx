@@ -35,9 +35,13 @@ function splitStyle(style: CSSProperties | undefined): [CSSProperties | undefine
   return [Object.keys(wrap).length ? (wrap as CSSProperties) : undefined, inner as CSSProperties];
 }
 
-/** Agrega texto al final del campo como si lo hubieras escrito (React recibe su `onChange`). */
+/**
+ * Agrega texto al final del campo como si lo hubieras escrito (React recibe su `onChange`). Respeta `maxLength`:
+ * el navegador solo lo aplica a lo que tecleas, no a lo que se escribe desde código.
+ */
 export function appendToField(el: HTMLInputElement | HTMLTextAreaElement, text: string) {
-  const next = appendSpeech(el.value, text);
+  let next = appendSpeech(el.value, text);
+  if (el.maxLength > 0 && next.length > el.maxLength) next = next.slice(0, el.maxLength);
   if (next === el.value) return;
   const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
   const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;

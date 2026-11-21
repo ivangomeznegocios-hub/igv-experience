@@ -89,6 +89,8 @@
 .coach-msg { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 8px; }
 .coach-msg.user { flex-direction: row-reverse; }
 .coach-msg .bubble { white-space: pre-wrap; }
+.coach-sources { margin-top: 4px; line-height: 1.5; overflow-wrap: anywhere; }
+.coach-sources a { color: var(--teal); }
 
 /* Nutrición */
 .nutri-checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; margin-top: 12px; }

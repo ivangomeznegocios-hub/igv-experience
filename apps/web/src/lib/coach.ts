@@ -2,19 +2,25 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   EXERCISE_BY_ID,
   coachPlan,
+  validateEvent,
   type BodyArea,
   type CoachPlan,
   type CoachSettings,
+  type EventPayload,
+  type EventType,
+  type GameEvent,
   type GameState,
   type MealKind,
   type MealTag,
+  type PrescribedExercise,
   type PrescribedSession,
   type WorkoutSet,
 } from '@igv/core';
-import { addEvent, getEvents, useGame, voidEvent } from '../data/store';
+import { addEvent, getEvents, restoreEvent, useGame, voidEvent } from '../data/store';
 import { toast, undoToast } from '../ui/kit';
 import { draftExercise, emptyDraft, saveTrainingSettings, type DraftExercise, type WorkoutDraft } from './entreno';
 import { sfx } from './sound';
+import { newId, todayLocal } from './time';
 
 /**
  * Tu entrenador personal en la app: el plan sale de `coachPlan` (core, sin IA ni red) y aquí viven los registros
@@ -56,6 +62,30 @@ export function saveCoachSettings(state: GameState, patch: Partial<CoachSettings
   const coach: CoachSettings = { ...(prev.coach ?? {}), ...patch };
   if (!coach.startDate) coach.startDate = state.today;
   return saveTrainingSettings(prev, { ...extra, coach });
+}
+
+/**
+ * Opciones para cambiar un ejercicio de la sesión de hoy: las alternativas de su movimiento sin las que ya usa otro
+ * ejercicio de la sesión (ahí el plan no aplicaría el cambio, o movería el otro ejercicio sin avisar).
+ */
+export function swapOptions(e: PrescribedExercise, session: PrescribedSession): PrescribedExercise['alternatives'] {
+  const taken = new Set(session.exercises.filter((x) => x.slot !== e.slot).map((x) => x.exerciseId));
+  return e.alternatives.filter((a) => a.id !== e.exerciseId && !taken.has(a.id));
+}
+
+/**
+ * Cambia el ejercicio de un movimiento en tu plan. Solo guarda si en la sesión de hoy ese movimiento de verdad queda
+ * con el ejercicio elegido; si no (otro ejercicio de la sesión ya lo usa), no toca nada y devuelve false: el cambio
+ * no se vería hoy y solo movería otras sesiones.
+ */
+export function applySwap(state: GameState, slot: string, exerciseId: string, nowIso = new Date().toISOString()): boolean {
+  const cs = state.training.settings.coach ?? {};
+  const swaps = { ...(cs.swaps ?? {}), [slot]: exerciseId };
+  const preview: GameState = { ...state, training: { ...state.training, settings: { ...state.training.settings, coach: { ...cs, swaps } } } };
+  const after = coachPlan(preview, nowIso).today.session.exercises.find((x) => x.slot === slot);
+  if (after?.exerciseId !== exerciseId) return false;
+  saveCoachSettings(state, { swaps });
+  return true;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -102,51 +132,104 @@ export function draftFromCoach(session: PrescribedSession, state: GameState): Wo
 // Registros de un toque (solo registro: no dan XP)
 // ---------------------------------------------------------------------------------------------
 
+/** Largo máximo de los textos libres (el mismo que valida el servidor en `events.ts`). */
+const MAX_TEXT = 500;
+const MAX_NOTE = 1000;
+/** Texto libre limpio: sin espacios de más y recortado a lo que acepta el servidor (el dictado se salta `maxLength`). */
+const clip = (s: string | undefined, max: number) => s?.trim().slice(0, max).trim() || undefined;
+
+/**
+ * Guarda el registro solo si el servidor lo aceptaría. Si no, avisa y no guarda nada (devuelve null): un evento
+ * inválido hace que el servidor rechace el lote entero y se perderían los registros que iban antes en la cola.
+ */
+function addChecked<T extends EventType>(type: T, payload: EventPayload<T>, date: string | undefined, what: string): GameEvent | null {
+  const check = validateEvent({ id: newId(), type, occurredAt: new Date().toISOString(), localDate: date ?? todayLocal(), payload });
+  if (!check.ok) {
+    toast(`No pude guardar ${what}: revisa los datos.`, 'error');
+    return null;
+  }
+  return addEvent(type, payload, { localDate: date });
+}
+
 export function logMeal(p: { meal: MealKind; text?: string; tags: MealTag[]; proteinG?: number; kcal?: number }, date?: string) {
-  const ev = addEvent('meal.logged', { meal: p.meal, text: p.text?.trim() || undefined, tags: p.tags, proteinG: p.proteinG || undefined, kcal: p.kcal || undefined }, { localDate: date });
+  const ev = addChecked('meal.logged', { meal: p.meal, text: clip(p.text, MAX_TEXT), tags: p.tags, proteinG: p.proteinG || undefined, kcal: p.kcal || undefined }, date, 'la comida');
+  if (!ev) return null;
   sfx.coin();
   undoToast('Comida registrada', () => voidEvent(ev.id));
   return ev;
 }
 
 export function logWater(glasses = 1, date?: string) {
-  const ev = addEvent('water.logged', { glasses }, { localDate: date });
+  const ev = addChecked('water.logged', { glasses }, date, 'el agua');
+  if (!ev) return null;
   undoToast(`+${glasses} ${glasses === 1 ? 'vaso' : 'vasos'} de agua`, () => voidEvent(ev.id));
   return ev;
 }
 
-/** Quita el último registro de agua del día (para corregir un toque de más). */
+/**
+ * "Quitar un vaso": quita UN vaso del día. Si el último registro traía varios (p. ej. "tomé 2 litros" desde la IA),
+ * se anula y se registra otro con un vaso menos. Siempre con "Deshacer", que regresa ese vaso.
+ */
 export function undoLastWater(date: string) {
   const last = getEvents()
     .filter((e) => e.type === 'water.logged' && e.localDate === date && !e.voidedAt)
-    .sort((a, b) => (a.occurredAt < b.occurredAt ? -1 : 1))
+    .sort((a, b) => (a.occurredAt < b.occurredAt ? -1 : a.occurredAt > b.occurredAt ? 1 : (a.createdAt ?? 0) - (b.createdAt ?? 0)))
     .at(-1);
   if (!last) return;
+  const glasses = (last.payload as EventPayload<'water.logged'>).glasses ?? 1;
   voidEvent(last.id);
-  toast('Quité el último registro de agua');
+  // El de reemplazo queda como el último del día: el siguiente "−" lo sigue bajando de uno en uno.
+  const rest = glasses > 1 ? addEvent('water.logged', { glasses: glasses - 1 }, { localDate: date }) : null;
+  undoToast('Quitaste un vaso de agua', () => giveBackGlass(date, last.id, rest?.id));
+}
+
+/**
+ * "Deshacer" de un "−": regresa exactamente el vaso que quitó. Los avisos se apilan y cada uno trae su "Deshacer",
+ * así que se pueden tocar en cualquier orden: si otro "−" ya bajó el reemplazo, restaurar el original sumaría de
+ * más (8 + 6 = 14 en vez de 7), y entonces solo se registra un vaso.
+ */
+function giveBackGlass(date: string, originalId: string, restId: string | undefined) {
+  const active = (id: string) => getEvents().some((e) => e.id === id && !e.voidedAt);
+  if (active(originalId)) {
+    // El original ya se restauró por otro lado (p. ej. "Restaurar" en la hoja del día): solo sobra el reemplazo.
+    if (restId && active(restId)) voidEvent(restId);
+    return;
+  }
+  if (!restId) return restoreEvent(originalId);
+  if (active(restId)) {
+    // Nadie más tocó el reemplazo: se cambia de vuelta por el registro original, tal cual.
+    voidEvent(restId);
+    restoreEvent(originalId);
+    return;
+  }
+  addEvent('water.logged', { glasses: 1 }, { localDate: date });
 }
 
 export function logSteps(steps: number, date?: string) {
-  const ev = addEvent('steps.logged', { steps: Math.round(steps) }, { localDate: date });
+  const ev = addChecked('steps.logged', { steps: Math.round(steps) }, date, 'los pasos');
+  if (!ev) return null;
   undoToast(`${Math.round(steps).toLocaleString('es-MX')} pasos`, () => voidEvent(ev.id));
   return ev;
 }
 
 export function logReadiness(p: { energy: number; soreness: number; pain: BodyArea[]; note?: string }) {
-  const ev = addEvent('coach.readiness', { energy: p.energy, soreness: p.soreness, pain: p.pain, note: p.note?.trim() || undefined });
+  const ev = addChecked('coach.readiness', { energy: p.energy, soreness: p.soreness, pain: p.pain, note: clip(p.note, MAX_TEXT) }, undefined, 'cómo te sientes');
+  if (!ev) return null;
   undoToast('Anotado: tu sesión de hoy se ajustó', () => voidEvent(ev.id));
   return ev;
 }
 
 export function logCheckin(p: { weekStart: string; effort: number; energy: number; mood: number; pain: BodyArea[]; wins?: string; struggles?: string }) {
-  const ev = addEvent('coach.checkin', { ...p, wins: p.wins?.trim() || undefined, struggles: p.struggles?.trim() || undefined });
+  const ev = addChecked('coach.checkin', { ...p, wins: clip(p.wins, MAX_NOTE), struggles: clip(p.struggles, MAX_NOTE) }, undefined, 'el check-in');
+  if (!ev) return null;
   sfx.coin();
   undoToast('Check-in guardado', () => voidEvent(ev.id));
   return ev;
 }
 
 export function logSleep(hours: number) {
-  const ev = addEvent('checkin.morning', { sleepHours: Math.round(hours * 10) / 10 });
+  const ev = addChecked('checkin.morning', { sleepHours: Math.round(hours * 10) / 10 }, undefined, 'el sueño');
+  if (!ev) return null;
   undoToast(`Dormiste ${Math.round(hours * 10) / 10} h`, () => voidEvent(ev.id));
   return ev;
 }
@@ -154,7 +237,8 @@ export function logSleep(hours: number) {
 export function logMeasures(p: { weightKg?: number; waistCm?: number; bodyFatPct?: number; note?: string }) {
   const clean = Object.fromEntries(Object.entries(p).filter(([, v]) => (typeof v === 'number' ? v > 0 : !!v))) as typeof p;
   if (!Object.keys(clean).length) return null;
-  const ev = addEvent('body.logged', clean);
+  const ev = addChecked('body.logged', clean, undefined, 'tus medidas');
+  if (!ev) return null;
   sfx.coin();
   undoToast('Medidas guardadas', () => voidEvent(ev.id));
   return ev;

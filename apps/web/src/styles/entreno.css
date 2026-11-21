@@ -96,6 +96,8 @@
 .stepper label { flex: 1; min-width: 0; display: flex; align-items: baseline; justify-content: center; gap: 2px; padding: 0 2px; }
 .stepper input { width: 100%; min-width: 0; border: 0; background: transparent; color: var(--text); text-align: center; font-weight: 700; font-size: 15px; padding: 7px 0; outline: none; font-variant-numeric: tabular-nums; -moz-appearance: textfield; }
 .stepper input::-webkit-outer-spin-button, .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+/* Pistas como "Último: 84.5" (campo vacío): más chicas para que quepan en media columna del celular. */
+.stepper input:not([placeholder="0"])::placeholder { font-size: 12px; font-weight: 600; }
 .stepper small { font-size: 10px; color: var(--faint); font-weight: 700; }
 .wk-last { font-size: 11px; color: var(--muted); margin-top: 6px; }
 .wk-pick { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 9px 2px; border: 0; border-top: 1px solid var(--line); background: none; color: var(--text); cursor: pointer; font: inherit; }

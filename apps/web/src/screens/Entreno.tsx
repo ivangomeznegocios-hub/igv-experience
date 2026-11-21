@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   EQUIPMENT_NAMES,
   EXERCISE_LIBRARY,
@@ -53,6 +54,8 @@ import { CoachTab } from '../ui/coach/CoachTab';
 import '../styles/entreno.css';
 
 type Tab = 'coach' | 'semana' | 'historial' | 'records' | 'rutinas';
+const TABS: readonly Tab[] = ['coach', 'semana', 'historial', 'records', 'rutinas'];
+const isTab = (v: string | null): v is Tab => !!v && (TABS as readonly string[]).includes(v);
 // Clave nueva para que todos abran primero la pestaña de tu coach (luego recuerda la última).
 const TAB_KEY = 'igv-entreno-tab2';
 const PAINT_KEY = 'igv-entreno-pintar';
@@ -83,9 +86,15 @@ export function muscleStateText(m: MuscleStatus): string {
 
 /** Entrenamiento: qué trabajaste, qué te falta, cuándo está listo cada músculo y qué sigue. */
 export default function Entreno() {
+  // Un enlace puede pedir una pestaña (`/entreno?tab=coach`, p. ej. "Ver tu plan" o el aviso del check-in): gana sobre
+  // la última que usaste. Sin `?tab=` se abre la última.
+  const [params, setParams] = useSearchParams();
+  const asked = params.get('tab');
   const [tab, setTabState] = useState<Tab>(() => {
+    if (isTab(asked)) return asked;
     try {
-      return (localStorage.getItem(TAB_KEY) as Tab) || 'coach';
+      const saved = localStorage.getItem(TAB_KEY);
+      return isTab(saved) ? saved : 'coach';
     } catch {
       return 'coach';
     }
@@ -98,6 +107,19 @@ export default function Entreno() {
       /* nada */
     }
   };
+  useEffect(() => {
+    if (!isTab(asked)) return;
+    setTab(asked);
+    // Se quita de la URL: al regresar a esta pantalla vuelve a abrir la última pestaña que usaste.
+    setParams(
+      (p) => {
+        p.delete('tab');
+        return p;
+      },
+      { replace: true },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [asked]);
   return (
     <>
       <PageHeader

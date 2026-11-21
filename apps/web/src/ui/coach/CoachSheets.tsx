@@ -29,7 +29,7 @@ import { updateSettings } from '../../lib/actions';
 import { logCheckin, logMeal, logMeasures, logReadiness, logSleep, logSteps, onOpenCoachSheet, saveCoachSettings, useCoachPlan, type CoachSheetOptions } from '../../lib/coach';
 import { fmtDate } from '../../lib/time';
 import { Icon } from '../icons';
-import { Chips, DateChips, Field, Sheet, TextArea, TextInput, toast } from '../kit';
+import { Chips, DateChips, Field, FieldGroup, Sheet, TextArea, TextInput, toast } from '../kit';
 import { Stepper } from '../quick/WorkoutQuick';
 import { CoachChat } from './CoachChat';
 import { CoachFace } from './CoachFace';
@@ -84,7 +84,7 @@ export function MultiChips<T extends string | number>({ value, onChange, options
 /** Escala de 1 a 5 con etiquetas en los extremos. */
 function Scale({ value, onChange, low, high, label }: { value: number | null; onChange: (v: number) => void; low: string; high: string; label: string }) {
   return (
-    <Field label={label}>
+    <FieldGroup label={label}>
       <div className="scale5">
         {[1, 2, 3, 4, 5].map((n) => (
           <button key={n} type="button" className={`chip ${value === n ? 'on' : ''}`} aria-pressed={value === n} onClick={() => onChange(n)}>
@@ -96,7 +96,7 @@ function Scale({ value, onChange, low, high, label }: { value: number | null; on
         <span>{low}</span>
         <span>{high}</span>
       </div>
-    </Field>
+    </FieldGroup>
   );
 }
 
@@ -107,7 +107,7 @@ const LEVEL_SHORT: Record<CoachLevel, string> = { sedentario: 'Sedentario', prin
 // Arma tu plan
 // ---------------------------------------------------------------------------------------------
 
-function SetupSheet({ onClose }: { onClose: () => void }) {
+export function SetupSheet({ onClose }: { onClose: () => void }) {
   const { state } = useGame();
   const cs = state.training.settings.coach ?? {};
   const editing = !!cs.on;
@@ -162,52 +162,52 @@ function SetupSheet({ onClose }: { onClose: () => void }) {
           </p>
         </div>
       )}
-      <Field label="¿Qué quieres lograr?">
+      <FieldGroup label="¿Qué quieres lograr?">
         <Chips value={goal} onChange={setGoal} options={COACH_GOALS.map((g) => ({ value: g, label: COACH_GOAL_NAMES[g] }))} />
-      </Field>
-      <Field label="¿De dónde arrancas?">
+      </FieldGroup>
+      <FieldGroup label="¿De dónde arrancas?">
         <Chips value={level} onChange={setLevel} options={COACH_LEVELS.map((l) => ({ value: l, label: LEVEL_SHORT[l] }))} />
         <div className="tiny muted" style={{ marginTop: 4 }}>
           {COACH_LEVEL_NAMES[level]}. {level === 'sedentario' ? 'Empezamos con 2 semanas de adaptación: pocas series y lejos del fallo.' : ''}
         </div>
-      </Field>
-      <Field label="¿Qué días puedes hacer pesas?">
+      </FieldGroup>
+      <FieldGroup label="¿Qué días puedes hacer pesas?">
         <MultiChips value={days} onChange={setDays} options={DAY_CHIPS} />
         <div className="tiny muted" style={{ marginTop: 4 }}>
           {days.length} {days.length === 1 ? 'día' : 'días'}. Al empezar uso máximo 3 de fuerza; los demás son de caminar o cardio. Así subes sin lastimarte.
         </div>
-      </Field>
-      <Field label="Minutos por sesión">
+      </FieldGroup>
+      <FieldGroup label="Minutos por sesión">
         <Chips value={minutes} onChange={setMinutes} options={[30, 45, 60, 75, 90].map((m) => ({ value: m, label: `${m}` }))} />
-      </Field>
-      <Field label="¿Dónde entrenas?">
+      </FieldGroup>
+      <FieldGroup label="¿Dónde entrenas?">
         <Chips value={where} onChange={setWhere} options={WORKOUT_PLACES.filter((p) => p !== 'alberca' && p !== 'cancha').map((p) => ({ value: p, label: WORKOUT_PLACE_NAMES[p] }))} />
-      </Field>
-      <Field label="¿Algo te duele o tienes alguna lesión?">
+      </FieldGroup>
+      <FieldGroup label="¿Algo te duele o tienes alguna lesión?">
         <MultiChips value={limits} onChange={setLimits} options={BODY_AREAS.map((a) => ({ value: a, label: BODY_AREA_NAMES[a] }))} />
         <div className="tiny muted" style={{ marginTop: 4 }}>Evito los ejercicios que cargan esa zona. Si el dolor es fuerte o no se va, primero médico o fisio.</div>
-      </Field>
+      </FieldGroup>
       <div className="eyebrow" style={{ marginTop: 6 }}>
         Tus datos (para calorías, proteína e IMC)
       </div>
       <div className="grid2" style={{ gap: 10 }}>
-        <Field label="Estatura">
+        <FieldGroup label="Estatura">
           <Stepper label="estatura" unit="cm" step={1} max={250} value={height} onChange={setHeight} />
-        </Field>
-        <Field label="Peso actual">
+        </FieldGroup>
+        <FieldGroup label="Peso actual">
           <Stepper label="peso" unit="kg" step={0.5} max={400} value={weight} onChange={setWeight} />
-        </Field>
+        </FieldGroup>
         <Field label="Fecha de nacimiento">
           <input className="input" type="date" max={state.today} value={birth} onChange={(e) => setBirth(e.target.value)} />
         </Field>
-        <Field label="Peso meta (opcional)">
+        <FieldGroup label="Peso meta (opcional)">
           <Stepper label="peso meta" unit="kg" step={0.5} max={400} value={target} onChange={setTarget} />
-        </Field>
+        </FieldGroup>
       </div>
       <div className="grid2" style={{ gap: 10 }}>
-        <Field label="Meta de pasos (vacío = automática)">
+        <FieldGroup label="Meta de pasos (vacío = automática)">
           <Stepper label="meta de pasos" unit="pasos" step={500} max={30000} value={steps} onChange={setSteps} />
-        </Field>
+        </FieldGroup>
         <Field label="Nombre de tu coach">
           <TextInput className="input" value={name} maxLength={30} placeholder="Coach" onChange={(e) => setName(e.target.value)} />
         </Field>
@@ -228,7 +228,7 @@ function SetupSheet({ onClose }: { onClose: () => void }) {
 // ¿Cómo te sientes hoy?
 // ---------------------------------------------------------------------------------------------
 
-function ReadinessSheet({ onClose }: { onClose: () => void }) {
+export function ReadinessSheet({ onClose }: { onClose: () => void }) {
   const { state } = useGame();
   const prev = state.coach.readiness[state.today];
   const [energy, setEnergy] = useState<number | null>(prev?.energy ?? null);
@@ -241,12 +241,12 @@ function ReadinessSheet({ onClose }: { onClose: () => void }) {
         Con esto ajusto tu sesión: si llegas cansado, la hago más ligera; si algo te duele, quito lo que lo carga.
       </p>
       <Scale label="Energía" value={energy} onChange={setEnergy} low="Sin pila" high="A tope" />
-      <Field label="¿Qué tan adolorido?">
+      <FieldGroup label="¿Qué tan adolorido?">
         <Chips value={soreness} onChange={setSoreness} options={['Nada', 'Poco', 'Bastante', 'Mucho'].map((l, i) => ({ value: i, label: l }))} />
-      </Field>
-      <Field label="¿Te molesta algo?">
+      </FieldGroup>
+      <FieldGroup label="¿Te molesta algo?">
         <MultiChips value={pain} onChange={setPain} options={BODY_AREAS.map((a) => ({ value: a, label: BODY_AREA_NAMES[a] }))} />
-      </Field>
+      </FieldGroup>
       <Field label="Nota (opcional)">
         <TextInput className="input" value={note} maxLength={500} placeholder="Dormí mal, mucho trabajo…" onChange={(e) => setNote(e.target.value)} />
       </Field>
@@ -268,7 +268,7 @@ function ReadinessSheet({ onClose }: { onClose: () => void }) {
 // Check-in semanal
 // ---------------------------------------------------------------------------------------------
 
-function CheckinSheet({ week, onClose }: { week?: string; onClose: () => void }) {
+export function CheckinSheet({ week, onClose }: { week?: string; onClose: () => void }) {
   const { state } = useGame();
   const plan = useCoachPlan();
   const ws = week ?? plan.checkinWeek ?? (weekday(state.today) <= 1 ? addDays(weekStart(state.today), -7) : weekStart(state.today));
@@ -293,9 +293,9 @@ function CheckinSheet({ week, onClose }: { week?: string; onClose: () => void })
       <Scale label="¿Qué tan pesado se sintió el plan?" value={effort} onChange={setEffort} low="Muy ligero" high="Demasiado" />
       <Scale label="Energía en la semana" value={energy} onChange={setEnergy} low="Sin pila" high="A tope" />
       <Scale label="Ánimo" value={mood} onChange={setMood} low="Bajo" high="Excelente" />
-      <Field label="¿Alguna molestia?">
+      <FieldGroup label="¿Alguna molestia?">
         <MultiChips value={pain} onChange={setPain} options={BODY_AREAS.map((a) => ({ value: a, label: BODY_AREA_NAMES[a] }))} />
-      </Field>
+      </FieldGroup>
       <Field label="¿Qué salió bien?">
         <TextArea rows={2} value={wins} maxLength={1000} placeholder="Fui 3 veces, comí mejor…" onChange={(e) => setWins(e.target.value)} />
       </Field>
@@ -349,28 +349,28 @@ export function MealForm({ onDone, date: initialDate }: { onDone: () => void; da
   const ok = tags.length > 0 || text.trim().length > 0;
   return (
     <>
-      <Field label="¿Cuál?">
+      <FieldGroup label="¿Cuál?">
         <Chips value={meal} onChange={setMeal} options={MEAL_KINDS.map((m) => ({ value: m, label: MEAL_KIND_NAMES[m] }))} />
-      </Field>
+      </FieldGroup>
       <Field label="¿Qué comiste?">
         <TextInput className="input" value={text} maxLength={500} placeholder="Huevos con nopales y 2 tortillas" onChange={(e) => setText(e.target.value)} />
       </Field>
-      <Field label="¿Qué llevaba?">
+      <FieldGroup label="¿Qué llevaba?">
         <MultiChips value={tags} onChange={setTags} options={good.map((t) => ({ value: t, label: MEAL_TAG_NAMES[t], tone: 'good' }))} />
         <div style={{ height: 6 }} />
         <MultiChips value={tags} onChange={setTags} options={MEAL_LIMIT_TAGS.map((t) => ({ value: t, label: MEAL_TAG_NAMES[t], tone: 'limit' }))} />
-      </Field>
+      </FieldGroup>
       <div className="grid2" style={{ gap: 10 }}>
-        <Field label="Proteína (opcional)">
+        <FieldGroup label="Proteína (opcional)">
           <Stepper label="gramos de proteína" unit="g" step={5} max={400} value={protein} onChange={setProtein} />
-        </Field>
-        <Field label="Calorías (opcional)">
+        </FieldGroup>
+        <FieldGroup label="Calorías (opcional)">
           <Stepper label="calorías" unit="kcal" step={50} max={6000} value={kcal} onChange={setKcal} />
-        </Field>
+        </FieldGroup>
       </div>
-      <Field label="Día">
+      <FieldGroup label="Día">
         <DateChips value={date} onChange={setDate} today={state.today} />
-      </Field>
+      </FieldGroup>
       <button
         className="btn primary block"
         disabled={!ok}
@@ -385,7 +385,7 @@ export function MealForm({ onDone, date: initialDate }: { onDone: () => void; da
   );
 }
 
-function MealSheet({ onClose }: { onClose: () => void }) {
+export function MealSheet({ onClose }: { onClose: () => void }) {
   return (
     <Sheet open onClose={onClose} title="¿Qué comiste?">
       <MealForm onDone={onClose} />
@@ -397,22 +397,39 @@ function MealSheet({ onClose }: { onClose: () => void }) {
 // Pasos, sueño y medidas
 // ---------------------------------------------------------------------------------------------
 
-function StepsSheet({ onClose }: { onClose: () => void }) {
+export function StepsSheet({ onClose }: { onClose: () => void }) {
   const { state } = useGame();
   const plan = useCoachPlan();
   const [date, setDate] = useState(state.today);
   const [steps, setSteps] = useState<number | undefined>(state.coach.steps[state.today]);
+  // Mientras no escribas un número, el campo muestra lo que ya tiene el día elegido (si no, guardarías los de hoy en
+  // otro día). Si ya lo escribiste, cambiar de día no lo borra.
+  const [typed, setTyped] = useState(false);
+  const pickDate = (d: string) => {
+    setDate(d);
+    if (!typed) setSteps(state.coach.steps[d]);
+  };
   return (
     <Sheet open onClose={onClose} title="Pasos">
       <p className="small muted" style={{ marginTop: -6 }}>
         Copia lo que dice tu teléfono o reloj. Tu meta: <b>{plan.targets.steps.target.toLocaleString('es-MX')}</b> al día (sube sola conforme te mueves más).
       </p>
-      <Field label="Pasos">
-        <Stepper label="pasos" unit="pasos" step={500} max={150000} value={steps} onChange={setSteps} />
-      </Field>
-      <Field label="Día">
-        <DateChips value={date} onChange={setDate} today={state.today} />
-      </Field>
+      <FieldGroup label="Pasos">
+        <Stepper
+          label="pasos"
+          unit="pasos"
+          step={500}
+          max={150000}
+          value={steps}
+          onChange={(v) => {
+            setTyped(true);
+            setSteps(v);
+          }}
+        />
+      </FieldGroup>
+      <FieldGroup label="Día">
+        <DateChips value={date} onChange={pickDate} today={state.today} />
+      </FieldGroup>
       <button
         className="btn primary block"
         disabled={steps === undefined}
@@ -427,7 +444,7 @@ function StepsSheet({ onClose }: { onClose: () => void }) {
   );
 }
 
-function SleepSheet({ onClose }: { onClose: () => void }) {
+export function SleepSheet({ onClose }: { onClose: () => void }) {
   const { state } = useGame();
   const [h, setH] = useState<number | undefined>(state.energy.sleepHours ?? 7);
   return (
@@ -453,11 +470,14 @@ function SleepSheet({ onClose }: { onClose: () => void }) {
   );
 }
 
-function MeasureSheet({ onClose }: { onClose: () => void }) {
+export function MeasureSheet({ onClose }: { onClose: () => void }) {
   const { state } = useGame();
+  // Lo último medido (de cualquier fecha) solo es pista: se guarda únicamente lo que mides hoy. Si no, una cintura
+  // de hace meses entraría como medida exacta de hoy (y un peso viejo como pesaje nuevo).
   const latest = state.body.latest as { weightKg?: number; waistCm?: number; bodyFatPct?: number };
-  const [weight, setWeight] = useState<number | undefined>(latest.weightKg);
-  const [waist, setWaist] = useState<number | undefined>(latest.waistCm);
+  const last = (v: number | undefined) => (v ? `Último: ${v}` : '—');
+  const [weight, setWeight] = useState<number | undefined>();
+  const [waist, setWaist] = useState<number | undefined>();
   const [fat, setFat] = useState<number | undefined>();
   return (
     <Sheet open onClose={onClose} title="Tus medidas de la semana">
@@ -465,16 +485,16 @@ function MeasureSheet({ onClose }: { onClose: () => void }) {
         Mídete el mismo día y a la misma hora: en ayunas, después del baño. La cintura, a la altura del ombligo sin apretar. Con eso veo si vas al ritmo correcto. Más contornos en Cuerpo.
       </p>
       <div className="grid2" style={{ gap: 10 }}>
-        <Field label="Peso">
-          <Stepper label="peso" unit="kg" step={0.1} max={400} value={weight} onChange={setWeight} />
-        </Field>
-        <Field label="Cintura">
-          <Stepper label="cintura" unit="cm" step={0.5} max={300} value={waist} onChange={setWaist} />
-        </Field>
+        <FieldGroup label="Peso">
+          <Stepper label="peso" unit="kg" step={0.1} max={400} value={weight} onChange={setWeight} base={latest.weightKg} placeholder={last(latest.weightKg)} />
+        </FieldGroup>
+        <FieldGroup label="Cintura">
+          <Stepper label="cintura" unit="cm" step={0.5} max={300} value={waist} onChange={setWaist} base={latest.waistCm} placeholder={last(latest.waistCm)} />
+        </FieldGroup>
       </div>
-      <Field label="% de grasa (si tu báscula lo da)">
-        <Stepper label="porcentaje de grasa" unit="%" step={0.5} max={70} value={fat} onChange={setFat} />
-      </Field>
+      <FieldGroup label="% de grasa (si tu báscula lo da)">
+        <Stepper label="porcentaje de grasa" unit="%" step={0.5} max={70} value={fat} onChange={setFat} base={latest.bodyFatPct} placeholder={last(latest.bodyFatPct)} />
+      </FieldGroup>
       <button
         className="btn primary block"
         disabled={!weight && !waist && !fat}

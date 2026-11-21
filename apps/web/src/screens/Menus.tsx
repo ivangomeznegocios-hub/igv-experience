@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { addDays, learningDueCount, weekStart, weekday, type Entity, type LearningTopicData } from '@igv/core';
 import { useGame } from '../data/store';
+import { openCoachSheet } from '../lib/coach';
 import { PageHeader } from '../ui/kit';
 import { Icon } from '../ui/icons';
 
@@ -52,10 +53,12 @@ interface Attention {
   to: string;
   icon: string;
   text: string;
+  /** Además de navegar (p. ej. abrir la hoja del check-in encima de la pestaña Coach). */
+  onClick?: () => void;
 }
 
 /** Lo que hoy pide tu atención en cada área (máx. 4, lo más urgente primero). Solo lectura. */
-function attentionItems(state: ReturnType<typeof useGame>['state'], name: (id: string) => string, learningTopics: Entity<LearningTopicData>[]): Attention[] {
+export function attentionItems(state: ReturnType<typeof useGame>['state'], name: (id: string) => string, learningTopics: Entity<LearningTopicData>[]): Attention[] {
   const out: Attention[] = [];
   for (const d of state.health.due.filter((x) => x.status === 'atrasado').slice(0, 1)) out.push({ to: '/salud', icon: 'salud-cross', text: `Ya te toca: ${d.name}` });
   for (const b of state.npcs.birthdays.filter((x) => x.inDays <= 3).slice(0, 1))
@@ -71,7 +74,9 @@ function attentionItems(state: ReturnType<typeof useGame>['state'], name: (id: s
     const wd = weekday(state.today);
     const ws = weekStart(state.today);
     const due = wd >= 5 ? ws : wd <= 1 ? addDays(ws, -7) : null;
-    if (due && !state.coach.checkins[due] && (!cs.startDate || due >= weekStart(cs.startDate))) out.push({ to: '/entreno', icon: 'whistle', text: '¿Cómo estuvo tu semana? Check-in con tu coach' });
+    // Abre directo la hoja del check-in, encima de la pestaña Coach (no la última pestaña que usaste).
+    if (due && !state.coach.checkins[due] && (!cs.startDate || due >= weekStart(cs.startDate)))
+      out.push({ to: '/entreno?tab=coach', icon: 'whistle', text: '¿Cómo estuvo tu semana? Check-in con tu coach', onClick: () => openCoachSheet({ kind: 'checkin', week: due }) });
   }
   const dueCards = learningDueCount(state.learning, learningTopics);
   if (dueCards) out.push({ to: '/aprendizaje', icon: 'translate', text: `${dueCards} ${dueCards === 1 ? 'tarjeta' : 'tarjetas'} por repasar` });
@@ -113,7 +118,7 @@ export function Mas() {
         <div className="card attention">
           <div className="eyebrow">Pide tu atención</div>
           {attention.map((a) => (
-            <Link key={a.text} to={a.to} className="item attention-row">
+            <Link key={a.text} to={a.to} onClick={a.onClick} className="item attention-row">
               <Icon name={a.icon} width={18} />
               <span className="grow small">{a.text}</span>
               <Icon name="right" width={16} />

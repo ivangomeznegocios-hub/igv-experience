@@ -5,7 +5,7 @@ import { logWater, openCoachSheet, undoLastWater, useCoachPlan } from '../lib/co
 import { fmtDate, fmtWeekday } from '../lib/time';
 import { BarChart } from '../ui/charts';
 import { CoachFace } from '../ui/coach/CoachFace';
-import { useCoachAi } from '../ui/coach/CoachChat';
+import { useCoachEnabled } from '../lib/voz';
 import { MealForm } from '../ui/coach/CoachSheets';
 import { Icon } from '../ui/icons';
 import { Badge, Empty, PageHeader, Sheet, confirmAction } from '../ui/kit';
@@ -18,7 +18,7 @@ import '../styles/coach.css';
 export default function Nutricion() {
   const { state } = useGame();
   const plan = useCoachPlan();
-  const ai = useCoachAi();
+  const ai = useCoachEnabled();
   const t = plan.nutrition.targets;
   const today = plan.nutrition.today;
   const [adding, setAdding] = useState(false);
@@ -126,7 +126,7 @@ export default function Nutricion() {
       <div className="card">
         <div className="card-head">
           <h2>Tus metas</h2>
-          <button className="btn sm ghost" onClick={() => openCoachSheet('setup')}>
+          <button className="btn sm ghost" onClick={() => openCoachSheet('setup')} aria-label="Ajustar tus metas" title="Ajustar tus metas">
             <Icon name="settings" />
           </button>
         </div>

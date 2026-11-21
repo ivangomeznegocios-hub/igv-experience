@@ -3,12 +3,13 @@ import { api, ApiError, type CoachAction } from '../../data/api';
 import { sync, useGame } from '../../data/store';
 import { uploadSnapshotNow } from '../../lib/aiSnapshot';
 import { flushActiveDictation } from '../../lib/voice';
+import { useCoachAvailability } from '../../lib/voz';
 import { Icon } from '../icons';
 import { TextInput, toast } from '../kit';
 import { CoachActionList } from '../Proposals';
 import { CoachFace } from './CoachFace';
 
-type Msg = { role: 'user' | 'assistant'; content: string; actions?: (CoachAction & { undone?: boolean })[] };
+type Msg = { role: 'user' | 'assistant'; content: string; actions?: (CoachAction & { undone?: boolean })[]; sources?: { title: string; url: string }[] };
 
 export const COACH_CHAT_SUGGESTIONS = [
   '¿Qué hago hoy?',
@@ -18,19 +19,15 @@ export const COACH_CHAT_SUGGESTIONS = [
   '¿Es mejor mancuerna o barra para pecho?',
 ];
 
-let gmEnabled: boolean | null = null;
-
-/** ¿Está activo el Coach con IA? (se pregunta una vez por sesión). */
-export function useCoachAi(): boolean | null {
-  const [on, setOn] = useState<boolean | null>(gmEnabled);
-  useEffect(() => {
-    if (gmEnabled !== null) return;
-    api
-      .gmStatus()
-      .then((s) => setOn((gmEnabled = s.enabled)))
-      .catch(() => setOn((gmEnabled = false)));
-  }, []);
-  return on;
+/** Fuentes que citó la búsqueda web: solo enlaces http(s), sin repetir y con un título corto. */
+export function safeSources(list?: { title: string; url: string }[]) {
+  const out: { title: string; url: string }[] = [];
+  for (const s of list ?? []) {
+    if (!/^https?:\/\//i.test(s.url) || out.some((o) => o.url === s.url)) continue;
+    const title = (s.title || s.url).trim();
+    out.push({ url: s.url, title: title.length > 60 ? `${title.slice(0, 57)}…` : title });
+  }
+  return out.slice(0, 6);
 }
 
 /**
@@ -39,7 +36,8 @@ export function useCoachAi(): boolean | null {
  */
 export function CoachChat({ coachName, initial, suggestions = COACH_CHAT_SUGGESTIONS }: { coachName: string; initial?: string; suggestions?: string[] }) {
   const { state, entities } = useGame();
-  const enabled = useCoachAi();
+  const status = useCoachAvailability();
+  const enabled = status === true;
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState(false);
@@ -62,7 +60,7 @@ export function CoachChat({ coachName, initial, suggestions = COACH_CHAT_SUGGEST
     try {
       await uploadSnapshotNow(state, entities);
       const res = await api.gmAsk({ question, history, mode: 'entrenador' });
-      setMsgs((m) => [...m, { role: 'assistant', content: res.answer, actions: res.actions }]);
+      setMsgs((m) => [...m, { role: 'assistant', content: res.answer, actions: res.actions, sources: safeSources(res.sources) }]);
       if (res.actions?.length) await sync();
     } catch (e) {
       const done = e instanceof ApiError ? (e.body as { actions?: CoachAction[] } | undefined)?.actions : undefined;
@@ -94,10 +92,17 @@ export function CoachChat({ coachName, initial, suggestions = COACH_CHAT_SUGGEST
     }
   };
 
-  if (enabled === false)
+  // Solo cuando el servidor respondió que no está activo; un fallo al preguntar es "sin conexión", no falta de llave.
+  if (status === false)
     return (
       <p className="small muted" style={{ margin: 0 }}>
         Para platicar con {coachName} (que registre lo que le cuentas, te arme ajustes e investigue la evidencia) activa el Coach con IA: en Cloudflare agrega el secreto <code>ANTHROPIC_API_KEY</code>. El plan, la sesión del día y los consejos de esta pantalla funcionan sin IA.
+      </p>
+    );
+  if (status === 'sin-conexion' && !msgs.length)
+    return (
+      <p className="small muted" style={{ margin: 0 }}>
+        Sin conexión con {coachName} por ahora: vuelve cuando tengas señal. El plan, la sesión del día y los consejos de esta pantalla funcionan sin conexión.
       </p>
     );
 
@@ -118,6 +123,19 @@ export function CoachChat({ coachName, initial, suggestions = COACH_CHAT_SUGGEST
             {m.role === 'assistant' && <CoachFace mood="calma" size={28} />}
             <div className="stack" style={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', minWidth: 0, flex: 1 }}>
               <div className={`bubble ${m.role === 'user' ? 'me' : 'gm'}`}>{m.content}</div>
+              {!!m.sources?.length && (
+                <div className="coach-sources small muted">
+                  Fuentes:{' '}
+                  {m.sources.map((s, k) => (
+                    <span key={s.url}>
+                      {k > 0 && ' · '}
+                      <a href={s.url} target="_blank" rel="noopener noreferrer">
+                        {s.title}
+                      </a>
+                    </span>
+                  ))}
+                </div>
+              )}
               {!!m.actions?.length && <CoachActionList actions={m.actions} onUndo={(a) => undo(i, a)} />}
             </div>
           </div>

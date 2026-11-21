@@ -330,9 +330,13 @@ series × reps, **peso objetivo por doble progresión**, reserva, descanso y té
 dolor y recuperación muscular; cardio, pasos, sueño, nutrición (Mifflin-St Jeor, proteína 1.6–2.0 g/kg con peso de
 referencia si hay sobrepeso, agua, día de comida 0–100 por hábitos) y tendencia de peso; check-in semanal y medidas.
 Ajustes en `training-settings.coach` (`CoachSettings`). Hojas globales con `openCoachSheet()` (`lib/coach.ts`,
-host `ui/coach/CoachSheets.tsx`); `/nutricion`; "+" → Comida. Con IA: `mode: 'entrenador'` en `/api/gm/ask`
-(`ENTRENADOR_SYSTEM`, búsqueda web `web_search_20260209`, reanuda `pause_turn`) y 8 herramientas en
-`assistant/tools-coach.ts`. **Nunca da XP** (la del entreno sigue en la misión de entrenar y los récords).
+host `ui/coach/CoachSheets.tsx`); `/nutricion`; "+" → Comida; `/entreno?tab=coach` abre la pestaña Coach. Con IA:
+`mode: 'entrenador'` en `/api/gm/ask` (`ENTRENADOR_SYSTEM`, búsqueda web `web_search_20260209` con
+`allowed_callers: ['direct']` para que el tope de 3 búsquedas valga por mensaje, reanuda `pause_turn` sin perder texto,
+reenvía `container`, devuelve `sources` citadas que el chat muestra) y 8 herramientas en `assistant/tools-coach.ts`
+(leen el historial de entrenos completo, igual que la app; las que escriben calculan su respuesta antes de guardar).
+En semana ligera, descarga o día ligero la progresión nunca sube peso. Grupos de botones en formularios: `FieldGroup`
+(no `Field`, que es un `<label>`). **Nunca da XP** (la del entreno sigue en la misión de entrenar y los récords).
 
 ## Plan de juego (fase 11)
 

@@ -119,28 +119,49 @@ export function markNote(noteId: string, via: 'coach' | 'local' | 'descartada'):
 // Coach en modo dictado
 // ---------------------------------------------------------------------------------------------
 
+// Solo se guardan las respuestas del servidor (10 min); un fallo nunca se guarda: se vuelve a preguntar.
 let coachCache: { enabled: boolean; at: number } | null = null;
+const cachedCoach = () => (coachCache && Date.now() - coachCache.at < 10 * 60_000 ? coachCache.enabled : null);
+
+/**
+ * ¿Está activo el Coach con IA en el servidor? `true` / `false` = lo que respondió el servidor; `'cargando'` mientras
+ * pregunta; `'sin-conexion'` si no se pudo preguntar (sin señal, error del servidor o sesión vencida). Tras un fallo
+ * vuelve a preguntar al montarse otra vez y cuando regresa la conexión.
+ */
+export type CoachAvailability = boolean | 'cargando' | 'sin-conexion';
+
+export function useCoachAvailability(): CoachAvailability {
+  const [status, setStatus] = useState<CoachAvailability>(() => cachedCoach() ?? 'cargando');
+  useEffect(() => {
+    let alive = true;
+    const check = () => {
+      const known = cachedCoach();
+      if (known !== null) return setStatus(known);
+      api
+        .gmStatus()
+        .then((s) => {
+          coachCache = { enabled: s.enabled, at: Date.now() };
+          if (alive) setStatus(s.enabled);
+        })
+        .catch(() => {
+          if (alive) setStatus('sin-conexion');
+        });
+    };
+    check();
+    const w = typeof window !== 'undefined' && typeof window.addEventListener === 'function' ? window : null;
+    w?.addEventListener('online', check);
+    return () => {
+      alive = false;
+      w?.removeEventListener('online', check);
+    };
+  }, []);
+  return status;
+}
 
 /** ¿El Coach está activado en el servidor? null = no se sabe (sin conexión o cargando). */
 export function useCoachEnabled(): boolean | null {
-  const [enabled, setEnabled] = useState<boolean | null>(coachCache && Date.now() - coachCache.at < 10 * 60_000 ? coachCache.enabled : null);
-  useEffect(() => {
-    if (coachCache && Date.now() - coachCache.at < 10 * 60_000) return;
-    let alive = true;
-    api
-      .gmStatus()
-      .then((s) => {
-        coachCache = { enabled: s.enabled, at: Date.now() };
-        if (alive) setEnabled(s.enabled);
-      })
-      .catch(() => {
-        if (alive) setEnabled(null);
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
-  return enabled;
+  const s = useCoachAvailability();
+  return typeof s === 'boolean' ? s : null;
 }
 
 /** ¿Hay conexión con el servidor ahora? */

@@ -78,6 +78,8 @@ export function Stepper({
   unit,
   max = 1000,
   label,
+  placeholder = '0',
+  base,
 }: {
   value: number | undefined;
   onChange: (v: number | undefined) => void;
@@ -85,9 +87,13 @@ export function Stepper({
   unit?: string;
   max?: number;
   label: string;
+  /** Texto del campo vacío (p. ej. "Último: 84"). */
+  placeholder?: string;
+  /** Desde dónde parten − / + si el campo está vacío (p. ej. tu último peso); vacío no se guarda. */
+  base?: number;
 }) {
   const bump = (d: number) => {
-    const n = Math.max(0, Math.min(max, Math.round(((value ?? 0) + d) * 100) / 100));
+    const n = Math.max(0, Math.min(max, Math.round(((value ?? base ?? 0) + d) * 100) / 100));
     onChange(n > 0 ? n : undefined);
   };
   return (
@@ -103,7 +109,7 @@ export function Stepper({
           max={max}
           step="any"
           value={value ?? ''}
-          placeholder="0"
+          placeholder={placeholder}
           aria-label={label}
           onFocus={(e) => e.target.select()}
           onChange={(e) => {

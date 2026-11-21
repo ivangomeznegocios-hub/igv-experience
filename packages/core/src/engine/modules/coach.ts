@@ -1,6 +1,6 @@
 import type { Ctx } from '../context';
 import { ofType } from '../context';
-import { MEAL_KINDS, MEAL_TAGS, type BodyArea, type MealKind, type MealTag } from '../../types';
+import { BODY_AREAS, MEAL_KINDS, MEAL_TAGS, type BodyArea, type MealKind, type MealTag } from '../../types';
 
 /**
  * Entrenador personal: junta lo que registras para que el coach te lea (comidas, agua, pasos, cómo te sientes y el
@@ -55,6 +55,14 @@ export interface CoachLogs {
   checkins: Record<string, WeeklyCheckin>;
 }
 
+/**
+ * Zonas de molestia que esta versión conoce, sin repetir. Igual que con las etiquetas de comida: un registro de una
+ * versión más nueva (con una zona que aquí no existe) no debe tronar el plan, la foto ni el texto para la IA.
+ */
+function knownAreas(xs: unknown): BodyArea[] {
+  return [...new Set((Array.isArray(xs) ? xs : []).filter((a): a is BodyArea => (BODY_AREAS as readonly string[]).includes(a as string)))];
+}
+
 export function reduceCoach(ctx: Ctx): CoachLogs {
   const meals: MealEntry[] = [];
   for (const e of ofType<{ meal: MealKind; text?: string; tags?: MealTag[]; proteinG?: number; kcal?: number }>(ctx, 'meal.logged')) {
@@ -76,11 +84,11 @@ export function reduceCoach(ctx: Ctx): CoachLogs {
   for (const e of ofType<{ steps: number }>(ctx, 'steps.logged')) steps[e.localDate] = Math.max(0, e.payload.steps || 0);
   const readiness: Record<string, Readiness> = {};
   for (const e of ofType<{ energy: number; soreness?: number; pain?: BodyArea[]; note?: string }>(ctx, 'coach.readiness'))
-    readiness[e.localDate] = { eventId: e.id, date: e.localDate, energy: e.payload.energy, soreness: e.payload.soreness ?? 0, pain: e.payload.pain ?? [], note: e.payload.note ?? '' };
+    readiness[e.localDate] = { eventId: e.id, date: e.localDate, energy: e.payload.energy, soreness: e.payload.soreness ?? 0, pain: knownAreas(e.payload.pain), note: e.payload.note ?? '' };
   const checkins: Record<string, WeeklyCheckin> = {};
   for (const e of ofType<{ weekStart: string; effort: number; energy: number; mood: number; pain?: BodyArea[]; wins?: string; struggles?: string }>(ctx, 'coach.checkin')) {
     const p = e.payload;
-    checkins[p.weekStart] = { eventId: e.id, weekStart: p.weekStart, date: e.localDate, effort: p.effort, energy: p.energy, mood: p.mood, pain: p.pain ?? [], wins: p.wins ?? '', struggles: p.struggles ?? '' };
+    checkins[p.weekStart] = { eventId: e.id, weekStart: p.weekStart, date: e.localDate, effort: p.effort, energy: p.energy, mood: p.mood, pain: knownAreas(p.pain), wins: p.wins ?? '', struggles: p.struggles ?? '' };
   }
   return { meals, water, steps, readiness, checkins };
 }

@@ -108,7 +108,7 @@ export const api = {
   pushTest: () => req<{ ok: true; sent: number }>('/push/test', { method: 'POST' }),
   /** `mode: 'dictado'` = registrar lo dictado sin conversar (botón Hablar). */
   gmAsk: (body: { question: string; history: { role: 'user' | 'assistant'; content: string }[]; context?: string; readOnly?: boolean; mode?: 'chat' | 'dictado' | 'entrenador' }) =>
-    req<{ answer: string; actions: CoachAction[] }>('/gm/ask', { method: 'POST', body: JSON.stringify(body) }),
+    req<{ answer: string; actions: CoachAction[]; sources?: { title: string; url: string }[] }>('/gm/ask', { method: 'POST', body: JSON.stringify(body) }),
   aiStatus: () => req<AiStatus>('/ai/status'),
   aiSettings: (allowWrites: boolean) => req<{ ok: true }>('/ai/settings', { method: 'PUT', body: JSON.stringify({ allowWrites }) }),
   aiCreateKey: (name: string) => req<{ ok: true; key: AiAccess; token: string }>('/ai/keys', { method: 'POST', body: JSON.stringify({ name }) }),

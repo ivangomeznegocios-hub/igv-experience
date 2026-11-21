@@ -5,7 +5,7 @@ import { draftFromCoach, logWater, openCoachSheet, useCoachPlan } from '../../li
 import { openWorkout } from '../../lib/entreno';
 import { Icon } from '../icons';
 import { CoachFace } from './CoachFace';
-import { useCoachAi } from './CoachChat';
+import { useCoachEnabled } from '../../lib/voz';
 import '../../styles/coach.css';
 
 const ACTION_ICON: Record<CoachActionKind, string> = {
@@ -56,7 +56,7 @@ export function runCoachAction(a: CoachAction, plan: CoachPlan, state: GameState
 export function CoachCard({ compact = false }: { compact?: boolean }) {
   const { state } = useGame();
   const plan = useCoachPlan();
-  const ai = useCoachAi();
+  const ai = useCoachEnabled();
   const b = plan.brief;
   const [first, ...rest] = b.actions;
   const more = rest.slice(0, compact ? 2 : 6);
@@ -101,7 +101,7 @@ export function CoachCard({ compact = false }: { compact?: boolean }) {
       )}
       {compact ? (
         <div className="row between" style={{ marginTop: 8 }}>
-          <Link to="/entreno" className="tiny linkish">
+          <Link to="/entreno?tab=coach" className="tiny linkish">
             Ver tu plan →
           </Link>
           {ai && (

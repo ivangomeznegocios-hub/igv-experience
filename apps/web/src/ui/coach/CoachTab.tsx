@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { COACH_GOAL_NAMES, GAME_CONFIG, MUSCLES, SESSION_TEMPLATES, lowerFirst, type PrescribedExercise } from '@igv/core';
+import { COACH_GOAL_NAMES, GAME_CONFIG, MUSCLES, SESSION_TEMPLATES, lowerFirst, type PrescribedExercise, type PrescribedSession } from '@igv/core';
 import { useGame } from '../../data/store';
-import { draftFromCoach, openCoachSheet, restText, saveCoachSettings, targetText, useCoachPlan } from '../../lib/coach';
+import { applySwap, draftFromCoach, openCoachSheet, restText, saveCoachSettings, swapOptions, targetText, useCoachPlan } from '../../lib/coach';
 import { openWorkout } from '../../lib/entreno';
 import { fmtDate } from '../../lib/time';
 import { Icon } from '../icons';
@@ -102,7 +102,7 @@ function TodaySession() {
         </ul>
       )}
       {s.exercises.map((e, i) => (
-        <ExerciseRow key={e.exerciseId} e={e} n={i + 1} onSwap={() => setSwap(e)} />
+        <ExerciseRow key={e.exerciseId} e={e} n={i + 1} canSwap={swapOptions(e, s).length > 0} onSwap={() => setSwap(e)} />
       ))}
       {s.cardio && (
         <div className="coach-ex">
@@ -128,12 +128,12 @@ function TodaySession() {
           Siguiente de fuerza: <b>{plan.today.next.title}</b> · {fmtDate(plan.today.next.date)}
         </div>
       )}
-      {swap && <SwapSheet e={swap} onClose={() => setSwap(null)} />}
+      {swap && <SwapSheet e={swap} session={s} onClose={() => setSwap(null)} />}
     </div>
   );
 }
 
-function ExerciseRow({ e, n, onSwap }: { e: PrescribedExercise; n: number; onSwap: () => void }) {
+function ExerciseRow({ e, n, canSwap, onSwap }: { e: PrescribedExercise; n: number; canSwap: boolean; onSwap: () => void }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="coach-ex">
@@ -157,7 +157,7 @@ function ExerciseRow({ e, n, onSwap }: { e: PrescribedExercise; n: number; onSwa
             </div>
             <div className="row wrap" style={{ gap: 6, marginTop: 6 }}>
               <RestTimer seconds={e.restSec} label={`Descanso ${restText(e.restSec)}`} />
-              {e.alternatives.length > 0 && (
+              {canSwap && (
                 <button className="btn sm ghost" onClick={onSwap}>
                   <Icon name="repeat" /> Cambiar ejercicio
                 </button>
@@ -170,11 +170,13 @@ function ExerciseRow({ e, n, onSwap }: { e: PrescribedExercise; n: number; onSwa
   );
 }
 
-function SwapSheet({ e, onClose }: { e: PrescribedExercise; onClose: () => void }) {
+/** Cambiar un ejercicio de la sesión de hoy por otro del mismo movimiento (sin los que ya usa la sesión). */
+export function SwapSheet({ e, session, onClose }: { e: PrescribedExercise; session: PrescribedSession; onClose: () => void }) {
   const { state } = useGame();
+  const options = swapOptions(e, session);
   const choose = (id: string, name: string) => {
-    const swaps = { ...(state.training.settings.coach?.swaps ?? {}), [e.slot]: id };
-    saveCoachSettings(state, { swaps });
+    // Solo se guarda y se avisa si la sesión de hoy de verdad cambia; si no, la hoja sigue abierta para elegir otro.
+    if (!applySwap(state, e.slot, id)) return toast(`${name} no entra en tu sesión de hoy: elige otro`, 'error');
     toast(`${e.slotLabel}: ahora ${name}`);
     onClose();
   };
@@ -183,7 +185,7 @@ function SwapSheet({ e, onClose }: { e: PrescribedExercise; onClose: () => void 
       <p className="small muted" style={{ marginTop: -6 }}>
         Opciones para el mismo movimiento ({e.slotLabel.toLowerCase()}) con tu equipo y cuidando tus molestias. El cambio se queda en tu plan.
       </p>
-      {e.alternatives.map((a) => (
+      {options.map((a) => (
         <button key={a.id} className="wk-item block-btn" onClick={() => choose(a.id, a.name)}>
           <span className="grow">{a.name}</span>
           <Icon name="right" width={16} className="faint" />

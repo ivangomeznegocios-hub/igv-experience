@@ -76,6 +76,12 @@ export const EVENT_AREAS: Record<string, string> = {
   'health.metric': 'cuerpo',
   'workout.logged': 'cuerpo',
   'place.visited': 'gente',
+  // [[coach]]
+  'meal.logged': 'cuerpo',
+  'water.logged': 'cuerpo',
+  'steps.logged': 'cuerpo',
+  'coach.readiness': 'cuerpo',
+  'coach.checkin': 'cuerpo',
 };
 
 /** Registros internos que no se listan en la revisión. */
@@ -371,7 +377,9 @@ export const DAY_CHECKS: DayCheck[] = [
     skipLabel: 'No quiero anotar detalles',
     tool: 'registrar_entrenamiento',
   }),
-  // [[coach]] Con tu entrenador activo: qué comiste (para que te diga qué te falta). No entra al puntaje del día.
+  // [[coach]] Con tu entrenador activo: qué comiste (para que te diga qué te falta). Solo desde que armaste el plan
+  // (`coach.startDate`), como "Hábitos a dejar": los días de antes no ganan una revisión que nunca pudieron cumplir.
+  // Cuenta en el % del día registrado, no en el marcador (modules/days.ts).
   eventCheck({
     id: 'comida',
     area: 'cuerpo',
@@ -379,7 +387,10 @@ export const DAY_CHECKS: DayCheck[] = [
     short: 'qué comiste',
     question: '¿Qué comiste hoy? Tu coach te dice qué te faltó.',
     types: ['meal.logged'],
-    applies: (c) => !!c.list<TrainingSettingsData>('training', 'settings')[0]?.data.coach?.on,
+    applies: (c) => {
+      const cs = c.list<TrainingSettingsData>('training', 'settings')[0]?.data.coach;
+      return !!cs?.on && (!cs.startDate || cs.startDate <= c.date);
+    },
     skipLabel: 'Hoy no lo anoto',
     tool: 'registrar_comida',
   }),
@@ -519,8 +530,15 @@ export function reviewDay(input: DayReviewInput): DayReview {
 
   const byId = new Map(c.entities.map((e) => [e.id, e]));
   const items = new Map<string, LoggedItem[]>();
+  // El agua se registra vaso por vaso: en la revisión va en un solo renglón con el total del día (donde va el primero).
+  const glasses = c.of<{ glasses?: number }>('water.logged').reduce((s, e) => s + Math.max(0, Number(e.payload.glasses) || 0), 0);
+  let waterShown = false;
   for (const e of c.events) {
     if (HIDDEN_IN_REVIEW.has(e.type)) continue;
+    if (e.type === 'water.logged') {
+      if (waterShown) continue;
+      waterShown = true;
+    }
     const area = EVENT_AREAS[e.type] ?? 'otros';
     const label = EVENT_TEXT[e.type] ?? e.type;
     const full = describeEvent(e, byId, c.currency);
@@ -528,11 +546,13 @@ export function reviewDay(input: DayReviewInput): DayReview {
     const text =
       e.type === 'mission.completed'
         ? String((e.payload as { title?: string }).title ?? '')
-        : full.startsWith(`${label}: `)
-          ? full.slice(label.length + 2)
-          : full === label
-            ? ''
-            : full;
+        : e.type === 'water.logged'
+          ? `${glasses} ${glasses === 1 ? 'vaso' : 'vasos'}`
+          : full.startsWith(`${label}: `)
+            ? full.slice(label.length + 2)
+            : full === label
+              ? ''
+              : full;
     if (!items.has(area)) items.set(area, []);
     items.get(area)!.push({ id: e.id, type: e.type, label, text, occurredAt: e.occurredAt });
   }

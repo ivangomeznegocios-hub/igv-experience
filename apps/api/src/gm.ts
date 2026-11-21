@@ -134,9 +134,51 @@ function writeQueryCost(input: unknown): number {
   if (input && typeof input === 'object') for (const v of Object.values(input)) if (Array.isArray(v)) n += v.length;
   return n;
 }
-/** Búsquedas web por mensaje del entrenador. */
+/**
+ * Búsquedas web por mensaje del entrenador. La API cuenta `max_uses` por turno, y todo un mensaje es un solo turno:
+ * cada continuación es un `pause_turn` reanudado o un mensaje con solo `tool_result`. Pero las búsquedas que corren
+ * desde code execution (el filtrado dinámico, valor por defecto de `web_search_20260209`) no cuentan entre requests:
+ * con él, cada ronda traería 3 búsquedas nuevas (hasta 27 por mensaje). Por eso la herramienta va con
+ * `allowed_callers: ['direct']`: así el tope de 3 sí vale para todo el mensaje (la API responde `max_uses_exceeded`).
+ * A cambio no hay filtrado dinámico (entran resultados completos al contexto; con 3 búsquedas y la caché del
+ * historial el costo queda acotado). No se quita ni se cambia la herramienta a media conversación: rompería la
+ * reanudación de una búsqueda pendiente, el razonamiento preservado y la caché.
+ */
 const WEB_SEARCH_MAX_USES = 3;
 const WRITE_TOOLS = new Set(ASSISTANT_TOOLS.filter((t) => t.writes).map((t) => t.name));
+
+export interface CoachSource {
+  title: string;
+  url: string;
+}
+
+/**
+ * Texto para Iván a partir de los bloques de un turno del modelo (los tramos pausados más el último).
+ * Con búsqueda web las citas siempre están activas y la API parte el texto justo donde empieza y termina cada
+ * cita; esos bloques ya traen sus espacios, así que los bloques de texto seguidos se pegan tal cual. Solo un bloque
+ * que no es texto (búsqueda, resultados, razonamiento) separa párrafos. También junta las fuentes citadas, sin repetir.
+ */
+export function replyFromBlocks(content: readonly Anthropic.Beta.BetaContentBlock[]): { text: string; sources: CoachSource[] } {
+  const paragraphs: string[] = [];
+  const sources = new Map<string, string>();
+  let current = '';
+  for (const block of content) {
+    if (block.type !== 'text') {
+      paragraphs.push(current);
+      current = '';
+      continue;
+    }
+    current += block.text;
+    for (const c of block.citations ?? []) {
+      if (c.type === 'web_search_result_location' && c.url && !sources.has(c.url)) sources.set(c.url, c.title || c.url);
+    }
+  }
+  paragraphs.push(current);
+  return {
+    text: paragraphs.map((p) => p.trim()).filter(Boolean).join('\n\n'),
+    sources: [...sources].map(([url, title]) => ({ title, url })),
+  };
+}
 
 gmRoute.post('/ask', async (c) => {
   if (!c.env.ANTHROPIC_API_KEY) return c.json({ error: 'El Coach no está activado: falta el secreto ANTHROPIC_API_KEY.' }, 503);
@@ -167,7 +209,16 @@ gmRoute.post('/ask', async (c) => {
     input_schema: toolInputSchema(t) as Anthropic.Beta.BetaTool['input_schema'],
   }));
   // El entrenador puede investigar en la web (herramienta del servidor de Anthropic: no gasta consultas a D1).
-  if (entrenador) tools.push({ type: 'web_search_20260209', name: 'web_search', max_uses: WEB_SEARCH_MAX_USES, user_location: { type: 'approximate', country: 'MX', timezone: 'America/Mexico_City' } });
+  // Búsqueda directa para que el tope valga por mensaje (ver WEB_SEARCH_MAX_USES).
+  if (entrenador) {
+    tools.push({
+      type: 'web_search_20260209',
+      name: 'web_search',
+      max_uses: WEB_SEARCH_MAX_USES,
+      allowed_callers: ['direct'],
+      user_location: { type: 'approximate', country: 'MX', timezone: 'America/Mexico_City' },
+    });
+  }
 
   const client = new Anthropic({ apiKey: c.env.ANTHROPIC_API_KEY });
   const messages: Anthropic.Beta.BetaMessageParam[] = [
@@ -212,6 +263,17 @@ gmRoute.post('/ask', async (c) => {
 
   try {
     let answer = '';
+    let sources: CoachSource[] = [];
+    /** Bloques del turno en curso: un `pause_turn` deja el turno a medias y la continuación solo trae lo nuevo. */
+    let turn: Anthropic.Beta.BetaContentBlock[] = [];
+    /**
+     * Contenedor de code execution, si una respuesta trajo uno: cada continuación del turno (pausa o ronda de
+     * herramientas) debe seguir en el mismo, o empieza en uno nuevo y pierde lo anterior. Con la búsqueda directa
+     * normalmente no hay, pero se reenvía igual por si una herramienta del servidor lo usa.
+     */
+    let container: string | undefined;
+    /** Se acabaron las rondas con el turno todavía en pausa: la respuesta quedó incompleta. */
+    let cutOff = false;
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
       const response = await client.beta.messages.create({
         model: c.env.ANTHROPIC_MODEL || DEFAULT_MODEL,
@@ -223,27 +285,36 @@ gmRoute.post('/ask', async (c) => {
         ],
         tools,
         output_config: { effort: 'medium' },
+        // Caché automática: el punto de caché avanza al último bloque, así cada ronda lee de caché el panorama, los
+        // resultados de herramientas y de búsquedas de las anteriores (el bloque de sistema conserva su propio punto).
+        cache_control: { type: 'ephemeral' },
         // Si un filtro de seguridad rechaza la solicitud, la API reintenta con un modelo de respaldo.
         betas: ['server-side-fallback-2026-07-01'],
         fallbacks: 'default',
         messages,
+        ...(container ? { container } : {}),
       });
+      container = response.container?.id ?? container;
       if (response.stop_reason === 'refusal') {
         answer = 'No pude responder a eso. Intenta reformular la pregunta.';
+        sources = [];
         break;
       }
-      answer = response.content
-        .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text')
-        .map((b) => b.text)
-        .join('\n')
-        .trim();
+      turn = [...turn, ...response.content];
+      ({ text: answer, sources } = replyFromBlocks(turn));
       // La búsqueda web (herramienta del servidor) pudo pausar el turno: se reenvía tal cual y el servidor sigue solo.
-      if (response.stop_reason === 'pause_turn' && round < MAX_TOOL_ROUNDS) {
-        messages.push({ role: 'assistant', content: response.content as Anthropic.Beta.BetaContentBlockParam[] });
-        continue;
+      if (response.stop_reason === 'pause_turn') {
+        if (round < MAX_TOOL_ROUNDS) {
+          messages.push({ role: 'assistant', content: response.content as Anthropic.Beta.BetaContentBlockParam[] });
+          continue;
+        }
+        cutOff = true;
+        break;
       }
       const uses = response.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use');
       if (response.stop_reason !== 'tool_use' || !uses.length || round === MAX_TOOL_ROUNDS) break;
+      // Lo que escribió antes de usar sus herramientas es preámbulo ("reviso tu plan…"): la respuesta es lo que sigue.
+      turn = [];
 
       // Se devuelve el contenido completo (incluye bloques de razonamiento) y luego todos los resultados juntos.
       messages.push({ role: 'assistant', content: response.content as Anthropic.Beta.BetaContentBlockParam[] });
@@ -251,7 +322,8 @@ gmRoute.post('/ask', async (c) => {
       for (const use of uses) results.push(await runTool(use));
       messages.push({ role: 'user', content: results });
     }
-    return c.json({ answer: answer || (actions.length ? 'Listo.' : 'Sin respuesta.'), actions });
+    const empty = cutOff ? 'Me quedé a medias investigando. Pregúntame otra vez y lo termino.' : actions.length ? 'Listo.' : 'Sin respuesta.';
+    return c.json({ answer: answer || empty, actions, ...(sources.length ? { sources } : {}) });
   } catch (err) {
     // Lo que ya se registró se informa siempre (con su "Deshacer"), aunque la conversación falle.
     const done = actions.length ? ` (Alcancé a hacer: ${actions.map((a) => a.summary).join('; ')}.)` : '';

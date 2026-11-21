@@ -227,6 +227,189 @@ describe('Coach en modo entrenador', () => {
     mode.script = null;
   });
 
+  const askCoach = async (question: string) => {
+    const app = (await import('../src/index')).default;
+    const env = { DB: fakeD1(), DEV_BYPASS_AUTH: 'true', ANTHROPIC_API_KEY: 'sk-test' } as any;
+    const res = await app.request('/api/gm/ask', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ question, history: [], mode: 'entrenador' }) }, env);
+    expect(res.status).toBe(200);
+    return (await res.json()) as { answer: string; actions: unknown[]; sources?: { title: string; url: string }[] };
+  };
+  const EXAMINE = 'https://examine.com/supplements/creatine/';
+  const PUBMED = 'https://pubmed.ncbi.nlm.nih.gov/28615996/';
+  const cite = (url: string, title: string | null) => ({ type: 'web_search_result_location', url, title, encrypted_index: 'idx', cited_text: '…' });
+  const search = (id: string, query: string) => [
+    { type: 'server_tool_use', id, name: 'web_search', input: { query } },
+    { type: 'web_search_tool_result', tool_use_id: id, content: [{ type: 'web_search_result', url: EXAMINE, title: 'Creatine - Examine', encrypted_content: 'enc', page_age: null }] },
+  ];
+
+  it('una respuesta citada en varios bloques sale en una sola frase (sin saltos a media oración) y trae sus fuentes', async () => {
+    calls.length = 0;
+    mode.script = [
+      {
+        stop_reason: 'end_turn',
+        content: [
+          { type: 'text', text: 'Déjame revisar la evidencia.' },
+          ...search('srvtoolu_1', 'creatina fuerza metaanálisis'),
+          // Con búsqueda web la API siempre cita: el texto llega partido justo donde empieza y termina cada cita.
+          { type: 'text', text: 'Sí. ' },
+          { type: 'text', text: 'La creatina monohidratada (3–5 g al día) mejora la fuerza', citations: [cite(EXAMINE, 'Creatine - Examine')] },
+          { type: 'text', text: ' y la masa muscular cuando entrenas', citations: [cite(PUBMED, 'ISSN position stand: creatine - PubMed'), cite(EXAMINE, 'Creatine - Examine')] },
+          { type: 'text', text: '. Tómala diario, con o sin entreno.' },
+        ],
+      },
+    ];
+    try {
+      const body = await askCoach('¿Sirve la creatina?');
+      // Los bloques seguidos ya traen sus espacios: se pegan tal cual. Solo lo que corta un bloque que no es texto
+      // (la búsqueda) va en otro párrafo.
+      expect(body.answer).toBe('Déjame revisar la evidencia.\n\nSí. La creatina monohidratada (3–5 g al día) mejora la fuerza y la masa muscular cuando entrenas. Tómala diario, con o sin entreno.');
+      // Fuentes de las citas, sin repetir y en orden de aparición.
+      expect(body.sources).toEqual([
+        { title: 'Creatine - Examine', url: EXAMINE },
+        { title: 'ISSN position stand: creatine - PubMed', url: PUBMED },
+      ]);
+    } finally {
+      mode.script = null;
+    }
+  });
+
+  it('una fuente sin título usa su dirección, y una respuesta sin citas no trae fuentes', async () => {
+    calls.length = 0;
+    mode.script = [
+      { stop_reason: 'end_turn', content: [{ type: 'text', text: 'Camina 8,000 pasos', citations: [cite(PUBMED, null)] }, { type: 'text', text: ' al día.' }] },
+    ];
+    try {
+      const body = await askCoach('¿Cuántos pasos?');
+      expect(body.answer).toBe('Camina 8,000 pasos al día.');
+      expect(body.sources).toEqual([{ title: PUBMED, url: PUBMED }]);
+    } finally {
+      mode.script = null;
+    }
+    calls.length = 0;
+    mode.script = [{ stop_reason: 'end_turn', content: [{ type: 'text', text: 'Hoy descansa.' }] }];
+    try {
+      const body = await askCoach('¿Qué hago hoy?');
+      expect(body.answer).toBe('Hoy descansa.');
+      expect(body.sources).toBeUndefined();
+    } finally {
+      mode.script = null;
+    }
+  });
+
+  it('no pierde el texto escrito antes de que la búsqueda pausara el turno', async () => {
+    calls.length = 0;
+    mode.script = [
+      {
+        stop_reason: 'pause_turn',
+        content: [
+          { type: 'text', text: 'Hoy toca cuerpo completo A:\n• Sentadilla goblet: 2×12 @ 16 kg' },
+          { type: 'server_tool_use', id: 'srvtoolu_2', name: 'web_search', input: { query: 'creatina dosis' } },
+        ],
+      },
+      // La continuación solo trae lo nuevo: el resultado de la búsqueda y el resto de la respuesta.
+      {
+        stop_reason: 'end_turn',
+        content: [
+          { type: 'web_search_tool_result', tool_use_id: 'srvtoolu_2', content: [] },
+          { type: 'text', text: 'Sobre la creatina: ' },
+          { type: 'text', text: '3–5 g al día', citations: [cite(EXAMINE, 'Creatine - Examine')] },
+          { type: 'text', text: '.' },
+        ],
+      },
+    ];
+    try {
+      const body = await askCoach('¿Qué hago hoy y sirve la creatina?');
+      expect(body.answer).toBe('Hoy toca cuerpo completo A:\n• Sentadilla goblet: 2×12 @ 16 kg\n\nSobre la creatina: 3–5 g al día.');
+      expect(body.sources).toEqual([{ title: 'Creatine - Examine', url: EXAMINE }]);
+      expect(calls).toHaveLength(2);
+    } finally {
+      mode.script = null;
+    }
+  });
+
+  it('el texto previo a una herramienta propia no se junta con la respuesta final (aunque viniera de un tramo pausado)', async () => {
+    calls.length = 0;
+    mode.script = [
+      { stop_reason: 'pause_turn', content: [{ type: 'text', text: 'Busco la evidencia…' }, { type: 'server_tool_use', id: 'srvtoolu_3', name: 'web_search', input: { query: 'proteína' } }] },
+      {
+        stop_reason: 'tool_use',
+        content: [
+          { type: 'web_search_tool_result', tool_use_id: 'srvtoolu_3', content: [] },
+          { type: 'text', text: 'Reviso tu plan.' },
+          { type: 'tool_use', id: 'tu_p', name: 'ver_plan_entrenador', input: {} },
+        ],
+      },
+      { stop_reason: 'end_turn', content: [{ type: 'text', text: 'Come 1.6 g/kg de proteína al día.' }] },
+    ];
+    try {
+      const body = await askCoach('¿Cuánta proteína?');
+      expect(body.answer).toBe('Come 1.6 g/kg de proteína al día.');
+    } finally {
+      mode.script = null;
+    }
+  });
+
+  it('si se acaban las rondas con el turno pausado y sin texto, lo dice en vez de "Sin respuesta."', async () => {
+    calls.length = 0;
+    const toolRound = (i: number) => ({ stop_reason: 'tool_use', content: [{ type: 'tool_use', id: `tu_r${i}`, name: 'herramienta_inexistente', input: {} }] });
+    mode.script = [
+      ...Array.from({ length: 8 }, (_, i) => toolRound(i)),
+      { stop_reason: 'pause_turn', content: [{ type: 'server_tool_use', id: 'srvtoolu_5', name: 'web_search', input: { query: 'x' } }] },
+    ];
+    try {
+      const body = await askCoach('Investiga todo');
+      expect(calls).toHaveLength(9);
+      expect(body.answer).toContain('a medias');
+    } finally {
+      mode.script = null;
+    }
+  });
+
+  it('reenvía el contenedor de la respuesta en cada continuación (pausa y ronda de herramientas)', async () => {
+    calls.length = 0;
+    const box = (id: string) => ({ id, expires_at: '2026-11-21T20:00:00Z', skills: null });
+    mode.script = [
+      { stop_reason: 'pause_turn', container: box('container_abc'), content: [{ type: 'server_tool_use', id: 'srvtoolu_4', name: 'web_search', input: { query: 'sentadilla técnica' } }] },
+      { stop_reason: 'tool_use', container: box('container_abc'), content: [{ type: 'tool_use', id: 'tu_c', name: 'ver_plan_entrenador', input: {} }] },
+      // Una respuesta sin contenedor no borra el que ya se tenía.
+      { stop_reason: 'tool_use', container: null, content: [{ type: 'tool_use', id: 'tu_d', name: 'ver_plan_entrenador', input: {} }] },
+      { stop_reason: 'end_turn', container: box('container_xyz'), content: [{ type: 'text', text: 'Listo.' }] },
+    ];
+    try {
+      await askCoach('Explícame la sentadilla');
+      expect(calls).toHaveLength(4);
+      expect(calls[0].container).toBeUndefined();
+      expect(calls[1].container).toBe('container_abc');
+      expect(calls[2].container).toBe('container_abc');
+      expect(calls[3].container).toBe('container_abc');
+    } finally {
+      mode.script = null;
+    }
+  });
+
+  it('el tope de búsquedas vale por mensaje (búsqueda directa) y el historial entre rondas va con caché', async () => {
+    calls.length = 0;
+    mode.script = [
+      { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'tu_e', name: 'ver_plan_entrenador', input: {} }] },
+      { stop_reason: 'end_turn', content: [{ type: 'text', text: 'Listo.' }] },
+    ];
+    try {
+      await askCoach('Arma mi plan y explícame la evidencia');
+      // Con `allowed_callers: ['direct']` las búsquedas de rondas anteriores del mismo turno cuentan contra
+      // max_uses; con el valor por defecto (desde code execution) cada ronda traería 3 búsquedas nuevas.
+      for (const call of calls) {
+        expect(call.tools.find((t: { name: string }) => t.name === 'web_search')).toMatchObject({ type: 'web_search_20260209', max_uses: 3, allowed_callers: ['direct'] });
+        // Caché automática: el punto de caché avanza con el historial y cada ronda lee las anteriores.
+        expect(call.cache_control).toEqual({ type: 'ephemeral' });
+        expect(call.system[0].cache_control).toEqual({ type: 'ephemeral' });
+      }
+      // Las herramientas no cambian entre rondas (cambiarlas rompería la caché y la reanudación).
+      expect(JSON.stringify(calls[1].tools)).toBe(JSON.stringify(calls[0].tools));
+    } finally {
+      mode.script = null;
+    }
+  });
+
   it('fuera del modo entrenador no hay búsqueda web', async () => {
     calls.length = 0;
     mode.script = [{ stop_reason: 'end_turn', content: [{ type: 'text', text: 'Hola.' }] }];

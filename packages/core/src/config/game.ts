@@ -242,6 +242,16 @@ export const GAME_CONFIG = {
     sleep: { target: 7, low: 6, veryLow: 5 },
     /** ¿Cómo te sientes? (1–5): con esto o menos, la sesión se aligera; con `restEnergy` o menos, mejor caminar. */
     readiness: { lightEnergy: 2, restEnergy: 1 },
+    /**
+     * Si a los músculos clave de la sesión les faltan más de estas horas para recuperarse, hoy toca cardio y la sesión
+     * se recorre al día en que ya se pueda (el mismo umbral).
+     */
+    readyWithinHours: 12,
+    /**
+     * Hora local desde la que ya es tarde para entrenar: la sesión se puede acortar y, si los músculos apenas se
+     * recuperan a esa hora o después, la sesión se recorre al día siguiente.
+     */
+    lateHour: 20,
     /** Medidas: cada cuántos días toca pesarte y medirte la cintura. */
     measureEveryDays: 7,
     /** Ritmo sano de cambio de peso por semana (% del peso). */
