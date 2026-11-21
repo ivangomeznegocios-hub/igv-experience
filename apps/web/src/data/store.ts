@@ -68,12 +68,26 @@ function reportError(msg: string) {
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
+let writing: Promise<void> = Promise.resolve();
+function writeLocal(): Promise<void> {
+  const data: Persisted = { v: 1, cursor, events: [...snap.events.values()], entities: [...snap.entities.values()], pending };
+  writing = set(KEY, data).catch(() => {});
+  return writing;
+}
 function persist() {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    const data: Persisted = { v: 1, cursor, events: [...snap.events.values()], entities: [...snap.entities.values()], pending };
-    set(KEY, data).catch(() => {});
+    saveTimer = null;
+    void writeLocal();
   }, 250);
+}
+
+/** Guarda ya en el dispositivo lo que esté por guardarse (antes de recargar la app o al salir de ella). */
+export function persistNow(): Promise<void> {
+  if (!saveTimer) return writing;
+  clearTimeout(saveTimer);
+  saveTimer = null;
+  return writeLocal();
 }
 
 function merge(events: GameEvent[], entities: Entity[]) {

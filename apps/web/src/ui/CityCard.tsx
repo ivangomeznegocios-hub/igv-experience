@@ -1,4 +1,5 @@
-import { lazy, Suspense, useMemo, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
+import { lazyScreen } from '../lib/recover';
 import { Link } from 'react-router-dom';
 import { GAME_CONFIG, type CityDistrictState, type GameState } from '@igv/core';
 import { useGame } from '../data/store';
@@ -7,7 +8,7 @@ import { fmtDate } from '../lib/time';
 import { Icon } from './icons';
 import '../styles/ciudad.css';
 
-const CityView = lazy(() => import('../city/CityView'));
+const CityView = lazyScreen(() => import('../city/CityView'));
 
 function useCityModel(state: GameState) {
   return useMemo(

@@ -530,6 +530,14 @@ input[type='range'] { width: 100%; accent-color: var(--gold); }
 .banner.warn { border-color: color-mix(in srgb, var(--flame) 45%, var(--line)); background: color-mix(in srgb, var(--flame) 10%, var(--card)); }
 .banner .btn { margin-left: auto; flex: none; }
 
+/* Pantalla que no se pudo abrir (ui/ErrorBoundary.tsx): nunca dejar el fondo vacío. */
+.screen-error { margin-top: 24px; }
+.screen-error p { margin: 0 0 14px; line-height: 1.45; }
+.screen-error details { margin-top: 14px; }
+.screen-error summary { cursor: pointer; }
+.screen-error code { display: block; margin-top: 6px; color: var(--muted); overflow-wrap: anywhere; }
+.fatal-error { padding-top: calc(env(safe-area-inset-top) + 40px); }
+
 .menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .menu-tile {
   display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: var(--radius); text-decoration: none; color: var(--text);

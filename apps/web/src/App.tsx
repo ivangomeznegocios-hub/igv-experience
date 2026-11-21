@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, type ReactNode } from 'react';
+import { Suspense, useEffect, useRef, type ReactNode } from 'react';
 import { BrowserRouter, NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { onStoreError, sync, useGame, useStore } from './data/store';
 import { ActionDock } from './ui/ActionDock';
@@ -14,64 +14,66 @@ import { schedulePlanUpload } from './lib/notifications';
 import { scheduleSnapshotUpload } from './lib/aiSnapshot';
 import { Toasts, toast } from './ui/kit';
 import { Icon } from './ui/icons';
+import { ErrorBoundary } from './ui/ErrorBoundary';
+import { lazyScreen, onRouteChange } from './lib/recover';
 import Hoy from './screens/Hoy';
 import { Mas, Progreso } from './screens/Menus';
 
-const Misiones = lazy(() => import('./screens/Misiones'));
-const Personaje = lazy(() => import('./screens/Personaje'));
-const Jefes = lazy(() => import('./screens/Jefes'));
-const Logros = lazy(() => import('./screens/Logros'));
-const Habilidades = lazy(() => import('./screens/Habilidades'));
-const Temporadas = lazy(() => import('./screens/Temporadas'));
-const Inventario = lazy(() => import('./screens/Inventario'));
-const Npcs = lazy(() => import('./screens/Npcs'));
-const Mapa = lazy(() => import('./screens/Mapa'));
-const Vida = lazy(() => import('./screens/Vida'));
-const Ajustes = lazy(() => import('./screens/Ajustes'));
-const GameMaster = lazy(() => import('./screens/GameMaster'));
-const Historial = lazy(() => import('./screens/Historial'));
-const Estadisticas = lazy(() => import('./screens/Estadisticas'));
-const Reporte = lazy(() => import('./screens/Reporte'));
-const Tienda = lazy(() => import('./screens/Tienda'));
-const Metas = lazy(() => import('./screens/Metas'));
-const Enemigos = lazy(() => import('./screens/Enemigos'));
-const Biblioteca = lazy(() => import('./screens/Biblioteca'));
-const Cuerpo = lazy(() => import('./screens/Cuerpo'));
-const Buscar = lazy(() => import('./screens/Buscar'));
-const Anual = lazy(() => import('./screens/Anual'));
-const Retos = lazy(() => import('./screens/Retos'));
-const Records = lazy(() => import('./screens/Records'));
-const ConectarIA = lazy(() => import('./screens/ConectarIA'));
+const Misiones = lazyScreen(() => import('./screens/Misiones'));
+const Personaje = lazyScreen(() => import('./screens/Personaje'));
+const Jefes = lazyScreen(() => import('./screens/Jefes'));
+const Logros = lazyScreen(() => import('./screens/Logros'));
+const Habilidades = lazyScreen(() => import('./screens/Habilidades'));
+const Temporadas = lazyScreen(() => import('./screens/Temporadas'));
+const Inventario = lazyScreen(() => import('./screens/Inventario'));
+const Npcs = lazyScreen(() => import('./screens/Npcs'));
+const Mapa = lazyScreen(() => import('./screens/Mapa'));
+const Vida = lazyScreen(() => import('./screens/Vida'));
+const Ajustes = lazyScreen(() => import('./screens/Ajustes'));
+const GameMaster = lazyScreen(() => import('./screens/GameMaster'));
+const Historial = lazyScreen(() => import('./screens/Historial'));
+const Estadisticas = lazyScreen(() => import('./screens/Estadisticas'));
+const Reporte = lazyScreen(() => import('./screens/Reporte'));
+const Tienda = lazyScreen(() => import('./screens/Tienda'));
+const Metas = lazyScreen(() => import('./screens/Metas'));
+const Enemigos = lazyScreen(() => import('./screens/Enemigos'));
+const Biblioteca = lazyScreen(() => import('./screens/Biblioteca'));
+const Cuerpo = lazyScreen(() => import('./screens/Cuerpo'));
+const Buscar = lazyScreen(() => import('./screens/Buscar'));
+const Anual = lazyScreen(() => import('./screens/Anual'));
+const Retos = lazyScreen(() => import('./screens/Retos'));
+const Records = lazyScreen(() => import('./screens/Records'));
+const ConectarIA = lazyScreen(() => import('./screens/ConectarIA'));
 
 // ---- Sistemas nuevos (pantallas) ----
 // [[voz]]
 import { Hablar } from './ui/Cuentame';
 
 // [[entreno]]
-const Entreno = lazy(() => import('./screens/Entreno'));
-const WorkoutSheetHost = lazy(() => import('./ui/WorkoutSheet'));
+const Entreno = lazyScreen(() => import('./screens/Entreno'));
+const WorkoutSheetHost = lazyScreen(() => import('./ui/WorkoutSheet'));
 
 // [[gente]]
-const Persona = lazy(() => import('./screens/Persona'));
+const Persona = lazyScreen(() => import('./screens/Persona'));
 import { PeopleWatcher } from './ui/people';
 
 // [[mapa]]
 
 // [[habilidades]]
-const Tiempo = lazy(() => import('./screens/Tiempo'));
-const TimerPill = lazy(() => import('./ui/habilidades/TimerPill'));
+const Tiempo = lazyScreen(() => import('./screens/Tiempo'));
+const TimerPill = lazyScreen(() => import('./ui/habilidades/TimerPill'));
 
 // [[aprendizaje]]
-const Aprendizaje = lazy(() => import('./screens/Aprendizaje'));
+const Aprendizaje = lazyScreen(() => import('./screens/Aprendizaje'));
 
 // [[salud]]
-const Salud = lazy(() => import('./screens/Salud'));
+const Salud = lazyScreen(() => import('./screens/Salud'));
 
 // [[habitos]]
-const Habitos = lazy(() => import('./screens/Habitos'));
+const Habitos = lazyScreen(() => import('./screens/Habitos'));
 // [[ciudad]]
-const Ciudad = lazy(() => import('./screens/Ciudad'));
-const Dia = lazy(() => import('./screens/Dia'));
+const Ciudad = lazyScreen(() => import('./screens/Ciudad'));
+const Dia = lazyScreen(() => import('./screens/Dia'));
 
 
 const PROGRESS = ['/progreso', '/jefes', '/logros', '/temporadas', '/metas', '/estadisticas', '/reporte', '/anual', '/tienda', '/historial', '/retos', '/records'];
@@ -197,10 +199,30 @@ function TabTitle() {
 
 function ScrollTop() {
   const { pathname } = useLocation();
+  const first = useRef(true);
   useEffect(() => {
     window.scrollTo(0, 0);
+    // Si se instaló una versión nueva con la app abierta, cambiar de pantalla la carga (ver lib/recover.ts).
+    if (first.current) first.current = false;
+    else onRouteChange();
   }, [pathname]);
   return null;
+}
+
+/** Las pantallas: si una falla, se muestra cómo salir y la navegación sigue ahí (nunca la pantalla en negro). */
+function Screens({ children }: { children: ReactNode }) {
+  const { pathname, search } = useLocation();
+  return <ErrorBoundary resetKey={pathname + search}>{children}</ErrorBoundary>;
+}
+
+/** Hojas y avisos globales: si uno falla, se oculta (con aviso) en vez de tumbar toda la app. */
+function Guard({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation();
+  return (
+    <ErrorBoundary resetKey={pathname} fallback={() => null} onError={() => toast('Algo falló. Intenta de nuevo.', 'error')}>
+      {children}
+    </ErrorBoundary>
+  );
 }
 
 export default function App() {
@@ -232,100 +254,144 @@ export default function App() {
               )}
             </div>
           ) : (
-            <Suspense fallback={<div className="empty">Cargando…</div>}>
-              <Routes>
-                <Route path="/" element={<Hoy />} />
-                <Route path="/misiones" element={<Misiones />} />
-                <Route path="/personaje" element={<Personaje />} />
-                <Route path="/progreso" element={<Progreso />} />
-                <Route path="/jefes" element={<Jefes />} />
-                <Route path="/logros" element={<Logros />} />
-                <Route path="/habilidades" element={<Habilidades />} />
-                <Route path="/temporadas" element={<Temporadas />} />
-                <Route path="/mas" element={<Mas />} />
-                <Route path="/inventario" element={<Inventario />} />
-                <Route path="/npcs" element={<Npcs />} />
-                <Route path="/mapa" element={<Mapa />} />
-                <Route path="/vida" element={<Vida />} />
-                <Route path="/ajustes" element={<Ajustes />} />
-                <Route path="/game-master" element={<GameMaster />} />
-                <Route path="/historial" element={<Historial />} />
-                <Route path="/estadisticas" element={<Estadisticas />} />
-                <Route path="/reporte" element={<Reporte />} />
-                <Route path="/tienda" element={<Tienda />} />
-                <Route path="/metas" element={<Metas />} />
-                <Route path="/enemigos" element={<Enemigos />} />
-                <Route path="/biblioteca" element={<Biblioteca />} />
-                <Route path="/cuerpo" element={<Cuerpo />} />
-                <Route path="/buscar" element={<Buscar />} />
-                <Route path="/anual" element={<Anual />} />
-                <Route path="/retos" element={<Retos />} />
-                <Route path="/records" element={<Records />} />
-                <Route path="/conectar-ia" element={<ConectarIA />} />
-                {/* [[voz]] */}
+            <Screens>
+              <Suspense fallback={<div className="empty">Cargando…</div>}>
+                <Routes>
+                  <Route path="/" element={<Hoy />} />
+                  <Route path="/misiones" element={<Misiones />} />
+                  <Route path="/personaje" element={<Personaje />} />
+                  <Route path="/progreso" element={<Progreso />} />
+                  <Route path="/jefes" element={<Jefes />} />
+                  <Route path="/logros" element={<Logros />} />
+                  <Route path="/habilidades" element={<Habilidades />} />
+                  <Route path="/temporadas" element={<Temporadas />} />
+                  <Route path="/mas" element={<Mas />} />
+                  <Route path="/inventario" element={<Inventario />} />
+                  <Route path="/npcs" element={<Npcs />} />
+                  <Route path="/mapa" element={<Mapa />} />
+                  <Route path="/vida" element={<Vida />} />
+                  <Route path="/ajustes" element={<Ajustes />} />
+                  <Route path="/game-master" element={<GameMaster />} />
+                  <Route path="/historial" element={<Historial />} />
+                  <Route path="/estadisticas" element={<Estadisticas />} />
+                  <Route path="/reporte" element={<Reporte />} />
+                  <Route path="/tienda" element={<Tienda />} />
+                  <Route path="/metas" element={<Metas />} />
+                  <Route path="/enemigos" element={<Enemigos />} />
+                  <Route path="/biblioteca" element={<Biblioteca />} />
+                  <Route path="/cuerpo" element={<Cuerpo />} />
+                  <Route path="/buscar" element={<Buscar />} />
+                  <Route path="/anual" element={<Anual />} />
+                  <Route path="/retos" element={<Retos />} />
+                  <Route path="/records" element={<Records />} />
+                  <Route path="/conectar-ia" element={<ConectarIA />} />
+                  {/* [[voz]] */}
 
-                {/* [[entreno]] */}
-                <Route path="/entreno" element={<Entreno />} />
+                  {/* [[entreno]] */}
+                  <Route path="/entreno" element={<Entreno />} />
 
-                {/* [[gente]] */}
-                <Route path="/npcs/:id" element={<Persona />} />
+                  {/* [[gente]] */}
+                  <Route path="/npcs/:id" element={<Persona />} />
 
-                {/* [[mapa]] */}
+                  {/* [[mapa]] */}
 
-                {/* [[habilidades]] */}
-                <Route path="/tiempo" element={<Tiempo />} />
+                  {/* [[habilidades]] */}
+                  <Route path="/tiempo" element={<Tiempo />} />
 
-                {/* [[aprendizaje]] */}
-                <Route path="/aprendizaje" element={<Aprendizaje />} />
+                  {/* [[aprendizaje]] */}
+                  <Route path="/aprendizaje" element={<Aprendizaje />} />
 
-                {/* [[salud]] */}
-                <Route path="/salud" element={<Salud />} />
+                  {/* [[salud]] */}
+                  <Route path="/salud" element={<Salud />} />
 
-                {/* [[habitos]] */}
-                <Route path="/habitos" element={<Habitos />} />
-                <Route path="/ciudad" element={<Ciudad />} />
-                <Route path="/dia" element={<Dia />} />
+                  {/* [[habitos]] */}
+                  <Route path="/habitos" element={<Habitos />} />
+                  <Route path="/ciudad" element={<Ciudad />} />
+                  <Route path="/dia" element={<Dia />} />
 
-                <Route path="*" element={<Hoy />} />
-              </Routes>
-            </Suspense>
+                  <Route path="*" element={<Hoy />} />
+                </Routes>
+              </Suspense>
+            </Screens>
           )}
         </Main>
       </div>
-      <Fx />
+      <Guard>
+        <Fx />
+      </Guard>
       <Toasts />
-      <SyncPill />
-      {store.ready && <QuestMode />}
-      {store.ready && <QuickAdd />}
-      <ActionDock />
-      {store.ready && <PlanSheet />}
-      {store.ready && <DayDeckHost />}
-      {store.ready && <DayResultHost />}
-      {store.ready && <TabTitle />}
-      {store.ready && <RecordWatcher />}
-      {store.ready && <NotificationsSync />}
-      {store.ready && <SkinSync />}
-      {store.ready && <AiSnapshotSync />}
+      <Guard>
+        <SyncPill />
+      </Guard>
+      {store.ready && (
+        <Guard>
+          <QuestMode />
+        </Guard>
+      )}
+      {store.ready && (
+        <Guard>
+          <QuickAdd />
+        </Guard>
+      )}
+      <Guard>
+        <ActionDock />
+      </Guard>
+      {store.ready && (
+        <Guard>
+          <PlanSheet />
+        </Guard>
+      )}
+      {store.ready && (
+        <Guard>
+          <DayDeckHost />
+        </Guard>
+      )}
+      {store.ready && (
+        <Guard>
+          <DayResultHost />
+        </Guard>
+      )}
+      {store.ready && (
+        <Guard>
+          <TabTitle />
+          <RecordWatcher />
+          <NotificationsSync />
+          <SkinSync />
+          <AiSnapshotSync />
+        </Guard>
+      )}
       {/* [[voz]] */}
-      {store.ready && <Hablar />}
+      {store.ready && (
+        <Guard>
+          <Hablar />
+        </Guard>
+      )}
 
       {/* [[entreno]] */}
       {store.ready && (
-        <Suspense fallback={null}>
-          <WorkoutSheetHost />
-        </Suspense>
+        <Guard>
+          <Suspense fallback={null}>
+            <WorkoutSheetHost />
+          </Suspense>
+        </Guard>
       )}
 
       {/* [[gente]] */}
-      {store.ready && <PeopleWatcher />}
+      {store.ready && (
+        <Guard>
+          <PeopleWatcher />
+        </Guard>
+      )}
 
       {/* [[mapa]] */}
 
       {/* [[habilidades]] */}
       {store.ready && (
-        <Suspense fallback={null}>
-          <TimerPill />
-        </Suspense>
+        <Guard>
+          <Suspense fallback={null}>
+            <TimerPill />
+          </Suspense>
+        </Guard>
       )}
 
       {/* [[aprendizaje]] */}

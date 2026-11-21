@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
+import { lazyScreen } from '../lib/recover';
 import { Link } from 'react-router-dom';
 import {
   MUSCLE_IDS,
@@ -19,7 +20,7 @@ import { BodyMap } from './BodyMap';
 import { Chips } from './kit';
 import '../styles/cuerpo3d.css';
 
-const CharacterView = lazy(() => import('../character/CharacterView'));
+const CharacterView = lazyScreen(() => import('../character/CharacterView'));
 
 /**
  * Músculos sobre tu cuerpo 3D: colores sobrios tipo lámina de anatomía (tintes suaves, nada neón). Los mismos

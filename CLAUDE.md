@@ -424,6 +424,14 @@ cd apps/api && pnpm dev:mcp   # servidor MCP en :8788 (misma D1 local)
   - **Celebraciones y feedback** (`ui/fx.tsx`, `lib/sound.ts`): banners de logro desbloqueado, "Avanzaste en el reto" (meta mensual de ingresos), rango de habilidad, día perfecto, misiones del día, y overlays de "Fase completada" / "Reto superado" y subida de nivel con monograma.
   - **Cierre del día** (`CampfireCard` / `CloseDaySheet` en `screens/Hoy.tsx`, evento `day.closed`): resumen del día y una nota.
   - **Dictado por voz** (`lib/voice.ts`): Web Speech API (`es-MX`, o el idioma que pidas) continuo (se reinicia solo tras silencios; en Android se evita repetir resultados), en el botón global "Hablar" (Cuéntame) y en **todos los campos de texto libre**: usa siempre `TextInput` / `TextArea` de `ui/kit.tsx` (`ui/VoiceField.tsx`, micrófono chico integrado; `lang="en-US"` para inglés; `voice={false}` lo quita) en lugar de `<input>`/`<textarea>`. Propuestas de un toque en `ui/Proposals.tsx`. Pruebas en `apps/web/test/voice.test.ts`.
+- **Nunca la pantalla en negro** (`lib/recover.ts`, `ui/ErrorBoundary.tsx`): al publicar una versión nueva, el service
+  worker nuevo (skipWaiting + clientsClaim) borra los archivos viejos y el servidor responde index.html en su lugar, así
+  que abrir una pantalla aún no cargada fallaba y React desmontaba toda la app. Por eso: las pantallas y vistas 3D se
+  cargan con `lazyScreen` (NO `React.lazy`): si su archivo ya no existe, recarga una vez con la versión nueva (con
+  enfriamiento de 20 s contra ciclos; sin conexión no recarga); si una versión nueva toma el control con la app abierta,
+  el siguiente cambio de pantalla recarga completa; antes de recargar se guarda lo pendiente (`persistNow` del store).
+  Las rutas van dentro de un `ErrorBoundary` (se limpia al cambiar de ruta; la navegación sigue visible), cada hoja global
+  en `Guard` (si falla se oculta con aviso) y toda la app en `AppErrorBoundary` (main.tsx).
 - Registro rápido: `ui/QuickAdd.tsx` (botón + global; `openQuickAdd({ mode, date })` desde cualquier pantalla; `/?accion=gasto` lo abre desde los accesos directos del manifest). Hoja de un día: `ui/DaySheet.tsx`.
 - Preferencias del dispositivo (sonido, vibración, notificaciones) en `localStorage` (`lib/prefs.ts`), no en D1.
 - Coach IA (fase 4; antes "Game Master", las rutas conservan `gm`): `POST /api/gm/ask` (conversar y ACTUAR con las herramientas de

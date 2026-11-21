@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazyScreen } from '../lib/recover';
 import {
   BEARD_STYLES,
   BODY_MEASURE_LABELS,
@@ -41,7 +42,7 @@ import { Chips, DateChips, Field, Tabs, toast } from './kit';
 import { Icon } from './icons';
 import { FrontBack, MusclePanel, useMusclePaint, useNowIso } from './MuscleBody';
 
-const CharacterView = lazy(() => import('../character/CharacterView'));
+const CharacterView = lazyScreen(() => import('../character/CharacterView'));
 /** Al comparar antes / ahora la figura va sin ropa (la ropa holgada esconde la forma), sin pintar músculos. */
 const BARE = { tints: {}, selected: null, outline: false };
 
