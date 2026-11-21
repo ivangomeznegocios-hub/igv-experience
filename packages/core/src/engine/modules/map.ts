@@ -1,7 +1,7 @@
 import type { Ctx } from '../context';
 import { entitiesOf } from '../context';
-import { placeLayer, type AttributeId, type Entity, type GameEvent, type PlaceData, type PlaceStatus, type VisitCompany } from '../../types';
-import { compareDates } from '../../util/dates';
+import { placeLayer, type AttributeId, type Entity, type GameEvent, type PlaceData, type PlaceGoal, type PlaceStatus, type VisitCompany } from '../../types';
+import { addDays, compareDates, nextMonthKey } from '../../util/dates';
 import { MAP_COLLECTIONS, catalogIdOfPlace } from '../map-catalog';
 
 /**
@@ -11,6 +11,7 @@ import { MAP_COLLECTIONS, catalogIdOfPlace } from '../map-catalog';
  *    `cfg.mapa.habitualVisits` al menos "habitual".
  * La primera vez que un lugar deja de estar "por conocer" (por cualquiera de los dos) da `rewards.discovery`
  * una sola vez. Completar una colección del catálogo fijo da la XP de una misión de su tamaño, una vez.
+ * Objetivos (`PlaceData.goal`): solo visuales; se cumplen con la primera visita desde que se marcaron.
  */
 
 export interface PlaceState {
@@ -59,6 +60,69 @@ export interface MapCollectionState {
   xp: number;
 }
 
+/** Objetivo del mapa: un lugar al que quieres ir, con quién y para cuándo. */
+export interface PlaceGoalState {
+  placeId: string;
+  name: string;
+  city: string | null;
+  with: VisitCompany | null;
+  by: string | null;
+  since: string;
+  /** Último día del plazo (null sin fecha). */
+  deadline: string | null;
+  /** Día en que se cumplió (primera visita desde `since`, con esa compañía si la pide). */
+  doneOn: string | null;
+  /** Pasó el plazo y no se ha cumplido. */
+  late: boolean;
+}
+
+/** Último día de un plazo 'YYYY', 'YYYY-MM' o 'YYYY-MM-DD' (null si no hay o no se entiende). */
+export function goalDeadline(by: string | null | undefined): string | null {
+  if (!by) return null;
+  if (/^\d{4}$/.test(by)) return `${by}-12-31`;
+  if (/^\d{4}-(0[1-9]|1[0-2])$/.test(by)) return addDays(`${nextMonthKey(by)}-01`, -1);
+  if (/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(by)) return by;
+  return null;
+}
+
+/** Día en que se cumple un objetivo: la primera visita desde `since` (con esa compañía si la pide). */
+export function placeGoalDoneOn(goal: Pick<PlaceGoal, 'with' | 'since'>, visits: Pick<PlaceVisit, 'date' | 'company'>[]): string | null {
+  let best: string | null = null;
+  for (const v of visits) {
+    if (goal.since && v.date < goal.since) continue;
+    if (goal.with && v.company !== goal.with) continue;
+    if (!best || v.date < best) best = v.date;
+  }
+  return best;
+}
+
+/** Objetivos de los lugares (sin borrar): pendientes primero (por plazo), luego los cumplidos (el más reciente primero). */
+export function mapGoals(entities: Entity<PlaceData>[], visits: PlaceVisit[], today: string): PlaceGoalState[] {
+  const byPlace = new Map<string, PlaceVisit[]>();
+  for (const v of visits) {
+    const l = byPlace.get(v.placeId) ?? [];
+    l.push(v);
+    byPlace.set(v.placeId, l);
+  }
+  const out: PlaceGoalState[] = [];
+  for (const e of entities) {
+    const g = e.data.goal;
+    if (!g || typeof g !== 'object') continue;
+    const since = typeof g.since === 'string' ? g.since : '';
+    const by = typeof g.by === 'string' && g.by ? g.by : null;
+    const deadline = goalDeadline(by);
+    const doneOn = placeGoalDoneOn({ with: g.with ?? null, since }, byPlace.get(e.id) ?? []);
+    out.push({ placeId: e.id, name: e.data.name, city: e.data.city?.trim() || null, with: g.with ?? null, by, since, deadline, doneOn, late: !doneOn && !!deadline && deadline < today });
+  }
+  return out.sort(
+    (a, b) =>
+      Number(!!a.doneOn) - Number(!!b.doneOn) ||
+      (a.doneOn && b.doneOn ? b.doneOn.localeCompare(a.doneOn) : 0) ||
+      (a.deadline ?? '9999').localeCompare(b.deadline ?? '9999') ||
+      a.name.localeCompare(b.name, 'es'),
+  );
+}
+
 /** Resumen compacto (pantalla y foto para la IA). */
 export interface MapSummary {
   /** Capa vida (lugares del catálogo editable). */
@@ -72,6 +136,8 @@ export interface MapSummary {
   byCompany: Partial<Record<VisitCompany, number>>;
   recent: { placeId: string; name: string; date: string; company: VisitCompany }[];
   collections: { id: string; name: string; known: number; total: number; completedOn: string | null }[];
+  /** Objetivos (las fotos viejas no lo traen). `next` = pendientes, el plazo más cercano primero (máx. 12). */
+  goals?: { open: number; done: number; next: { placeId: string; name: string; city: string | null; with: VisitCompany | null; by: string | null; late: boolean }[] };
   empresa: {
     /** Lugares de la capa empresa que siguen activos. */
     active: number;
@@ -89,6 +155,8 @@ export interface MapState {
   /** Primeras veces con cada compañía en cada lugar (orden cronológico). */
   firsts: MapFirst[];
   collections: Record<string, MapCollectionState>;
+  /** Objetivos de los lugares (ver `mapGoals`). */
+  goals: PlaceGoalState[];
   /** Catálogo fijo: id → lugar ligado y cuándo lo conociste. */
   catalog: Record<string, { placeId: string; discoveredOn: string | null }>;
   summary: MapSummary;
@@ -250,18 +318,21 @@ export function reduceMap(ctx: Ctx): MapState {
     catalog[cid] = { placeId: live, discoveredOn: knownOn.get(cid) ?? null };
   }
 
+  const goals = mapGoals(entitiesOf<PlaceData>(ctx, 'map', 'place'), fold.visits, ctx.today);
+
   return {
     places,
     discoveryDates: fold.discoveries.map((d) => d.date),
     visits: fold.visits,
     firsts: fold.firsts,
     collections,
+    goals,
     catalog,
-    summary: summarize(ctx, places, fold, collections),
+    summary: summarize(ctx, places, fold, collections, goals),
   };
 }
 
-function summarize(ctx: Ctx, places: Record<string, PlaceState>, fold: MapFold, collections: Record<string, MapCollectionState>): MapSummary {
+function summarize(ctx: Ctx, places: Record<string, PlaceState>, fold: MapFold, collections: Record<string, MapCollectionState>, goals: PlaceGoalState[]): MapSummary {
   const all = entitiesOf<PlaceData>(ctx, 'map', 'place');
   const vida = all.filter((e) => placeLayer(e.data) === 'vida');
   const empresa = all.filter((e) => placeLayer(e.data) === 'empresa');
@@ -300,6 +371,14 @@ function summarize(ctx: Ctx, places: Record<string, PlaceState>, fold: MapFold, 
       .reverse()
       .map((v) => ({ placeId: v.placeId, name: (ctx.entityById.get(v.placeId)!.data as PlaceData).name, date: v.date, company: v.company })),
     collections: Object.values(collections).map((c) => ({ id: c.id, name: c.name, known: c.known, total: c.total, completedOn: c.completedOn })),
+    goals: {
+      open: goals.filter((g) => !g.doneOn).length,
+      done: goals.filter((g) => g.doneOn).length,
+      next: goals
+        .filter((g) => !g.doneOn)
+        .slice(0, 12)
+        .map((g) => ({ placeId: g.placeId, name: g.name, city: g.city, with: g.with, by: g.by, late: g.late })),
+    },
     empresa: {
       active: activeEmpresa.length,
       clients: activeEmpresa.filter((e) => e.data.placeType === 'cliente').length,

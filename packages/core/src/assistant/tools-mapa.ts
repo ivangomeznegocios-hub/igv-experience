@@ -11,7 +11,7 @@ import {
   searchMapCatalog,
   type CatalogPlace,
 } from '../engine/map-catalog';
-import { mapCatalogLinks, mapCollectionProgress, foldMapEvents, type MapSummary, type PlaceState } from '../engine/modules/map';
+import { mapCatalogLinks, mapCollectionProgress, foldMapEvents, goalDeadline, mapGoals, placeGoalDoneOn, type MapSummary, type PlaceGoalState, type PlaceState } from '../engine/modules/map';
 import {
   EMPRESA_PLACE_TYPES,
   PLACE_STATUS_NAMES,
@@ -144,9 +144,21 @@ function namesOf(catalog: Entity[], ids: string[]): string[] {
   return ids.map((id) => (catalog.find((e) => e.id === id)?.data as { name?: string } | undefined)?.name ?? id);
 }
 
-function placeLine(p: Entity<PlaceData>, st: PlaceState | undefined, catalog: Entity[]): string {
+/** "en familia, para 2027" (objetivo). */
+function goalText(g: { with?: VisitCompany | null; by?: string | null }): string {
+  return [g.with ? COMPANY_TEXT[g.with] : '', g.by ? `para ${g.by}` : ''].filter(Boolean).join(', ');
+}
+
+function goalLine(g: PlaceGoalState): string {
+  const extra = goalText(g);
+  const state = g.doneOn ? `cumplido el ${g.doneOn}` : g.late ? 'pendiente (ya pasó el plazo)' : 'pendiente';
+  return `- [${g.placeId}] ${g.name}${g.city ? ` (${g.city})` : ''}${extra ? ` · ${extra}` : ''}: ${state}`;
+}
+
+function placeLine(p: Entity<PlaceData>, st: PlaceState | undefined, catalog: Entity[], goal?: PlaceGoalState): string {
   const status = PLACE_STATUS_NAMES[st?.status ?? 'inexplorado'].toLowerCase();
   const parts = [`- [${p.id}] ${p.data.name} (${PLACE_TYPE_NAMES[p.data.placeType] ?? p.data.placeType}${where(p.data) ? ` · ${where(p.data)}` : ''}): ${status}`];
+  if (goal) parts.push(`objetivo${goalText(goal) ? ` ${goalText(goal)}` : ''}${goal.doneOn ? ` (cumplido el ${goal.doneOn})` : ''}`);
   if (st?.visits) parts.push(`${st.visits} ${st.visits === 1 ? 'visita' : 'visitas'} (última ${st.lastVisit})`);
   const lived = (Object.keys(st?.firsts ?? {}) as VisitCompany[]).map((c) => COMPANY_TEXT[c]);
   if (lived.length) parts.push(lived.join(', '));
@@ -167,13 +179,15 @@ async function mapEvents(store: AssistantStore, placeId?: string): Promise<GameE
 // ---------------------------------------------------------------------------------------------
 
 export function renderMapaOverview(m: MapSummary): string[] {
-  if (!m.known && !m.toKnow && !m.empresa.active) return [];
+  if (!m.known && !m.toKnow && !m.empresa.active && !m.goals?.open) return [];
   const L = ['', '## Mapa'];
   L.push(
     `Conoce ${m.known} ${m.known === 1 ? 'lugar' : 'lugares'} (${m.habitual} habituales)${m.cities.length ? ` en ${m.cities.length} ${m.cities.length === 1 ? 'ciudad' : 'ciudades'}` : ''}; ${m.toKnow} por conocer. Visitas este año: ${m.visitsThisYear}.`,
   );
   const lived = (Object.entries(m.byCompany) as [VisitCompany, number][]).map(([c, n]) => `${COMPANY_TEXT[c]} ${n}`);
   if (lived.length) L.push(`Lugares vividos: ${lived.join(' · ')}.`);
+  if (m.goals?.open) L.push(`Objetivos pendientes (${m.goals.open}): ${m.goals.next.map((g) => `${g.name}${goalText(g) ? ` (${goalText(g)}${g.late ? ', ya pasó el plazo' : ''})` : g.late ? ' (ya pasó el plazo)' : ''}`).join('; ')}.`);
+  if (m.goals?.done) L.push(`Objetivos cumplidos: ${m.goals.done}.`);
   const started = m.collections.filter((c) => c.known > 0);
   if (started.length) L.push(`Colecciones: ${started.map((c) => `${c.name} ${c.known}/${c.total}${c.completedOn ? ' (completa)' : ''}`).join(' · ')}.`);
   if (m.recent.length) L.push(`Últimas visitas: ${m.recent.map((v) => `${v.date} ${v.name} (${COMPANY_TEXT[v.company]})`).join('; ')}.`);
@@ -191,7 +205,7 @@ const verMapa = tool({
   group: 'consultar',
   writes: false,
   description:
-    'Mapa de lugares de Iván con sus ids: estado (por conocer / conocido / habitual), visitas, con quién los ha vivido (solo, pareja, familia, amigos), colecciones del catálogo de Jalisco con su avance y, en la capa empresa, dónde opera su empresa (oficinas, sucursales, clientes, proveedores, zonas). Con "sugerencias" lista lugares emblemáticos que aún no conoce.',
+    'Mapa de lugares de Iván con sus ids: estado (por conocer / conocido / habitual), visitas, con quién los ha vivido (solo, pareja, familia, amigos), sus OBJETIVOS (lugares a los que quiere ir, con quién y para cuándo, pendientes o cumplidos), colecciones del catálogo de Jalisco con su avance y, en la capa empresa, dónde opera su empresa (oficinas, sucursales, clientes, proveedores, zonas). Con "sugerencias" lista lugares emblemáticos que aún no conoce (a Iván no le interesan salvo que los pida).',
   input: z.object({
     capa: z.enum(['vida', 'empresa', 'todo']).optional().describe('Por defecto, vida.'),
     ciudad: z.string().trim().max(80).optional().describe('Filtra por ciudad o municipio.'),
@@ -213,16 +227,25 @@ const verMapa = tool({
       L.push(`Conoce ${known.length} lugares (${known.filter((p) => status(p.id) === 'dominado').length} habituales; habitual = ${habitualVisits()}+ visitas o marcado a mano), ${vida.length - known.length} por conocer.`);
       const lived = VISIT_COMPANIES.map((c) => [c, known.filter((p) => fold.places[p.id]?.firsts[c]).length] as const).filter(([, n]) => n > 0);
       if (lived.length) L.push(`Lo ha vivido: ${lived.map(([c, n]) => `${COMPANY_TEXT[c]} ${n}`).join(' · ')}.`);
+      const goals = mapGoals(vida, fold.visits, store.today);
+      const goalOf = new Map(goals.map((g) => [g.placeId, g]));
+      if (goals.length) {
+        L.push('', `Objetivos (${goals.filter((g) => !g.doneOn).length} pendientes; se cumplen con registrar_visita, con la compañía que piden):`);
+        for (const g of goals) L.push(goalLine(g));
+      }
       const links = mapCatalogLinks(Object.keys(fold.places), catalog);
       const { collections } = mapCollectionProgress(fold.places, links);
-      L.push(
-        `Colecciones (completar una da XP una vez): ${collections
-          .map(({ collection: c, knownIds, completedOn }) => `${c.name} ${knownIds.length}/${c.placeIds.length}${completedOn ? ` (completa el ${completedOn})` : ` (+${GAME_CONFIG.missionXp[c.size]} XP)`}`)
-          .join(' · ')}.`,
-      );
+      const started = collections.filter((c) => c.knownIds.length > 0);
+      if (started.length || sugerencias)
+        L.push(
+          '',
+          `Colecciones del catálogo de Jalisco (completar una da XP una vez): ${(sugerencias ? collections : started)
+            .map(({ collection: c, knownIds, completedOn }) => `${c.name} ${knownIds.length}/${c.placeIds.length}${completedOn ? ` (completa el ${completedOn})` : ` (+${GAME_CONFIG.missionXp[c.size]} XP)`}`)
+            .join(' · ')}.`,
+        );
       L.push('', 'Lugares:');
       const sorted = [...vida].sort((a, b) => (fold.places[b.id]?.lastVisit ?? '').localeCompare(fold.places[a.id]?.lastVisit ?? '') || a.data.name.localeCompare(b.data.name, 'es'));
-      for (const p of sorted.slice(0, 80)) L.push(placeLine(p, fold.places[p.id], catalog));
+      for (const p of sorted.slice(0, 80)) L.push(placeLine(p, fold.places[p.id], catalog, goalOf.get(p.id)));
       if (sorted.length > 80) L.push(`(y ${sorted.length - 80} más)`);
       if (!sorted.length) L.push('(ninguno todavía)');
       if (sugerencias) {
@@ -264,7 +287,7 @@ const registrarVisita = tool({
   title: 'Registrar visita a un lugar',
   group: 'registrar',
   writes: true,
-  description: `Registra que Iván FUE a un lugar y con quién (solo, pareja = con su novia, familia, amigos, trabajo u otro). Acepta el id o el nombre: si el lugar no existe se crea, y si es un lugar emblemático de Jalisco se liga al catálogo (cuenta para sus colecciones). La primera visita a un lugar da +${GAME_CONFIG.rewards.discovery} XP (una vez); con ${GAME_CONFIG.mapa.habitualVisits} visitas se vuelve habitual.`,
+  description: `Registra que Iván FUE a un lugar y con quién (solo, pareja = con su novia, familia, amigos, trabajo u otro). Acepta el id o el nombre: si el lugar no existe se crea, y si es un lugar emblemático de Jalisco se liga al catálogo (cuenta para sus colecciones). La primera visita a un lugar da +${GAME_CONFIG.rewards.discovery} XP (una vez); con ${GAME_CONFIG.mapa.habitualVisits} visitas se vuelve habitual. Si el lugar era un objetivo, la visita lo cumple (con la compañía que pide).`,
   input: z.object({
     lugar: zText(200).describe('Id (de ver_mapa), id del catálogo de Jalisco o nombre del lugar.'),
     compania: z.enum(VISIT_COMPANIES).describe('Con quién fue.'),
@@ -301,6 +324,9 @@ const registrarVisita = tool({
     if (!prevState?.discoveredOn && nextState?.discoveredOn) notes.push(`¡Primera visita! +${GAME_CONFIG.rewards.discovery} XP`);
     else if (!prevState?.firsts[input.compania]) notes.push(`Primera vez ${COMPANY_TEXT[input.compania]}`);
     if (nextState?.status === 'dominado' && prevState?.status !== 'dominado') notes.push('ya es habitual');
+    const goal = p.data.goal;
+    if (goal && !placeGoalDoneOn(goal, foldMapEvents(valid, habitualVisits()).visits.filter((v) => v.placeId === p.id)) && placeGoalDoneOn(goal, [{ date, company: input.compania }]))
+      notes.push(`¡Objetivo cumplido${goalText(goal) ? ` (${goalText(goal)})` : ''}!`);
     const cid = catalogIdOfPlace(p.id, p.data);
     if (cid) {
       const all = (await mapEvents(store)).filter((e) => !e.voidedAt && e.localDate <= store.today);
@@ -333,7 +359,7 @@ const guardarLugar = tool({
   group: 'organizar',
   writes: true,
   description:
-    'Crea o edita un lugar del mapa. Capa "vida" (lugares que quiere conocer o ya conoce) o "empresa" (oficina, sucursal, cliente, proveedor o zona donde opera su empresa). Para editar manda "id"; solo cambia los campos que mandes. Un lugar emblemático de Jalisco se liga solo al catálogo (o manda "catalogo_id"). Crear un lugar no da XP: la XP llega con la primera visita (registrar_visita).',
+    'Crea o edita un lugar del mapa, en cualquier parte del mundo. Capa "vida" (lugares que quiere conocer o ya conoce) o "empresa" (oficina, sucursal, cliente, proveedor o zona donde opera su empresa). Para editar manda "id"; solo cambia los campos que mandes. Manda lat/lng siempre que sepas dónde está (aunque sea aproximado, p. ej. el centro de la ciudad) para que salga en el mapa. "objetivo" lo marca como un lugar al que quiere ir (p. ej. Disneyland California en familia para 2027); null lo quita. Un lugar emblemático de Jalisco se liga solo al catálogo (o manda "catalogo_id"). Crear un lugar no da XP: la XP llega con la primera visita (registrar_visita).',
   input: z.object({
     id: zId.optional().describe('Para editar uno existente (de ver_mapa).'),
     nombre: zText(200).optional(),
@@ -349,6 +375,19 @@ const guardarLugar = tool({
     desde: zDate.optional().describe('Empresa: desde cuándo opera ahí (YYYY-MM-DD).'),
     catalogo_id: zId.optional().describe('Id de un lugar emblemático (ver_mapa con sugerencias) para ligarlo.'),
     estado: z.enum(['por_conocer', 'conocido', 'habitual']).optional().describe('Fija el estado a mano (queda como registro de hoy). Normalmente sale solo de las visitas.'),
+    objetivo: z
+      .object({
+        con: z.enum(VISIT_COMPANIES).optional().describe('Con quién quiere ir (familia, pareja…). Sin él, cuenta cualquier visita.'),
+        para: z
+          .string()
+          .trim()
+          .regex(/^\d{4}(-\d{2}(-\d{2})?)?$/, 'Usa AAAA, AAAA-MM o AAAA-MM-DD.')
+          .optional()
+          .describe('Para cuándo: año (2027), mes (2027-06) o día.'),
+      })
+      .nullable()
+      .optional()
+      .describe('Marca el lugar como objetivo (un lugar al que quiere ir); reemplaza el objetivo completo. null = ya no es objetivo. Se cumple con la primera visita desde que se marca.'),
   }),
   async run(i, store) {
     if ((i.lat === undefined) !== (i.lng === undefined)) throw new ToolError('Manda lat y lng juntos.');
@@ -395,6 +434,17 @@ const guardarLugar = tool({
     if (i.personas) data.npcIds = resolvePeople(catalog, i.personas);
     if (i.activo !== undefined) data.active = i.activo;
     if (i.desde !== undefined) data.since = i.desde;
+    if (i.objetivo === null) data.goal = null;
+    else if (i.objetivo) {
+      if (i.objetivo.para && !goalDeadline(i.objetivo.para)) throw new ToolError(`"${i.objetivo.para}" no es una fecha válida. Usa AAAA, AAAA-MM o AAAA-MM-DD.`);
+      // Editar un objetivo pendiente conserva desde cuándo; uno ya cumplido empieza de nuevo (volver a ir).
+      let since = store.today;
+      if (existing && prev.goal?.since) {
+        const visits = foldMapEvents((await mapEvents(store, id)).filter((e) => !e.voidedAt && e.localDate <= store.today), habitualVisits()).visits;
+        if (!placeGoalDoneOn(prev.goal, visits)) since = prev.goal.since;
+      }
+      data.goal = { with: i.objetivo.con ?? null, by: i.objetivo.para ?? null, since };
+    }
     // Un lugar viejo ligado al catálogo solo por su nombre guarda la liga (si se renombra, sigue contando).
     const nameLink = existing && !cat && !data.catalogId ? catalogIdOfPlace(existing.id, existing.data) : null;
     if (nameLink) data.catalogId = nameLink;
@@ -424,9 +474,10 @@ const guardarLugar = tool({
       }
     }
     const what = existing ? 'Actualicé' : 'Agregué al mapa';
+    const goalNote = i.objetivo ? ` Objetivo${goalText(data.goal!) ? `: ${goalText(data.goal!)}` : ''}.` : i.objetivo === null && prev.goal ? ' Ya no es objetivo.' : '';
     const layerText = placeLayer(saved.data as PlaceData) === 'empresa' ? 'empresa' : 'vida';
     return ok(
-      `${what} "${data.name}" (${PLACE_TYPE_NAMES[data.placeType] ?? data.placeType} · capa ${layerText}${where(data) ? ` · ${where(data)}` : ''}${data.catalogId ? ' · del catálogo de Jalisco' : ''}) [${saved.id}].${statusText}`,
+      `${what} "${data.name}" (${PLACE_TYPE_NAMES[data.placeType] ?? data.placeType} · capa ${layerText}${where(data) ? ` · ${where(data)}` : ''}${data.catalogId ? ' · del catálogo de Jalisco' : ''}) [${saved.id}].${goalNote}${statusText}${data.lat == null ? ' Sin ubicación: no sale en el mapa hasta que tenga lat/lng.' : ''}`,
       `${existing ? 'Editó' : 'Agregó'} el lugar "${data.name}"`,
       refs,
     );

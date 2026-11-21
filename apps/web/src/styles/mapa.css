@@ -1,11 +1,14 @@
 /* ---------- Mapa (vida y empresa) ---------- */
 .mapa-card { padding: 0; overflow: hidden; }
 
+.mapa-head-btns { gap: 6px; flex: none; }
+.mapa-head-btns .btn { white-space: nowrap; }
+
 /* Lienzo */
 .mapa-canvas {
   position: relative; overflow: hidden; width: 100%;
   background-color: var(--bg-2);
-  touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab;
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: grab;
 }
 .mapa-canvas:active { cursor: grabbing; }
 .mapa-canvas.no-tiles {
@@ -40,6 +43,11 @@
 .mapa-cluster text { font-size: 11px; stroke-width: 0; fill: #0b0d12; font-weight: 800; }
 .mapa-cluster.mk-suggest circle { fill: color-mix(in srgb, var(--faint) 75%, var(--bg)); }
 .mapa-cluster.mk-suggest text, .mapa-cluster.mk-proveedor text { fill: #fff; }
+/* Objetivo: naranja con banderita (se distingue de oro = habitual y turquesa = conocido). */
+.mapa-pin.mk-goal .dot { stroke-width: 2.2; }
+.mapa-pin .flag { fill: #fff; stroke: #fff; stroke-width: 1.3; stroke-linejoin: round; stroke-linecap: round; pointer-events: none; }
+.mapa-cluster.mk-goal text { fill: #fff; }
+.mk-goal { --k: var(--flame); }
 .mk-habitual, .mk-oficina, .mk-sucursal { --k: var(--gold); }
 .mk-known, .mk-cliente { --k: var(--teal); }
 .mk-todo { --k: var(--muted); }
@@ -62,6 +70,18 @@
   border: 1px solid var(--line); box-shadow: var(--shadow);
 }
 .mapa-ctl button svg { width: 18px; height: 18px; }
+.mapa-ctl button.add { color: var(--flame); }
+.mapa-ctl button.add.on { background: var(--flame); border-color: var(--flame); color: #1a0800; }
+.mapa-card { position: relative; }
+.mapa-card.picking { border-color: color-mix(in srgb, var(--flame) 50%, var(--line)); }
+/* Barra de "Marcar aquí": flota sobre el mapa (arriba, junto a los controles) para que siempre se vea. */
+.mapa-picking {
+  position: absolute; top: 10px; left: 10px; right: 56px; z-index: 2;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; padding: 8px 10px; border-radius: 12px;
+  background: color-mix(in srgb, var(--card) 94%, transparent); border: 1px solid color-mix(in srgb, var(--flame) 45%, var(--line)); box-shadow: var(--shadow);
+}
+.mapa-picking .small { flex-basis: 100%; color: var(--muted); font-size: 12.5px; }
+.mapa-picking .btn.primary { margin-left: auto; }
 .mapa-ctl button:active { transform: scale(0.95); }
 .mapa-attrib {
   position: absolute; right: 6px; bottom: 4px; font-size: 10px; color: var(--muted); text-decoration: none;
@@ -85,6 +105,23 @@
 
 /* Lugar seleccionado */
 .mapa-sel { border-color: color-mix(in srgb, var(--gold) 30%, var(--line)); }
+.mapa-sel.goal { border-color: color-mix(in srgb, var(--flame) 40%, var(--line)); }
+.mapa-sel .badge svg { vertical-align: -2px; }
+.mapa-goal {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 10px; padding: 8px 10px; border-radius: 10px;
+  font-size: 13px; font-weight: 650; color: var(--flame);
+  background: color-mix(in srgb, var(--flame) 9%, var(--card-2)); border: 1px solid color-mix(in srgb, var(--flame) 30%, var(--line));
+}
+.mapa-goal b { color: var(--text); }
+.mapa-goal.done { color: var(--green); background: color-mix(in srgb, var(--green) 8%, var(--card-2)); border-color: color-mix(in srgb, var(--green) 30%, var(--line)); }
+.mapa-done-toggle {
+  display: flex; align-items: center; gap: 6px; width: 100%; margin-top: 6px; padding: 10px 0 2px; cursor: pointer;
+  background: none; border: 0; border-top: 1px solid var(--line); color: var(--muted); font: inherit; font-size: 13px; font-weight: 650; text-align: left;
+}
+.mapa-done-toggle svg:last-child { margin-left: auto; }
+.chip.flame { border-color: color-mix(in srgb, var(--flame) 45%, var(--line)); }
+.chip.flame.on { background: var(--flame); border-color: var(--flame); color: #1a0800; }
+.chip svg { vertical-align: -2px; }
 .mapa-facts { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px; font-size: 13px; color: var(--muted); }
 .mapa-facts b { color: var(--text); }
 .mapa-facts svg { vertical-align: -2px; }
@@ -136,6 +173,13 @@
 .mapa-city-row .row { margin-bottom: 6px; }
 
 /* Formularios */
+.mapa-geo { margin-bottom: 4px; }
+.mapa-geo-bar { display: flex; gap: 6px; align-items: flex-start; }
+.mapa-geo-bar .search-box { flex: 1; min-width: 0; margin-bottom: 8px; }
+.mapa-geo-bar .btn { flex: none; min-height: 42px; }
+.mapa-geo .mapa-picker-list { margin-bottom: 8px; }
+.mapa-geo-src { align-self: flex-end; padding: 0 4px; }
+.mapa-goal-fields { padding: 10px 12px 2px; margin: -4px 0 12px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--flame) 30%, var(--line)); background: color-mix(in srgb, var(--flame) 5%, var(--card-2)); }
 .mapa-picker .search-box { margin-bottom: 8px; }
 .mapa-picker-list { display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; }
 .mapa-pick {

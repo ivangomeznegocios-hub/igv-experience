@@ -5,10 +5,11 @@ import { Icon } from '../icons';
  * Mapa interactivo sin librerías: proyección Web Mercator, arrastrar para mover, pellizcar / rueda / botones
  * para acercar, agrupación de marcadores cercanos y, si `tiles` está activo, fondo de calles de
  * OpenStreetMap (teselas raster de tile.openstreetmap.org con atribución; solo las visibles, sin descargas
- * masivas). Sin conexión o sin teselas, queda un fondo sobrio con retícula.
+ * masivas). Sin conexión o sin teselas, queda un fondo sobrio con retícula. Mantener presionado (o clic
+ * derecho) en un punto llama a `onLongPress` con sus coordenadas (para marcar un lugar ahí).
  */
 
-export type MarkerKind = 'habitual' | 'known' | 'todo' | 'suggest' | 'oficina' | 'sucursal' | 'cliente' | 'proveedor' | 'zona' | 'inactive';
+export type MarkerKind = 'goal' | 'habitual' | 'known' | 'todo' | 'suggest' | 'oficina' | 'sucursal' | 'cliente' | 'proveedor' | 'zona' | 'inactive';
 
 export interface MapMarker {
   id: string;
@@ -31,7 +32,8 @@ const MAX_Z = 18;
 export const GDL_CENTER = { lat: 20.6736, lng: -103.344 };
 const TILE_URL = (z: number, x: number, y: number) => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
 
-const PRIORITY: Record<MarkerKind, number> = { habitual: 0, oficina: 0, sucursal: 1, known: 1, cliente: 1, proveedor: 2, zona: 2, todo: 3, inactive: 4, suggest: 5 };
+const PRIORITY: Record<MarkerKind, number> = { goal: 0, habitual: 0, oficina: 0, sucursal: 1, known: 1, cliente: 1, proveedor: 2, zona: 2, todo: 3, inactive: 4, suggest: 5 };
+const LONG_PRESS_MS = 550;
 
 function worldSize(z: number) {
   return TILE * 2 ** z;
@@ -107,6 +109,9 @@ export function MapView({
   onViewChange,
   me,
   onLocate,
+  onLongPress,
+  onAdd,
+  adding = false,
   ariaLabel = 'Mapa',
 }: {
   markers: MapMarker[];
@@ -128,6 +133,11 @@ export function MapView({
   onViewChange?: (v: MapViewState) => void;
   me?: { lat: number; lng: number } | null;
   onLocate?: () => void;
+  /** Mantener presionado un punto (o clic derecho): sus coordenadas y el zoom del mapa. */
+  onLongPress?: (p: { lat: number; lng: number; z: number }) => void;
+  /** Botón "Marcar un lugar" en los controles (`adding` = ya está marcando). */
+  onAdd?: () => void;
+  adding?: boolean;
   ariaLabel?: string;
 }) {
   const box = useRef<HTMLDivElement>(null);
@@ -195,6 +205,26 @@ export function MapView({
 
   // ---------- Gestos ----------
   const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const press = useRef<{ timer: number; at: number } | null>(null);
+  const lastLong = useRef(0);
+  const clearPress = () => {
+    if (press.current) window.clearTimeout(press.current.timer);
+    press.current = null;
+  };
+  useEffect(() => clearPress, []);
+  /** Coordenadas de un punto de la pantalla del mapa. */
+  const pointToLL = (px: number, py: number) => {
+    const v = viewRef.current;
+    const [vx, vy] = projectLL(v.lat, v.lng, v.z);
+    const [lat, lng] = unprojectXY(vx + px - size.w / 2, vy + py - size.h / 2, v.z);
+    return { lat, lng: ((((lng + 180) % 360) + 360) % 360) - 180, z: v.z };
+  };
+  const fireLongPress = (px: number, py: number) => {
+    if (!onLongPress || Date.now() - lastLong.current < 900) return;
+    lastLong.current = Date.now();
+    if (gesture.current) gesture.current.moved = true; // al soltar no selecciona nada
+    onLongPress(pointToLL(px, py));
+  };
   const gesture = useRef<{ x: number; y: number; view: MapViewState; moved: boolean; target: string | null; pinch: { d: number; mx: number; my: number; view: MapViewState } | null } | null>(null);
 
   const local = (e: { clientX: number; clientY: number }) => {
@@ -225,7 +255,10 @@ export function MapView({
     if (pointers.current.size === 1) {
       const t = (e.target as Element).closest('[data-mid]');
       gesture.current = { ...p, view: viewRef.current, moved: false, target: t?.getAttribute('data-mid') ?? null, pinch: null };
+      clearPress();
+      if (onLongPress && e.button === 0) press.current = { timer: window.setTimeout(() => fireLongPress(p.x, p.y), LONG_PRESS_MS), at: Date.now() };
     } else if (pointers.current.size === 2 && gesture.current) {
+      clearPress();
       const [a, b] = [...pointers.current.values()];
       gesture.current.moved = true;
       gesture.current.pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, view: viewRef.current };
@@ -249,11 +282,13 @@ export function MapView({
     const dx = p.x - g.x;
     const dy = p.y - g.y;
     if (!g.moved && Math.hypot(dx, dy) < 6) return;
+    clearPress();
     g.moved = true;
     setView(panBy(g.view, dx, dy));
   };
   const onPointerUp = (e: React.PointerEvent) => {
     pointers.current.delete(e.pointerId);
+    clearPress();
     const g = gesture.current;
     if (pointers.current.size > 0) {
       // Queda un dedo tras pellizcar: sigue arrastrando desde aquí.
@@ -380,6 +415,13 @@ export function MapView({
         const p = local(e);
         animateTo(zoomAt(viewRef.current, viewRef.current.z + 1, p.x, p.y), 220);
       }}
+      onContextMenu={(e) => {
+        // Clic derecho en computadora; en el celular el menú del navegador no debe salir al mantener presionado.
+        e.preventDefault();
+        if ((e.target as HTMLElement).closest('.mapa-ctl, .mapa-attrib')) return;
+        const p = local(e);
+        fireLongPress(p.x, p.y);
+      }}
       role="application"
       aria-label={ariaLabel}
     >
@@ -416,8 +458,9 @@ export function MapView({
               {m.kind === 'zona' && <circle r="24" className="zone" />}
               <circle r="16" className="hit" />
               {sel && <circle r="13" className="ring" />}
-              <circle r={m.kind === 'suggest' ? 4.5 : 7.5} className="dot" />
+              <circle r={m.kind === 'suggest' ? 4.5 : m.kind === 'goal' ? 9 : 7.5} className="dot" />
               {m.kind === 'habitual' && <circle r="2.6" className="core" />}
+              {m.kind === 'goal' && <path className="flag" d="M-2.6 4.2V-4.4M-2.6 -4.4H3.6L2.2 -2.4L3.6 -0.4H-2.6" />}
               {labelled.has(m.id) && (
                 <text y={-13} textAnchor="middle" className="lbl">
                   {m.label.length > 26 ? `${m.label.slice(0, 25)}…` : m.label}
@@ -429,6 +472,11 @@ export function MapView({
       </svg>
       {crosshair && <div className="mapa-crosshair" aria-hidden="true" />}
       <div className="mapa-ctl">
+        {onAdd && (
+          <button type="button" className={`add ${adding ? 'on' : ''}`} aria-label="Marcar un lugar en el mapa" aria-pressed={adding} title="Marcar un lugar" onClick={onAdd}>
+            <Icon name="pin-plus" />
+          </button>
+        )}
         <button type="button" aria-label="Acercar" onClick={() => zoomBtn(1)}>
           <Icon name="plus" />
         </button>

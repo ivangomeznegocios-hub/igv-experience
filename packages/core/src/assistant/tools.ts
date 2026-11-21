@@ -537,7 +537,7 @@ const GUIDE_SYSTEMS: string[] = [
   GENTE_GUIDE,
 
   // [[mapa]]
-  `Mapa (capas vida y empresa): lugares por conocer / conocidos / habituales. Cada visita se registra con registrar_visita (con quién: solo, pareja, familia, amigos, trabajo u otro, y qué personas). La primera visita a cada lugar da ${GAME_CONFIG.rewards.discovery} XP una vez; con ${GAME_CONFIG.mapa.habitualVisits} visitas se vuelve habitual. Hay colecciones de lugares emblemáticos de Guadalajara y Jalisco (completar una da XP una vez). La capa empresa marca dónde opera su empresa (oficinas, sucursales, clientes, proveedores, zonas). Usa ver_mapa (no ver_catalogo) para ver estados y visitas.`,
+  `Mapa (capas vida y empresa): lugares por conocer / conocidos / habituales. Cada visita se registra con registrar_visita (con quién: solo, pareja, familia, amigos, trabajo u otro, y qué personas). La primera visita a cada lugar da ${GAME_CONFIG.rewards.discovery} XP una vez; con ${GAME_CONFIG.mapa.habitualVisits} visitas se vuelve habitual. Los lugares pueden estar en cualquier parte del mundo (manda lat/lng aproximados). OBJETIVOS: lugares a los que quiere ir, con quién y para cuándo (p. ej. Disneyland California en familia para 2027); se marcan con guardar_lugar (objetivo) y se cumplen con la visita. Hay colecciones de lugares emblemáticos de Guadalajara y Jalisco (completar una da XP una vez), pero a Iván no le interesan esas sugerencias: no se las propongas salvo que las pida. La capa empresa marca dónde opera su empresa (oficinas, sucursales, clientes, proveedores, zonas). Usa ver_mapa (no ver_catalogo) para ver estados y visitas.`,
 
   // [[habilidades]]
   HABILIDADES_GUIDE,

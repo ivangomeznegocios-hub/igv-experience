@@ -4,17 +4,22 @@ import {
   VISIT_COMPANY_NAMES,
   catalogPlaceEntityId,
   placeFromCatalog,
+  placeGoalDoneOn,
   placeLayer,
   type CatalogPlace,
   type Entity,
   type GameState,
   type NpcData,
   type PlaceData,
+  type PlaceGoal,
   type PlaceStatus,
+  type SettingsData,
   type VisitCompany,
 } from '@igv/core';
 import { addEvent, deleteEntity, saveEntity, voidEvent } from '../../data/store';
-import { newId } from '../../lib/time';
+import { updateSettings } from '../../lib/actions';
+import { haptic } from '../../lib/sound';
+import { fmtDate, fmtMonth, newId } from '../../lib/time';
 import { toast, undoToast } from '../kit';
 import type { MarkerKind } from './MapView';
 
@@ -27,13 +32,41 @@ export function statusOf(state: GameState, id: string): PlaceStatus {
   return state.map.places[id]?.status ?? 'inexplorado';
 }
 
-export function markerKind(p: Entity<PlaceData>, status: PlaceStatus): MarkerKind {
+/** `goalOpen`: el lugar es un objetivo pendiente (se pinta como objetivo aunque ya lo conozcas). */
+export function markerKind(p: Entity<PlaceData>, status: PlaceStatus, goalOpen = false): MarkerKind {
   if (placeLayer(p.data) === 'empresa') {
     if (p.data.active === false) return 'inactive';
     const t = p.data.placeType;
     return t === 'oficina' || t === 'sucursal' || t === 'cliente' || t === 'proveedor' || t === 'zona' ? t : 'cliente';
   }
+  if (goalOpen) return 'goal';
   return status === 'dominado' ? 'habitual' : status === 'descubierto' ? 'known' : 'todo';
+}
+
+/** Lugares con objetivo pendiente. */
+export function openGoalIds(state: GameState): Set<string> {
+  return new Set(state.map.goals.filter((g) => !g.doneOn).map((g) => g.placeId));
+}
+
+/** "2027", "junio 2027" o "15 jun 2027". */
+export function fmtGoalBy(by: string | null | undefined): string {
+  if (!by) return '';
+  if (/^\d{4}$/.test(by)) return by;
+  if (/^\d{4}-\d{2}$/.test(by)) return fmtMonth(by);
+  return fmtDate(by, true);
+}
+
+/** "En familia · para 2027" (sin datos, ""). */
+export function goalText(g: Pick<PlaceGoal, 'with' | 'by'>): string {
+  return [g.with ? VISIT_COMPANY_NAMES[g.with] : '', g.by ? `para ${fmtGoalBy(g.by)}` : ''].filter(Boolean).join(' · ');
+}
+
+/** ¿Se muestran los lugares sugeridos de Jalisco? Apagado salvo que lo prendas. */
+export function suggestionsOn(settings: SettingsData): boolean {
+  return settings.map?.suggestions === true;
+}
+export function setSuggestions(settings: SettingsData, on: boolean) {
+  updateSettings(settings, { map: { ...settings.map, suggestions: on } });
 }
 
 export const hasCoords = (d: Pick<PlaceData, 'lat' | 'lng'>) => typeof d.lat === 'number' && typeof d.lng === 'number' && Number.isFinite(d.lat) && Number.isFinite(d.lng);
@@ -90,8 +123,12 @@ export function registerVisit(
   }
   const first = !state.map.places[placeId]?.discoveredOn;
   const firstWith = !first && !state.map.places[placeId]?.firsts[v.company];
+  const goal = target.kind === 'place' ? target.place.data.goal : null;
+  const goalDone = !!goal && !state.map.goals.find((g) => g.placeId === placeId)?.doneOn && !!placeGoalDoneOn(goal, [{ date: v.date, company: v.company }]);
   const ev = addEvent('place.visited', { placeId, company: v.company, npcIds: v.npcIds.length ? v.npcIds : undefined, note: v.note?.trim() || undefined, rating: v.rating }, { localDate: v.date });
-  const msg = first ? `Primera visita: ${name} · +${GAME_CONFIG.rewards.discovery} XP` : firstWith ? `Primera vez ${VISIT_COMPANY_NAMES[v.company].toLowerCase()} en ${name}` : `Visita registrada: ${name}`;
+  const xp = first ? ` · +${GAME_CONFIG.rewards.discovery} XP` : '';
+  const msg = goalDone ? `¡Objetivo cumplido! ${name}${xp}` : first ? `Primera visita: ${name}${xp}` : firstWith ? `Primera vez ${VISIT_COMPANY_NAMES[v.company].toLowerCase()} en ${name}` : `Visita registrada: ${name}`;
+  if (goalDone) haptic([18, 40, 18]);
   undoToast(msg, () => {
     voidEvent(ev.id);
     if (created) deleteEntity(created);
@@ -132,13 +169,13 @@ export function getPosition(): Promise<{ lat: number; lng: number }> {
 }
 
 // ---------- Preferencias de esta pantalla (solo en este dispositivo) ----------
+// (Las sugerencias de Jalisco ya no van aquí: son un ajuste que se sincroniza, `settings.map.suggestions`.)
 const KEY = 'igv-mapa';
 export interface MapaPrefs {
   layer: 'vida' | 'empresa';
   tiles: boolean;
-  suggest: boolean;
 }
-const DEFAULTS: MapaPrefs = { layer: 'vida', tiles: true, suggest: true };
+const DEFAULTS: MapaPrefs = { layer: 'vida', tiles: true };
 export function getMapaPrefs(): MapaPrefs {
   try {
     return { ...DEFAULTS, ...(JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<MapaPrefs>) };
@@ -152,6 +189,14 @@ export function setMapaPrefs(p: Partial<MapaPrefs>) {
   } catch {
     // sin almacenamiento: solo en esta sesión
   }
+}
+
+/** Punto central de tus lugares (para dar preferencia a lo cercano al buscar). */
+export function homeCenter(places: Entity<PlaceData>[]): { lat: number; lng: number } | null {
+  const pts = places.filter((p) => hasCoords(p.data));
+  if (!pts.length) return null;
+  const med = (a: number[]) => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)];
+  return { lat: med(pts.map((p) => p.data.lat!)), lng: med(pts.map((p) => p.data.lng!)) };
 }
 
 /** Ciudades sugeridas para el formulario (zona metropolitana de Guadalajara y Jalisco). */

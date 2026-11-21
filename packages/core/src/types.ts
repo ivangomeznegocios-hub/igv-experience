@@ -86,6 +86,8 @@ export interface SettingsData {
    * Sin definir, cualquier misión completada salva el día.
    */
   dayMinimum?: { missionId: string; title: string };
+  /** Mapa: `suggestions` = mostrar los lugares sugeridos de Jalisco y sus colecciones (apagado si no está). */
+  map?: { suggestions?: boolean };
 }
 
 // ---------- Personaje 3D ----------
@@ -520,6 +522,21 @@ export interface PlaceData {
   active?: boolean;
   /** Capa empresa: desde cuándo opera ahí (YYYY-MM-DD). */
   since?: string | null;
+  /** Objetivo: un lugar al que quieres ir (p. ej. "Disneyland California, en familia, para 2027"). */
+  goal?: PlaceGoal | null;
+}
+
+/**
+ * Objetivo del mapa. Se cumple con la primera visita desde `since` (con esa compañía si `with` viene).
+ * Solo es visual: no da XP extra (la primera visita al lugar ya da la suya).
+ */
+export interface PlaceGoal {
+  /** Con quién quieres ir (sin él, cuenta cualquier visita). */
+  with?: VisitCompany | null;
+  /** Para cuándo: 'YYYY', 'YYYY-MM' o 'YYYY-MM-DD'. */
+  by?: string | null;
+  /** Desde qué día es objetivo (YYYY-MM-DD): las visitas anteriores no lo cumplen. */
+  since: string;
 }
 
 // ---------- Sistemas de la fase 5 ----------
