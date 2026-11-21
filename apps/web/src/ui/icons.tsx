@@ -96,6 +96,9 @@ const P: Record<string, string> = {
   'salud-cross': 'M9 3h6v6h6v6h-6v6H9v-6H3V9h6z',
   'salud-pulse': 'M3 12h4l2.5-6 4 12 2.5-6h5',
   'salud-card': 'M3 6h18v13H3zM3 10h18M7 15h4M15 14v3M13.5 15.5h3',
+  'salud-doc': 'M14 3H6v18h12V7zM14 3v4h4M9 12h6M9 16h6M9 8h2',
+  paperclip: 'M21 11.5l-8.6 8.6a5 5 0 0 1-7.1-7.1l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9',
+  camera: 'M3 8h4l2-3h6l2 3h4v12H3zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
 
   // [[habitos]]
   repeat: 'M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3',

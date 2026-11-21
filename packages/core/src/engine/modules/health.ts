@@ -1,17 +1,33 @@
 import type { Ctx } from '../context';
 import { entitiesOf, ofType } from '../context';
 import {
+  HEALTH_DOCTOR_ID,
   HEALTH_PROFILE_ID,
   MISSION_SIZES,
   type AttributeId,
   type CheckupCategory,
   type CheckupData,
+  type DoctorAction,
+  type HealthConsultData,
+  type HealthDoctorData,
   type HealthMetricKind,
   type HealthProfileData,
+  type HealthRecordData,
   type MissionSize,
 } from '../../types';
 import { isDateString } from '../../util/dates';
-import { HEALTH_METRIC_INFO, checkupTiming, classifyHealthMetric, healthMetricKey, type CheckupStatus, type HealthMetricLevel } from '../health';
+import {
+  HEALTH_METRIC_INFO,
+  checkupTiming,
+  classifyAgainstRange,
+  classifyHealthMetric,
+  fmtRange,
+  healthMetricKey,
+  nextDoctorReview,
+  resolveMetricKind,
+  type CheckupStatus,
+  type HealthMetricLevel,
+} from '../health';
 
 export interface CheckupState {
   id: string;
@@ -71,7 +87,18 @@ export interface HealthMetricEntry {
   note?: string;
   level: HealthMetricLevel | null;
   levelText: string | null;
+  /** Rango de referencia del propio estudio ("70–99"), si lo trae. */
+  ref?: string;
+  /** Estudio del que salió. */
+  recordId?: string;
 }
+
+/** Un estudio o documento médico (`health/record`) con su id. */
+export type HealthRecordEntry = HealthRecordData & { id: string; /** Valores fuera de rango que leyó la IA. */ flagged: number };
+/** Una revisión de tu médico IA con su id. */
+export type HealthConsultEntry = HealthConsultData & { id: string };
+/** Una acción pendiente de la última revisión. */
+export type DoctorPendingAction = DoctorAction & { consultId: string };
 
 export interface HealthState {
   checkups: Record<string, CheckupState>;
@@ -90,6 +117,21 @@ export interface HealthState {
   metrics: Record<string, HealthMetricEntry[]>;
   /** Ficha médica (null si no se ha llenado). */
   card: HealthProfileData | null;
+  /** Estudios y documentos, del más reciente al más antiguo. */
+  records: HealthRecordEntry[];
+  /** Lo gastado en salud (costo de los estudios) este año y en total. */
+  spendThisYear: number;
+  spendTotal: number;
+  /** Revisiones de tu médico IA, de la más reciente a la más antigua. */
+  consults: HealthConsultEntry[];
+  /** La revisión más reciente que aún no abres (null si ya las viste). */
+  unseenConsultId: string | null;
+  /** Acciones de la última revisión que no has hecho ni descartado. */
+  pendingActions: DoctorPendingAction[];
+  /** Lo que tu médico IA debe saber de ti y cada cuándo te revisa. */
+  doctor: HealthDoctorData;
+  /** Siguiente revisión automática (null = manual o aún sin primera revisión). */
+  nextReview: string | null;
 }
 
 interface CheckupDonePayload {
@@ -107,6 +149,9 @@ interface MetricPayload {
   unit?: string;
   label?: string;
   note?: string;
+  refLow?: number;
+  refHigh?: number;
+  recordId?: string;
 }
 
 const validSize = (s: unknown): s is MissionSize => typeof s === 'string' && (MISSION_SIZES as readonly string[]).includes(s);
@@ -205,28 +250,62 @@ export function reduceHealth(ctx: Ctx): HealthState {
   const metrics: Record<string, HealthMetricEntry[]> = {};
   for (const ev of ofType<MetricPayload>(ctx, 'health.metric')) {
     const p = ev.payload;
-    const info = HEALTH_METRIC_INFO[p.kind];
-    if (!info) continue;
-    const key = healthMetricKey(p.kind, p.label);
-    const reading = classifyHealthMetric(p.kind, p.value, p.value2);
+    if (!HEALTH_METRIC_INFO[p.kind]) continue;
+    // Una "otra" con nombre conocido (p. ej. "Triglicéridos" en mg/dL) se agrupa con la suya.
+    const kind = resolveMetricKind(p.kind, p.label, p.unit);
+    const info = HEALTH_METRIC_INFO[kind];
+    const key = healthMetricKey(kind, p.label);
+    const reading = kind === 'otro' ? classifyAgainstRange(p.value, p.refLow, p.refHigh) : classifyHealthMetric(kind, p.value, p.value2);
+    const ref = fmtRange(p.refLow, p.refHigh);
     (metrics[key] ??= []).push({
       eventId: ev.id,
       date: ev.localDate,
-      kind: p.kind,
+      kind,
       key,
-      label: p.kind === 'otro' ? p.label?.trim() || info.name : info.name,
+      label: kind === 'otro' ? p.label?.trim() || info.name : info.name,
       value: p.value,
-      value2: p.value2,
-      unit: p.unit?.trim() || info.unit,
+      value2: kind === 'presion' ? p.value2 : undefined,
+      unit: (kind === 'otro' ? p.unit?.trim() : '') || info.unit || p.unit?.trim() || '',
       note: p.note || undefined,
       level: reading?.level ?? null,
       levelText: reading?.text ?? null,
+      ...(ref ? { ref } : {}),
+      ...(p.recordId ? { recordId: p.recordId } : {}),
     });
   }
 
   // --- Ficha médica ---
   const cardEntity = ctx.entityById.get(HEALTH_PROFILE_ID);
   const card = cardEntity && cardEntity.module === 'health' ? ((cardEntity.data ?? {}) as HealthProfileData) : null;
+
+  // --- Estudios y documentos ---
+  const records: HealthRecordEntry[] = entitiesOf<HealthRecordData>(ctx, 'health', 'record')
+    .filter((e) => e.data && typeof e.data.title === 'string')
+    .map((e) => ({
+      ...e.data,
+      id: e.id,
+      files: Array.isArray(e.data.files) ? e.data.files : [],
+      flagged: (e.data.ai?.values ?? []).filter((v) => v.flag).length,
+      _sort: e.createdAt ?? e.sort ?? 0,
+    }))
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b._sort - a._sort))
+    .map(({ _sort, ...r }) => r);
+  const costOf = (r: HealthRecordEntry) => (typeof r.cost === 'number' && Number.isFinite(r.cost) && r.cost > 0 ? r.cost : 0);
+  const spendThisYear = records.filter((r) => r.date?.startsWith(year)).reduce((t, r) => t + costOf(r), 0);
+  const spendTotal = records.reduce((t, r) => t + costOf(r), 0);
+
+  // --- Tu médico IA ---
+  const consults: HealthConsultEntry[] = entitiesOf<HealthConsultData>(ctx, 'health', 'consult')
+    .filter((e) => e.data && isDateString(e.data.date) && typeof e.data.title === 'string')
+    .map((e) => ({ ...e.data, id: e.id, actions: Array.isArray(e.data.actions) ? e.data.actions : [], _sort: e.createdAt ?? e.sort ?? 0 }))
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b._sort - a._sort))
+    .map(({ _sort, ...c }) => c);
+  const latest = consults[0] ?? null;
+  const pendingActions: DoctorPendingAction[] = latest
+    ? latest.actions.filter((a) => !a.doneAt && !a.dismissedAt).map((a) => ({ ...a, consultId: latest.id }))
+    : [];
+  const doctorEntity = ctx.entityById.get(HEALTH_DOCTOR_ID);
+  const doctor = (doctorEntity && doctorEntity.module === 'health' ? doctorEntity.data ?? {} : {}) as HealthDoctorData;
 
   const thisYear = history.filter((h) => h.date.startsWith(year));
   return {
@@ -240,5 +319,13 @@ export function reduceHealth(ctx: Ctx): HealthState {
     xpThisYear: thisYear.reduce((s, h) => s + h.xp, 0),
     metrics,
     card,
+    records,
+    spendThisYear,
+    spendTotal,
+    consults,
+    unseenConsultId: latest && !latest.seenAt ? latest.id : null,
+    pendingActions,
+    doctor,
+    nextReview: nextDoctorReview(latest?.date ?? null, doctor.cadence),
   };
 }

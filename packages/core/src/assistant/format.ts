@@ -1,4 +1,5 @@
-import { ATTRIBUTE_NAMES, MISSION_SIZE_NAMES, type AttributeId, type Entity, type GameEvent, type MissionSize } from '../types';
+import { ATTRIBUTE_NAMES, MISSION_SIZE_NAMES, type AttributeId, type Entity, type GameEvent, type HealthMetricKind, type MissionSize } from '../types';
+import { HEALTH_METRIC_INFO } from '../engine/health';
 import { cityDistrict } from '../engine/city-catalog';
 
 const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -248,8 +249,8 @@ export function describeEvent(e: GameEvent, byId: Map<string, Entity>, currency 
       detail = [p.name ?? name(p.checkupId), p.result ? String(p.result).slice(0, 100) : '', p.note ? String(p.note).slice(0, 100) : ''].filter(Boolean).join(' · ');
       break;
     case 'health.metric': {
-      const names: Record<string, [string, string]> = { presion: ['Presión', 'mmHg'], glucosa: ['Glucosa', 'mg/dL'], colesterol: ['Colesterol', 'mg/dL'], frecuencia_reposo: ['Pulso en reposo', 'lpm'] };
-      const [label, unit] = names[p.kind] ?? [p.label ?? 'Medición', p.unit ?? ''];
+      const info = p.kind !== 'otro' ? HEALTH_METRIC_INFO[p.kind as HealthMetricKind] : undefined;
+      const [label, unit] = info ? [info.name, info.unit] : [p.label ?? 'Medición', p.unit ?? ''];
       detail = `${label} ${p.kind === 'presion' && p.value2 !== undefined ? `${p.value}/${p.value2}` : p.value}${unit ? ` ${unit}` : ''}${p.note ? ` · ${String(p.note).slice(0, 100)}` : ''}`;
       break;
     }

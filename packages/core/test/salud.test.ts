@@ -311,7 +311,12 @@ describe('salud: herramientas de IA', () => {
     expect(o.isError).toBeFalsy();
     const s = xpOf(store);
     expect(s.xp.total).toBe(0);
-    expect(Object.keys(s.health.metrics).sort()).toEqual(['otro:trigliceridos', 'presion']);
+    // "Triglicéridos" en mg/dL se reconoce como la medición de laboratorio (con su rango propio).
+    expect(Object.keys(s.health.metrics).sort()).toEqual(['presion', 'trigliceridos']);
+    expect(o.text).toContain('150');
+    // En otra unidad se queda como "otra" (no se mezcla con la serie en mg/dL).
+    await call(store, 'registrar_medicion', { tipo: 'otro', valor: 1.8, nombre: 'Triglicéridos', unidad: 'mmol/L' });
+    expect(Object.keys(xpOf(store).health.metrics).sort()).toEqual(['otro:trigliceridos', 'presion', 'trigliceridos']);
   });
 
   it('guardar_ficha_medica y ver_salud', async () => {

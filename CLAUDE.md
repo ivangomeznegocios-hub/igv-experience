@@ -34,6 +34,8 @@ código los nombres internos se conservan (módulos, tipos de evento, ids, rutas
 | `note.captured`, `ui/Cuentame.tsx` | Cuéntame (botón de micrófono "Hablar"), notas por procesar |
 | `training/*`, `workout.logged`, `/entreno` | Entrenamiento (series, músculos, recuperación, récords) |
 | `health/*`, `/salud` | Salud (chequeos "ya te toca", mediciones, ficha médica) |
+| `health/consult`, `health/doctor`, `/api/medico`, `lib/medico.ts` | Tu médico IA (revisión, "Tu médico te quiere decir algo", "Lo que debe saber de ti") |
+| `health/record`, `health_files` | Estudios (análisis, consultas, recetas; archivos PDF/fotos) |
 | `learning/*`, `/aprendizaje` | Aprendizaje (temas como Inglés, frases, tarjetas, tests con IA) |
 | `time.logged`, `/tiempo` | Tu tiempo ("¿a qué te dedicas?", cronómetro) |
 | `habits` (estado), `/habitos`, `/dia` | Hábitos (de la rutina) y "¿Cómo fue tu día?" |
@@ -63,7 +65,8 @@ packages/core   Reglas del juego en TypeScript puro (sin red ni DOM). Probadas c
   src/seed/            Datos iniciales (IDs fijos) y guía de atributos (30/70).
 packages/db     Esquema Drizzle (events, entities, server_meta) y migraciones SQL de D1.
 apps/api        Worker de Cloudflare con Hono: /api/* (sync, eventos, catálogo, respaldo, Coach IA en /api/gm, push,
-                Conectar IA en /api/ai y /api/oauth). Notificaciones push APAGADAS (sin cron); ver "Notificaciones push".
+                Conectar IA en /api/ai y /api/oauth, médico IA y archivos de Salud en /api/medico). Notificaciones push
+                APAGADAS (sin cron); ver "Notificaciones push".
                 El mismo Worker sirve el frontend (Workers Static Assets, SPA).
                 Segundo Worker `igv-experience-mcp` (wrangler.mcp.jsonc, src/mcp-worker.ts): servidor MCP público
                 con OAuth; misma base D1. Ver "Conectar IA (MCP)".
@@ -305,7 +308,17 @@ Ninguno rompe las reglas de oro: cada uno tiene una prueba de propiedades "agreg
   `health.checkup_done` (guarda nombre y tamaño del momento) y `health.metric` (presión exige 2 valores). Estado: al día /
   pronto (≤30 días) / atrasado / sin registro, `state.health.due`. XP (`health`): la de una misión de su tamaño (media)
   a Fuerza física, máx. una por chequeo por día. 9 recomendaciones para hombre adulto (por edad si hay `birthDate`),
-  siempre con "Orientación general; no sustituye a tu médico".
+  siempre visibles con su estado (activar una no esconde las demás), con "Orientación general; no sustituye a tu médico".
+- **Tu médico IA y Estudios** (fase 12, detalle en `docs/sistemas/salud.md`): pestañas en `/salud?tab=` (resumen,
+  medico, estudios, chequeos, mediciones). `health/record` = estudio con archivos (PDF/fotos en D1: tablas
+  `health_files` + `health_file_chunks`, base64 en trozos, NUNCA se sincronizan ni van al respaldo), costo (opcional como
+  `expense.recorded` "Salud") y lo que leyó la IA (`/api/medico/read`); sus valores van a `health.metric` con `recordId`
+  (nuevos tipos de laboratorio: triglicéridos, HDL, LDL, HbA1c, ácido úrico, creatinina, TSH, vitamina D, hemoglobina,
+  saturación; `refLow`/`refHigh` del estudio). El expediente (`buildHealthDossier`, puro) junta salud, cuerpo, sueño,
+  entrenamiento y hábitos; `/api/medico/consult` regresa la revisión (`health/consult`: mensaje, acciones, datos que
+  faltan) y `/api/medico/ask` responde preguntas. La primera revisión es a mano; luego `DoctorAutoReview` la pide sola
+  según `health/doctor.cadence` (semanal por defecto). Aviso "Tu médico te quiere decir algo" arriba de Hoy
+  (`ui/DoctorCard.tsx`). Sin XP (salvo el chequeo que marques hecho). Nunca diagnostica ni receta.
 - **Hábitos y tu día** (`habitos`, `/habitos`, `/dia?fecha=`): cada diaria de la rutina se mide solo en los días que le
   tocaban, desde que existe, sin contar descansos ni hoy; veredicto ≥80 % / 40–80 % / <40 % (`config.habits`). "Hazlo
   hábito": lo que registras ≥3 días de 14 fuera de la rutina. "¿Cómo fue tu día?" (`engine/day-review.ts`): revisiones

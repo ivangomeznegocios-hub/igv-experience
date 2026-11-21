@@ -78,7 +78,8 @@ export * from './assistant/tools-aprendizaje';
 
 // [[salud]]
 export * from './engine/health';
-export type { HealthState, CheckupState, HealthDueItem, CheckupDone, HealthMetricEntry } from './engine/modules/health';
+export type { HealthState, CheckupState, HealthDueItem, CheckupDone, HealthMetricEntry, HealthRecordEntry, HealthConsultEntry, DoctorPendingAction } from './engine/modules/health';
+export * from './engine/health-dossier';
 
 // [[habitos]]
 export * from './engine/habits';

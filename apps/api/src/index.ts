@@ -26,6 +26,7 @@ import { consentRoute } from './ai/oauth';
 import { learnRoute } from './learn';
 
 // [[salud]]
+import { medicoRoute } from './medico';
 
 // [[habitos]]
 
@@ -233,6 +234,7 @@ app.route('/oauth', consentRoute);
 app.route('/learn', learnRoute);
 
 // [[salud]]
+app.route('/medico', medicoRoute);
 
 // [[habitos]]
 

@@ -648,7 +648,7 @@ export const ENTITY_KINDS: Record<string, readonly string[]> = {
   learning: ['topic', 'item'],
 
   // [[salud]]
-  health: ['checkup', 'profile'],
+  health: ['checkup', 'profile', 'record', 'consult', 'doctor'],
 
   // [[habitos]]
 
@@ -1026,8 +1026,160 @@ export interface CheckupData {
   suggestionId?: string | null;
 }
 
-export const HEALTH_METRIC_KINDS = ['presion', 'glucosa', 'colesterol', 'frecuencia_reposo', 'otro'] as const;
+/**
+ * Mediciones con nombre y rango de referencia propio. Las de laboratorio (triglicéridos, HDL…) se agregaron con el
+ * médico IA: la lectura de estudios las reconoce solas. `otro` = cualquier otra, con nombre y unidad libres.
+ */
+export const HEALTH_METRIC_KINDS = [
+  'presion',
+  'glucosa',
+  'colesterol',
+  'frecuencia_reposo',
+  'trigliceridos',
+  'hdl',
+  'ldl',
+  'hba1c',
+  'acido_urico',
+  'creatinina',
+  'tsh',
+  'vitamina_d',
+  'hemoglobina',
+  'saturacion',
+  'otro',
+] as const;
 export type HealthMetricKind = (typeof HEALTH_METRIC_KINDS)[number];
+
+// ---------- Estudios y archivos (`health/record`) ----------
+
+export const HEALTH_RECORD_TYPES = ['laboratorio', 'consulta', 'imagen', 'receta', 'vacuna', 'dental', 'otro'] as const;
+export type HealthRecordType = (typeof HEALTH_RECORD_TYPES)[number];
+export const HEALTH_RECORD_TYPE_NAMES: Record<HealthRecordType, string> = {
+  laboratorio: 'Laboratorio',
+  consulta: 'Consulta',
+  imagen: 'Imagen (rayos X, ultrasonido…)',
+  receta: 'Receta',
+  vacuna: 'Vacuna',
+  dental: 'Dental',
+  otro: 'Otro',
+};
+
+/** Un archivo guardado en el servidor (tabla `health_files`, nunca se sincroniza: se baja al abrirlo). */
+export interface HealthFileRef {
+  id: string;
+  name: string;
+  mime: string;
+  /** Bytes del archivo. */
+  size: number;
+}
+
+/** Un valor de un estudio (lo que leyó la IA o lo que capturaste). */
+export interface HealthRecordValue {
+  name: string;
+  /** Medición conocida a la que corresponde (null = otra). */
+  kind?: HealthMetricKind | null;
+  value?: number | null;
+  /** Segundo valor (presión diastólica). */
+  value2?: number | null;
+  /** Resultado que no es número ("Negativo", "Normal"…). */
+  text?: string | null;
+  unit?: string | null;
+  /** Rango de referencia tal como viene en el estudio ("70–99"). */
+  ref?: string | null;
+  low?: number | null;
+  high?: number | null;
+  flag?: 'alto' | 'bajo' | 'anormal' | null;
+}
+
+/** Lo que tu médico IA leyó de un estudio. */
+export interface HealthRecordReading {
+  readAt: string;
+  summary: string;
+  findings: string[];
+  values: HealthRecordValue[];
+  recommendations: string[];
+}
+
+/**
+ * Estudio, consulta o documento médico (`health/record`): cuándo, dónde, con quién, cuánto costó, sus archivos y lo que
+ * leyó la IA. Sin XP propia: si es de un chequeo, se registra además `health.checkup_done` (esa sí da XP).
+ */
+export interface HealthRecordData {
+  title: string;
+  type: HealthRecordType;
+  /** Fecha del estudio o la consulta (YYYY-MM-DD). */
+  date: string;
+  place?: string;
+  doctor?: string;
+  /** Lo que costó (dinero real, en la moneda de Ajustes). */
+  cost?: number | null;
+  notes?: string;
+  files: HealthFileRef[];
+  /** Chequeo al que corresponde (si se marcó como hecho al guardarlo). */
+  checkupId?: string | null;
+  ai?: HealthRecordReading | null;
+  /** Mediciones que se guardaron desde este estudio (eventos `health.metric`). */
+  metricEventIds?: string[];
+  /** Gasto registrado por su costo (evento `expense.recorded`). */
+  expenseEventId?: string | null;
+  /** Evento `health.checkup_done` registrado al guardarlo. */
+  checkupEventId?: string | null;
+}
+
+// ---------- Tu médico IA (`health/consult`, `health/doctor`) ----------
+
+export const DOCTOR_ACTION_TYPES = ['chequeo', 'medicion', 'estudio', 'consulta', 'habito', 'dato'] as const;
+export type DoctorActionType = (typeof DOCTOR_ACTION_TYPES)[number];
+
+export interface DoctorAction {
+  id: string;
+  text: string;
+  why?: string;
+  type: DoctorActionType;
+  priority: 'alta' | 'media' | 'baja';
+  /** Si es un chequeo, cómo activarlo con un toque. */
+  checkup?: { name: string; category: CheckupCategory; everyMonths: number } | null;
+  /** Si es medirse algo, cuál. */
+  metric?: HealthMetricKind | null;
+  doneAt?: string | null;
+  dismissedAt?: string | null;
+}
+
+/** Revisión de tu médico IA (`health/consult`): lo que te quiere decir, qué hacer y qué datos le faltan. */
+export interface HealthConsultData {
+  /** Día de la revisión (YYYY-MM-DD). */
+  date: string;
+  /** auto = la de cada semana/mes · pedida = la pediste tú · inicial = la primera. */
+  kind: 'auto' | 'pedida' | 'inicial';
+  title: string;
+  message: string;
+  status: 'bien' | 'atencion' | 'importante';
+  highlights: { tone: 'bien' | 'atencion' | 'pendiente'; text: string }[];
+  actions: DoctorAction[];
+  /** Datos que le faltan para orientarte mejor. */
+  missing: string[];
+  /** En cuántos días quiere volver a revisarte. */
+  nextReviewDays?: number | null;
+  /** Tema que pediste revisar (opcional). */
+  focus?: string;
+  seenAt?: string | null;
+}
+
+export const DOCTOR_CADENCES = ['semanal', 'quincenal', 'mensual', 'manual'] as const;
+export type DoctorCadence = (typeof DOCTOR_CADENCES)[number];
+
+/** Lo que tu médico IA debe saber de ti (`health/doctor`, id fijo HEALTH_DOCTOR_ID) y cada cuándo te revisa. */
+export interface HealthDoctorData {
+  cadence?: DoctorCadence;
+  /** Qué quieres lograr con tu salud ("bajar grasa", "dormir mejor"…). */
+  goals?: string;
+  /** Antecedentes familiares (diabetes, infartos, cáncer…). */
+  familyHistory?: string;
+  /** Cirugías, lesiones o enfermedades pasadas. */
+  pastHistory?: string;
+  /** Alimentación, alcohol, tabaco, estrés, trabajo… */
+  lifestyle?: string;
+}
+export const HEALTH_DOCTOR_ID = 'health-doctor';
 
 export const BLOOD_TYPES = ['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'] as const;
 

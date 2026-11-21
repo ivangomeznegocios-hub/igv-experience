@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ATTRIBUTE_IDS, COMPLETION_KINDS, DAILY_SLOTS, MISSION_SIZES, PLACE_STATUSES } from './types';
+import { ATTRIBUTE_IDS, COMPLETION_KINDS, DAILY_SLOTS, HEALTH_METRIC_KINDS, MISSION_SIZES, PLACE_STATUSES } from './types';
 import { isDateString } from './util/dates';
 import { BODY_MEASURE_KEYS } from './engine/physique';
 
@@ -275,18 +275,25 @@ export const EVENT_SCHEMAS = {
     note: z.string().trim().max(2000).optional(),
     result: z.string().trim().max(2000).optional(),
   }),
-  /** Salud: una medición (presión, glucosa, colesterol, pulso en reposo u otra). Solo registro: no da XP. */
+  /**
+   * Salud: una medición (presión, glucosa, colesterol, pulso, valores de laboratorio u otra). Solo registro: no da XP.
+   * `refLow`/`refHigh` = rango de referencia del propio estudio; `recordId` = estudio del que salió.
+   */
   'health.metric': z
     .object({
-      kind: z.enum(['presion', 'glucosa', 'colesterol', 'frecuencia_reposo', 'otro']),
+      kind: z.enum(HEALTH_METRIC_KINDS),
       value: z.number().positive().max(100000),
       value2: z.number().positive().max(100000).optional(),
       unit: z.string().trim().max(20).optional(),
       label: z.string().trim().max(80).optional(),
       note: z.string().trim().max(2000).optional(),
+      refLow: z.number().min(0).max(100000).optional(),
+      refHigh: z.number().positive().max(100000).optional(),
+      recordId: id.optional(),
     })
     .refine((p) => p.kind !== 'presion' || (p.value2 !== undefined && p.value2 < p.value), 'La presión lleva sistólica y diastólica (la diastólica es menor)')
-    .refine((p) => p.kind !== 'otro' || !!p.label, 'Ponle nombre a la medición'),
+    .refine((p) => p.kind !== 'otro' || !!p.label, 'Ponle nombre a la medición')
+    .refine((p) => p.refLow === undefined || p.refHigh === undefined || p.refLow < p.refHigh, 'El rango de referencia está al revés'),
 
   // [[habitos]]
   /** "¿Cómo fue tu día?": no había nada que registrar en una revisión (p. ej., "No gasté nada"). No da XP. */

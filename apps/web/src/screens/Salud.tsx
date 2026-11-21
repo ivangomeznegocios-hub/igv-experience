@@ -1,9 +1,10 @@
-import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   BLOOD_TYPES,
   CHECKUP_CATEGORIES,
   CHECKUP_CATEGORY_NAMES,
+  CHECKUP_STATUS_NAMES,
   HEALTH_DISCLAIMER,
   HEALTH_METRIC_INFO,
   addDays,
@@ -25,10 +26,15 @@ import {
 import { deleteEntity, saveEntity, useGame, voidEvent } from '../data/store';
 import { CATEGORY_ICON, activateMany, activateSuggestion, checkupSizeOf, checkupXpOf, saveCheckup, saveHealthCard } from '../lib/health';
 import { fmtDate, fmtNum } from '../lib/time';
-import { Badge, Chips, Collapse, Empty, Field, PageHeader, Sheet, SizeChips, confirmAction, undoToast, TextInput, TextArea } from '../ui/kit';
+import { Badge, Chips, Collapse, Empty, Field, PageHeader, Sheet, SizeChips, Tabs, confirmAction, undoToast, TextInput, TextArea } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { CheckupDoneForm, HealthQuick, MetricForm } from '../ui/quick/HealthQuick';
+import { DoctorTeaser, ExpedienteCard, Medico } from './salud/Medico';
+import { Estudios } from './salud/Estudios';
 import '../styles/salud.css';
+
+const TABS = ['resumen', 'medico', 'estudios', 'chequeos', 'mediciones'] as const;
+type SaludTab = (typeof TABS)[number];
 
 type SheetState =
   | { type: 'quick' }
@@ -39,10 +45,17 @@ type SheetState =
   | { type: 'card' }
   | null;
 
-/** Salud: chequeos preventivos (qué ya te toca), mediciones con su referencia y ficha médica. */
+/**
+ * Salud: resumen, tu médico IA (revisiones con todo tu expediente), estudios y archivos, chequeos preventivos con sus
+ * recomendaciones, mediciones con su referencia y ficha médica. Pestaña en `?tab=`.
+ */
 export default function Salud() {
   const { state, list } = useGame();
+  const [params, setParams] = useSearchParams();
   const [sheet, setSheet] = useState<SheetState>(null);
+  const raw = params.get('tab');
+  const tab: SaludTab = (TABS as readonly string[]).includes(raw ?? '') ? (raw as SaludTab) : 'resumen';
+  const setTab = (t: SaludTab) => setParams(t === 'resumen' ? {} : { tab: t }, { replace: true });
   const today = state.today;
   const all = list<CheckupData>('health', 'checkup');
   const byId = new Map(all.map((c) => [c.id, c]));
@@ -50,6 +63,41 @@ export default function Salud() {
   const paused = all.filter((c) => c.data.active === false);
   const close = () => setSheet(null);
   const target = sheet && 'id' in sheet && sheet.id ? byId.get(sheet.id) : undefined;
+  const h = state.health;
+
+  // Enlaces directos: ?ficha=1 abre la ficha médica.
+  useEffect(() => {
+    if (params.get('ficha') === '1') {
+      setSheet({ type: 'card' });
+      const next = new URLSearchParams(params);
+      next.delete('ficha');
+      setParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const pausedCard = paused.length > 0 && (
+    <Collapse title={`Pausados (${paused.length})`}>
+      {paused.map((c) => (
+        <div key={c.id} className="salud-row tap" onClick={() => setSheet({ type: 'edit', id: c.id })}>
+          <CatIcon c={c} />
+          <div className="grow">
+            <div className="salud-name">{c.data.name}</div>
+            <div className="salud-sub">{checkupEveryText(c.data.everyMonths)} · no cuenta en tu puntaje</div>
+          </div>
+          <button
+            className="btn sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              saveEntity<CheckupData>({ ...c, data: { ...c.data, active: true } });
+            }}
+          >
+            Reactivar
+          </button>
+        </div>
+      ))}
+    </Collapse>
+  );
 
   return (
     <>
@@ -62,44 +110,62 @@ export default function Salud() {
           </button>
         }
       />
-      <Hero />
-      {active.length === 0 ? (
-        <Suggestions onboarding onNew={() => setSheet({ type: 'edit' })} />
-      ) : (
+      <div className="salud-tabs">
+        <Tabs
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: 'resumen', label: 'Resumen' },
+            { value: 'medico', label: h.unseenConsultId ? 'Médico •' : 'Médico' },
+            { value: 'estudios', label: h.records.length ? `Estudios (${h.records.length})` : 'Estudios' },
+            { value: 'chequeos', label: 'Chequeos' },
+            { value: 'mediciones', label: 'Mediciones' },
+          ]}
+        />
+      </div>
+
+      {tab === 'resumen' && (
         <>
-          <DueCard checkups={byId} onDone={(id) => setSheet({ type: 'done', id })} onLast={(id) => setSheet({ type: 'last', id })} onOpen={(id) => setSheet({ type: 'edit', id })} />
-          <Upcoming checkups={active} onOpen={(id) => setSheet({ type: 'edit', id })} onNew={() => setSheet({ type: 'edit' })} />
-          <Suggestions />
+          <Hero />
+          <DoctorTeaser onOpen={() => setTab('medico')} />
+          {active.length > 0 && <DueCard checkups={byId} onDone={(id) => setSheet({ type: 'done', id })} onLast={(id) => setSheet({ type: 'last', id })} onOpen={(id) => setSheet({ type: 'edit', id })} />}
+          <Recommendations compact onOpen={(id) => setSheet({ type: 'edit', id })} onNew={() => setSheet({ type: 'edit' })} />
+          <ExpedienteCard compact />
+          <MedicalCard onEdit={() => setSheet({ type: 'card' })} />
         </>
       )}
-      <Metrics onNew={(kind) => setSheet({ type: 'metric', kind })} />
-      <MedicalCard onEdit={() => setSheet({ type: 'card' })} />
-      {paused.length > 0 && (
-        <Collapse title={`Pausados (${paused.length})`}>
-          {paused.map((c) => (
-            <div key={c.id} className="salud-row tap" onClick={() => setSheet({ type: 'edit', id: c.id })}>
-              <CatIcon c={c} />
-              <div className="grow">
-                <div className="salud-name">{c.data.name}</div>
-                <div className="salud-sub">{checkupEveryText(c.data.everyMonths)} · no cuenta en tu puntaje</div>
-              </div>
-              <button
-                className="btn sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  saveEntity<CheckupData>({ ...c, data: { ...c.data, active: true } });
-                }}
-              >
-                Reactivar
-              </button>
-            </div>
-          ))}
-        </Collapse>
+
+      {tab === 'medico' && <Medico onMetric={(kind) => setSheet({ type: 'metric', kind })} onCard={() => setSheet({ type: 'card' })} goTab={setTab} />}
+
+      {tab === 'estudios' && <Estudios goTab={setTab} />}
+
+      {tab === 'chequeos' && (
+        <>
+          {active.length > 0 && <DueCard checkups={byId} onDone={(id) => setSheet({ type: 'done', id })} onLast={(id) => setSheet({ type: 'last', id })} onOpen={(id) => setSheet({ type: 'edit', id })} />}
+          {active.length > 0 && <Upcoming checkups={active} onOpen={(id) => setSheet({ type: 'edit', id })} onNew={() => setSheet({ type: 'edit' })} />}
+          <Recommendations onOpen={(id) => setSheet({ type: 'edit', id })} onNew={() => setSheet({ type: 'edit' })} />
+          {pausedCard}
+          <History />
+        </>
       )}
-      <History />
-      <p className="salud-note" style={{ justifyContent: 'center', marginBottom: 24 }}>
-        <Icon name="shield" /> {HEALTH_DISCLAIMER}
-      </p>
+
+      {tab === 'mediciones' && (
+        <>
+          <Metrics onNew={(kind) => setSheet({ type: 'metric', kind })} />
+          <div className="salud-note" style={{ justifyContent: 'center' }}>
+            <Icon name="salud-doc" />
+            <span>
+              ¿Tienes análisis de laboratorio? <button className="salud-link" onClick={() => setTab('estudios')}>Súbelos en Estudios</button> y tus valores se llenan solos.
+            </span>
+          </div>
+        </>
+      )}
+
+      {tab !== 'medico' && (
+        <p className="salud-note" style={{ justifyContent: 'center', marginBottom: 24 }}>
+          <Icon name="shield" /> {HEALTH_DISCLAIMER}
+        </p>
+      )}
 
       {sheet?.type === 'quick' && (
         <Sheet open onClose={close} title="Registrar salud">
@@ -323,34 +389,74 @@ function Upcoming({ checkups, onOpen, onNew }: { checkups: Entity<CheckupData>[]
   );
 }
 
-function Suggestions({ onboarding = false, onNew }: { onboarding?: boolean; onNew?: () => void }) {
+/**
+ * Recomendaciones para un hombre adulto, SIEMPRE visibles con su estado: activar una no esconde las demás (se queda
+ * marcada como "Activo"). Las que aún no tocan por edad van aparte. `compact` (Resumen): solo si falta activar alguna.
+ */
+const HIDE_RECS = 'igv.salud.hideRecs';
+
+function Recommendations({ compact = false, onOpen, onNew }: { compact?: boolean; onOpen: (id: string) => void; onNew: () => void }) {
   const { state, list } = useGame();
   const all = list<CheckupData>('health', 'checkup');
-  const known = new Set(all.map((c) => c.data.suggestionId).filter(Boolean) as string[]);
   const fits = healthSuggestionsFor(state.settings.birthDate, state.today);
-  const pending = fits.filter((s) => !known.has(s.id) && !all.some((c) => c.id === suggestionCheckupId(s.id)) && s.applies !== false);
-  const recommended = pending.filter((s) => s.recommended);
-  const hiddenByAge = fits.filter((s) => s.applies === false).length;
-  if (!pending.length && !onboarding) return null;
-  const body = (
-    <>
-      {onboarding && (
-        <p className="small" style={{ marginTop: 0 }}>
-          Lo que conviene revisarte cada cierto tiempo. Activa los tuyos y la app te avisa cuándo te toca. Cada chequeo que hagas suma XP a Fuerza física.
-        </p>
-      )}
+  const entityFor = (s: HealthSuggestionFit) => all.find((c) => c.id === suggestionCheckupId(s.id)) ?? all.find((c) => c.data.suggestionId === s.id);
+  const rows = fits.map((s) => ({ s, e: entityFor(s) }));
+  const now = rows.filter((r) => r.s.applies !== false);
+  const later = rows.filter((r) => r.s.applies === false);
+  const pending = now.filter((r) => !r.e);
+  const recommended = pending.filter((r) => r.s.recommended).map((r) => r.s);
+  const activeCount = now.filter((r) => r.e && r.e.data.active !== false).length;
+  const [hidden, setHidden] = useState(() => {
+    try {
+      return compact && localStorage.getItem(HIDE_RECS) === '1';
+    } catch {
+      return false;
+    }
+  });
+  if (compact && (hidden || pending.length === 0 || (all.length > 0 && recommended.length === 0))) return null;
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h2>{all.length === 0 ? 'Activa tus chequeos' : 'Recomendados para ti'}</h2>
+        <Badge tone={pending.length ? 'flame' : 'green'}>
+          {activeCount} de {now.length} activos
+        </Badge>
+      </div>
+      <p className="small muted" style={{ marginTop: 0 }}>
+        Lo que conviene revisarte cada cierto tiempo. Activa los tuyos y la app te dice cuándo te toca; cada chequeo que hagas suma XP a Fuerza física.
+      </p>
       {recommended.length > 1 && (
         <button className="btn primary block" style={{ marginBottom: 6 }} onClick={() => activateMany(recommended)}>
-          <Icon name="check" /> Activar las recomendadas ({recommended.length})
+          <Icon name="check" /> Activar los que faltan ({recommended.length})
         </button>
       )}
-      {pending.map((s) => (
-        <SuggestionRow key={s.id} s={s} />
+      {now.map(({ s, e }) => (
+        <SuggestionRow key={s.id} s={s} entity={e} onOpen={onOpen} />
       ))}
-      {!pending.length && <Empty>{onboarding && all.length ? 'Tus chequeos están en pausa: reactívalos en "Pausados".' : 'Ya activaste todas las recomendaciones.'}</Empty>}
-      {onNew && (
-        <button className="btn block" style={{ marginTop: 8 }} onClick={onNew}>
-          <Icon name="plus" /> Crear un chequeo propio
+      {later.length > 0 && (
+        <details className="salud-later">
+          <summary className="small muted">Más adelante, por tu edad ({later.length})</summary>
+          {later.map(({ s, e }) => (
+            <SuggestionRow key={s.id} s={s} entity={e} onOpen={onOpen} />
+          ))}
+        </details>
+      )}
+      <button className="btn block ghost" style={{ marginTop: 8 }} onClick={onNew}>
+        <Icon name="plus" /> Crear un chequeo propio
+      </button>
+      {compact && all.length > 0 && (
+        <button
+          className="btn block ghost sm"
+          onClick={() => {
+            try {
+              localStorage.setItem(HIDE_RECS, '1');
+            } catch {
+              /* nada */
+            }
+            setHidden(true);
+          }}
+        >
+          Ya no mostrar aquí (siguen en Chequeos)
         </button>
       )}
       {!state.settings.birthDate && fits.some((s) => s.ageText) && (
@@ -361,27 +467,21 @@ function Suggestions({ onboarding = false, onNew }: { onboarding?: boolean; onNe
           </span>
         </div>
       )}
-      {hiddenByAge > 0 && <div className="tiny muted" style={{ marginTop: 6 }}>{hiddenByAge} más aparecerán cuando te toquen por edad.</div>}
       <div className="salud-note">
         <Icon name="shield" />
         <span>{HEALTH_DISCLAIMER}</span>
       </div>
-    </>
+    </div>
   );
-  if (onboarding)
-    return (
-      <div className="card">
-        <h2>Activa tus chequeos</h2>
-        {body}
-      </div>
-    );
-  return <Collapse title={`Recomendados (${pending.length})`}>{body}</Collapse>;
 }
 
-function SuggestionRow({ s }: { s: HealthSuggestionFit }) {
+function SuggestionRow({ s, entity, onOpen }: { s: HealthSuggestionFit; entity?: Entity<CheckupData>; onOpen: (id: string) => void }) {
+  const { state } = useGame();
+  const st = entity ? state.health.checkups[entity.id] : undefined;
+  const isActive = !!entity && entity.data.active !== false;
   return (
-    <div className="salud-row">
-      <div className="salud-ico">
+    <div className={`salud-row ${entity ? 'tap' : ''} ${isActive ? 'is-on' : ''}`} onClick={entity ? () => onOpen(entity.id) : undefined}>
+      <div className={`salud-ico ${isActive ? st?.status ?? '' : ''}`}>
         <Icon name={CATEGORY_ICON[s.category]} />
       </div>
       <div className="grow">
@@ -389,19 +489,35 @@ function SuggestionRow({ s }: { s: HealthSuggestionFit }) {
         <div className="salud-sub">{s.why}</div>
         <div className="row wrap" style={{ gap: 4, marginTop: 5 }}>
           <Badge>{checkupEveryText(s.everyMonths)}</Badge>
-          <Badge tone="gold">+{checkupXpOf(s)} XP</Badge>
+          <Badge tone="gold">+{checkupXpOf(entity?.data ?? s)} XP</Badge>
           {s.ageText && <Badge tone={s.applies === null ? 'flame' : undefined}>{s.ageText}</Badge>}
         </div>
       </div>
-      <button
-        className="btn sm salud-do"
-        onClick={() => {
-          const e = activateSuggestion(s);
-          undoToast(`Activado: ${s.name}`, () => deleteEntity(e.id));
-        }}
-      >
-        Activar
-      </button>
+      {isActive ? (
+        <span className={`salud-state ${st?.status ?? ''}`}>
+          <Icon name="check" width={14} /> {st ? CHECKUP_STATUS_NAMES[st.status] : 'Activo'}
+        </span>
+      ) : entity ? (
+        <button
+          className="btn sm salud-do"
+          onClick={(e) => {
+            e.stopPropagation();
+            activateSuggestion(s, entity);
+          }}
+        >
+          Reactivar
+        </button>
+      ) : (
+        <button
+          className="btn sm salud-do"
+          onClick={() => {
+            const e = activateSuggestion(s);
+            undoToast(`Activado: ${s.name}`, () => deleteEntity(e.id));
+          }}
+        >
+          Activar
+        </button>
+      )}
     </div>
   );
 }
@@ -600,7 +716,7 @@ function History() {
 // Mediciones
 // ---------------------------------------------------------------------------
 
-const QUICK_KINDS: HealthMetricKind[] = ['presion', 'glucosa', 'colesterol', 'frecuencia_reposo'];
+const QUICK_KINDS: HealthMetricKind[] = ['presion', 'glucosa', 'colesterol', 'trigliceridos', 'hba1c', 'frecuencia_reposo'];
 
 function Metrics({ onNew }: { onNew: (kind?: HealthMetricKind) => void }) {
   const { state } = useGame();
@@ -620,7 +736,7 @@ function Metrics({ onNew }: { onNew: (kind?: HealthMetricKind) => void }) {
       </div>
       {!cur ? (
         <>
-          <Empty>Anota tu presión, glucosa o colesterol cuando te los midan y ve cómo cambian. Solo registro: no da XP.</Empty>
+          <Empty>Anota tu presión, glucosa, colesterol o cualquier valor de tus análisis y ve cómo cambian. Solo registro: no da XP.</Empty>
           <div className="chips" style={{ justifyContent: 'center' }}>
             {QUICK_KINDS.map((k) => (
               <button key={k} className="chip" onClick={() => onNew(k)}>
@@ -662,7 +778,9 @@ function MetricDetail({ series }: { series: HealthMetricEntry[] }) {
       </div>
       <MetricChart series={series.slice(-30)} />
       <div className="tiny muted" style={{ marginTop: 8 }}>
-        {last.kind === 'otro' ? 'Compáralo con el rango de referencia de tu estudio.' : info.reference} {HEALTH_DISCLAIMER}
+        {last.ref ? `Rango de tu estudio: ${last.ref} ${last.unit}. ` : ''}
+        {last.kind === 'otro' ? (last.ref ? '' : 'Compáralo con el rango de referencia de tu estudio. ') : `${info.reference} `}
+        {HEALTH_DISCLAIMER}
       </div>
       <details style={{ marginTop: 10 }}>
         <summary className="small muted" style={{ cursor: 'pointer' }}>
@@ -675,6 +793,8 @@ function MetricDetail({ series }: { series: HealthMetricEntry[] }) {
               {m.levelText && <span className={`salud-level ${m.level}`} style={{ marginLeft: 8 }}>{m.levelText}</span>}
               <div className="tiny muted">
                 {fmtDate(m.date, true)}
+                {m.ref && ` · ref. ${m.ref}`}
+                {m.recordId && ' · de un estudio'}
                 {m.note && ` · ${m.note}`}
               </div>
             </div>

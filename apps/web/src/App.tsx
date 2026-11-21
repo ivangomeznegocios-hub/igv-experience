@@ -9,6 +9,7 @@ import { QuestMode } from './ui/QuestMode';
 import { QuickAdd } from './ui/QuickAdd';
 import { PlanSheet } from './ui/DayPlan';
 import { RecordWatcher } from './ui/RecordWatcher';
+import { DoctorAutoReview } from './lib/medico';
 import { SyncPill } from './ui/SyncPill';
 import { schedulePlanUpload } from './lib/notifications';
 import { scheduleSnapshotUpload } from './lib/aiSnapshot';
@@ -397,6 +398,11 @@ export default function App() {
       {/* [[aprendizaje]] */}
 
       {/* [[salud]] */}
+      {store.ready && (
+        <Guard>
+          <DoctorAutoReview />
+        </Guard>
+      )}
 
       {/* [[habitos]] */}
 

@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, index, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core';
 
 /**
  * Tabla de eventos: hechos con fecha. Nunca se borran ni se editan; solo se anulan (voided_at).
@@ -93,3 +93,31 @@ export const aiActivity = sqliteTable(
 
 export type AiCredentialRow = typeof aiCredentials.$inferSelect;
 export type AiActivityRow = typeof aiActivity.$inferSelect;
+
+/**
+ * Archivos de Salud (estudios, recetas, fotos de resultados). Nunca se sincronizan al cliente: la app guarda solo la
+ * referencia en el catálogo (`health/record`) y baja el archivo al abrirlo. El contenido va en base64 partido en
+ * trozos (`health_file_chunks`) para no pasar el tamaño máximo de una fila de D1.
+ */
+export const healthFiles = sqliteTable('health_files', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  mime: text('mime').notNull(),
+  /** Bytes del archivo original. */
+  size: integer('size').notNull(),
+  chunks: integer('chunks').notNull(),
+  createdAt: integer('created_at').notNull(),
+});
+
+export const healthFileChunks = sqliteTable(
+  'health_file_chunks',
+  {
+    fileId: text('file_id').notNull(),
+    idx: integer('idx').notNull(),
+    /** Base64. */
+    data: text('data').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.fileId, t.idx] })],
+);
+
+export type HealthFileRow = typeof healthFiles.$inferSelect;
