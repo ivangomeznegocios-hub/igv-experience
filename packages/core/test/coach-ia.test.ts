@@ -10,6 +10,7 @@ import {
   fmtPrescribed,
   memoryAssistantStore,
   nutritionDay,
+  patternOptions,
   planPhase,
   project,
   reviewDay,
@@ -382,6 +383,88 @@ describe('herramientas que escriben: respuesta barata (sin proyectar todo despu�
     expect(t.typesRead()).not.toContain('meal.logged');
     const p = await fullPlan(t.store);
     expect(a.text).toContain(`hoy: ${p.today.session.title}`);
+  });
+});
+
+describe('revisión final: agua, check-in de semanas viejas y cambio de ejercicio contra la sesión de hoy', () => {
+  it('registrar_agua lee el total ANTES de guardar y lo cuenta bien', async () => {
+    const water = (d: string, glasses: number) => ev('water.logged', d, { glasses });
+    const s = spyStore(memoryAssistantStore({ events: [water(TODAY, 3), water(TODAY, 1), water(addDays(TODAY, -1), 5)], entities: entities(ON), today: TODAY }));
+    const r = await runTool(s.store, 'registrar_agua', { vasos: 2 });
+    expect(r.isError).toBeFalsy();
+    expect(s.readsAfterWrite()).toEqual([]);
+    expect(s.typesRead()).toEqual(['water.logged']);
+    expect(r.text).toContain('llevas 6 ese día');
+  });
+
+  it('registrar_checkin_semanal de una semana vieja lee solo el registro diario de esa semana (y da lo mismo)', async () => {
+    const ents = entities({ ...ON, startDate: '2025-11-03' });
+    const history = yearOfLogs('2025-11-01', addDays(TODAY, -1));
+    const s = spyStore(memoryAssistantStore({ events: history, entities: ents, today: TODAY }));
+    const r = await runTool(s.store, 'registrar_checkin_semanal', { pesado: 3, energia: 3, animo: 3, semana: '2025-12-01' });
+    expect(r.isError).toBeFalsy();
+    const daily = s.log.filter((x) => x.op === 'events' && x.q?.types?.includes('meal.logged'));
+    expect(daily.length).toBeGreaterThan(0);
+    for (const x of daily) expect(x.q!.to! <= '2025-12-07').toBe(true);
+    const w = weekReview(project({ events: await s.store.events({}), entities: ents, today: TODAY }), '2025-12-01');
+    expect(r.text).toContain(`Fuerza ${w.strength.done}/${w.strength.target}, cardio ${w.cardio.done}/${w.cardio.target} min, cumplimiento ${w.compliance}%. ${w.verdictText}`);
+  });
+
+  it('cambiar_ejercicio no dice "Listo" si hoy te molesta una zona que ese ejercicio carga (check-in o cómo te sientes)', async () => {
+    const prev = addDays(MONDAY, -7);
+    const checkin = ev('coach.checkin', addDays(prev, 6), { weekStart: prev, effort: 3, energy: 3, mood: 3, pain: ['espalda_baja'] });
+    const readiness = ev('coach.readiness', MONDAY, { energy: 3, soreness: 0, pain: ['espalda_baja'] });
+    for (const events of [[checkin], [readiness]]) {
+      const store = memoryAssistantStore({ events, entities: entities(ON), today: MONDAY });
+      const before = coachPlan(project({ events, entities: entities(ON), today: MONDAY }), store.now().toISOString());
+      expect(before.today.session.exercises.some((e) => e.slot === 'remo')).toBe(true);
+      const r = await runTool(store, 'ajustar_entrenador', { cambiar_ejercicio: { patron: 'remo', ejercicio: 'remo con barra' } });
+      expect(r.isError).toBe(true);
+      expect(r.text).toMatch(/espalda baja/i);
+      expect(r.text).toMatch(/no lo cambié/);
+      expect(((await store.catalog()).find((e) => e.id === TRAINING_SETTINGS_ID)!.data as TrainingSettingsData).coach?.swaps).toBeUndefined();
+    }
+  });
+
+  it('cambiar_ejercicio no acepta un ejercicio que ya va en otro patrón de la sesión de hoy; sí uno que aplica', async () => {
+    // Recorre sesiones distintas (nivel, días, lugar y lo que ya entrenaste en la semana) buscando patrones que comparten
+    // opciones con otro ejercicio de la misma sesión (p. ej. femoral y bisagra en pierna).
+    let found = 0;
+    let applied = 0;
+    for (const level of ['sedentario', 'intermedio'] as const)
+      for (const days of [[0, 1, 3, 4], [0, 1, 2, 3, 4]])
+        for (const where of ['gym', 'casa'] as const)
+          for (let k = 0; k < 4; k++) {
+            const today = addDays(MONDAY, k);
+            const coach = { ...ON, level, days, sessionMinutes: 60, startDate: '2026-09-07' };
+            const ents = entities(coach, where);
+            // Una sesión hecha cada día anterior de esta semana: hoy toca la k-ésima en orden.
+            const events = Array.from({ length: k }, (_, j) => wk(addDays(MONDAY, j), [['plancha', 1, 1]]));
+            const store = memoryAssistantStore({ events, entities: ents, today });
+            const ex = coachPlan(project({ events, entities: ents, today }), store.now().toISOString()).today.session.exercises;
+            const ids = (slot: string) => patternOptions(slot, { where, avoid: [], beginner: false }).map((o) => o.id);
+            for (const e of ex)
+              for (const f of ex) {
+                if (f === e || !ids(e.slot).includes(f.exerciseId)) continue;
+                found++;
+                const r = await runTool(store, 'ajustar_entrenador', { cambiar_ejercicio: { patron: e.slot, ejercicio: f.name } });
+                const tag = `${level} ${days} ${where} ${today} ${e.slot} → ${f.exerciseId}`;
+                expect(r.isError, tag).toBe(true);
+                expect(r.text, tag).toMatch(/ya va en la sesión de hoy/);
+              }
+            expect(((await store.catalog()).find((x) => x.id === TRAINING_SETTINGS_ID)!.data as TrainingSettingsData).coach?.swaps).toBeUndefined();
+            // Una alternativa que la app ofrece sí se guarda y aplica hoy.
+            const e = ex.find((x) => x.alternatives.length);
+            if (!e) continue;
+            const alt = e.alternatives[0];
+            const okR = await runTool(store, 'ajustar_entrenador', { cambiar_ejercicio: { patron: e.slot, ejercicio: alt.name } });
+            expect(okR.isError, `${e.slot} → ${alt.id}: ${okR.text}`).toBeFalsy();
+            const after = coachPlan(project({ events, entities: await store.catalog(), today }), store.now().toISOString());
+            expect(after.today.session.exercises.find((x) => x.slot === e.slot)?.exerciseId).toBe(alt.id);
+            applied++;
+          }
+    expect(found).toBeGreaterThan(0);
+    expect(applied).toBeGreaterThan(10);
   });
 });
 

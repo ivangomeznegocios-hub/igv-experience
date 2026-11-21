@@ -884,6 +884,35 @@ describe('entrenador: sesión recorrida por recuperación', () => {
     expect(sun.today.session.adjustments.join(' ')).toMatch(/mañana\./);
   });
 
+  it('el día libre sigue libre aunque vayas atrasado: ni sesión recorrida, ni cardio, ni fuerza de reposición', () => {
+    const fri = addDays(MONDAY, 4);
+    const sun = addDays(MONDAY, 6);
+    // (A) Pierna el jueves 8:00: el viernes los glúteos siguen recuperándose; la sesión no se recorre al domingo libre.
+    const a = at([legs(addDays(MONDAY, 3), 8)], ON, fri, 12);
+    expect(a.today.session.kind).toBe('cardio');
+    expect(a.today.next!.date > sun).toBe(true);
+    expect(a.week[6].kind).toBe('descanso');
+    // (B) Pierna el sábado 18:00: el domingo libre es descanso y la fila de hoy dice lo mismo.
+    const b = at([legs(addDays(MONDAY, 5), 18)], ON, sun, 10);
+    expect(b.today.session.kind).toBe('descanso');
+    expect(b.week[6]).toMatchObject({ kind: 'descanso', title: b.today.session.title });
+    // (C) Semana vacía: el domingo no pide "hazla hoy".
+    const c = at([], ON, sun, 10);
+    expect(c.today.session.kind).toBe('descanso');
+  });
+
+  it('la fila de hoy en la semana siempre dice lo que receta la sesión de hoy', () => {
+    for (let d = 0; d < 7; d++)
+      for (const events of [[], [legs(addDays(MONDAY, -1), 18)], [legs(MONDAY, 8)]]) {
+        const date = addDays(MONDAY, d);
+        if (events.some((e) => e.localDate > date)) continue;
+        const p = at(events, ON, date, 12);
+        const row = p.week[d];
+        if (p.today.session.kind === 'fuerza') expect(row, date).toMatchObject({ kind: 'fuerza', sessionKey: p.today.session.key });
+        else if (!row.didStrength) expect(row.title, date).toBe(p.today.session.title);
+      }
+  });
+
   it('semana completa: la siguiente es la primera de la semana que entra, con su fase (de cuerpo completo a torso/pierna)', () => {
     const prev = addDays(MONDAY, -7);
     const coach: CoachSettings = { ...ON, days: [0, 1, 3, 4], startDate: prev };

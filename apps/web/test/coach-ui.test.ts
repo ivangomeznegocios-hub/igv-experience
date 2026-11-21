@@ -21,11 +21,12 @@ vi.mock('../src/lib/sound', async (importOriginal) => {
   return { ...real, sfx: { ...real.sfx, coin: vi.fn(), restDone: vi.fn() }, unlockAudio: vi.fn() };
 });
 
-import { server } from './helpers/env';
+import { fetchMock, server } from './helpers/env';
 import { find, findAll, render, renderHook, text } from './helpers/fake-react';
 import { addEvent, getEvents, saveEntity, useGame } from '../src/data/store';
 import { applySwap, useCoachPlan } from '../src/lib/coach';
 import { sfx, unlockAudio } from '../src/lib/sound';
+import { useCoachAvailability } from '../src/lib/voz';
 import { CoachCard } from '../src/ui/coach/CoachCard';
 import { CoachChat, safeSources } from '../src/ui/coach/CoachChat';
 import { MeasureSheet, StepsSheet } from '../src/ui/coach/CoachSheets';
@@ -81,6 +82,37 @@ describe('Coach con IA: un fallo al preguntar /api/gm/status no lo apaga para to
     expect(text(chat.out)).toContain('ANTHROPIC_API_KEY');
     chat.unmount();
     vi.setSystemTime(NOW);
+  });
+
+  it('si volver a preguntar falla (señal que va y viene), se queda lo que el servidor ya respondió', async () => {
+    const g = globalThis as { window?: unknown };
+    const prevWindow = g.window;
+    const win = new EventTarget();
+    g.window = win;
+    try {
+      // Después de la prueba anterior (su caché es de NOW + 11 min): a NOW + 30 min ya venció y se pregunta de verdad.
+      const base = NOW.getTime() + 30 * 60_000;
+      vi.setSystemTime(base);
+      server.routes = { '/gm/status': () => ({ enabled: true }) };
+      const h = renderHook(useCoachAvailability);
+      await settle();
+      expect(h.value).toBe(true);
+      expect(fetchMock.mock.calls.some(([u]) => String(u).includes('/gm/status'))).toBe(true);
+      vi.setSystemTime(base + 11 * 60_000); // pasó la caché de 10 min
+      server.routes = {}; // la red acaba de volver pero aún no responde
+      win.dispatchEvent(new Event('online'));
+      await settle();
+      expect(h.value).toBe(true);
+      h.unmount();
+      // Un componente nuevo también arranca con lo que ya se sabía (y vuelve a preguntar por detrás).
+      const h2 = renderHook(useCoachAvailability);
+      await settle();
+      expect(h2.value).toBe(true);
+      h2.unmount();
+    } finally {
+      g.window = prevWindow;
+      vi.setSystemTime(NOW);
+    }
   });
 });
 

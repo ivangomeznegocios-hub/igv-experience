@@ -272,7 +272,10 @@ gmRoute.post('/ask', async (c) => {
      * normalmente no hay, pero se reenvía igual por si una herramienta del servidor lo usa.
      */
     let container: string | undefined;
-    /** Se acabaron las rondas con el turno todavía en pausa: la respuesta quedó incompleta. */
+    /**
+     * Se acabaron las rondas con el turno todavía en pausa o con herramientas pendientes: la respuesta quedó incompleta
+     * (lo que haya escrito es preámbulo, no la respuesta) y se avisa.
+     */
     let cutOff = false;
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
       const response = await client.beta.messages.create({
@@ -312,7 +315,11 @@ gmRoute.post('/ask', async (c) => {
         break;
       }
       const uses = response.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use');
-      if (response.stop_reason !== 'tool_use' || !uses.length || round === MAX_TOOL_ROUNDS) break;
+      if (response.stop_reason !== 'tool_use' || !uses.length) break;
+      if (round === MAX_TOOL_ROUNDS) {
+        cutOff = true;
+        break;
+      }
       // Lo que escribió antes de usar sus herramientas es preámbulo ("reviso tu plan…"): la respuesta es lo que sigue.
       turn = [];
 
@@ -322,8 +329,8 @@ gmRoute.post('/ask', async (c) => {
       for (const use of uses) results.push(await runTool(use));
       messages.push({ role: 'user', content: results });
     }
-    const empty = cutOff ? 'Me quedé a medias investigando. Pregúntame otra vez y lo termino.' : actions.length ? 'Listo.' : 'Sin respuesta.';
-    return c.json({ answer: answer || empty, actions, ...(sources.length ? { sources } : {}) });
+    const final = cutOff ? [answer, 'Me quedé a medias. Pregúntame otra vez y lo termino.'].filter(Boolean).join('\n\n') : answer || (actions.length ? 'Listo.' : 'Sin respuesta.');
+    return c.json({ answer: final, actions, ...(sources.length ? { sources } : {}) });
   } catch (err) {
     // Lo que ya se registró se informa siempre (con su "Deshacer"), aunque la conversación falle.
     const done = actions.length ? ` (Alcancé a hacer: ${actions.map((a) => a.summary).join('; ')}.)` : '';

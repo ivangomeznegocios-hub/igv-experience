@@ -1223,9 +1223,10 @@ export function coachPlan(state: GameState, nowIso: string, cfg: Cfg = DEFAULT_C
   const remainingSessions = Math.max(0, sdays.length - strengthDoneCount);
   /**
    * Días de esta semana en que el motor receta fuerza con lo que llevas hecho: día del plan o, si no, solo cuando ya vas
-   * atrasado (la misma regla que decide la sesión de hoy). Sirve para saber a qué día cae una sesión recorrida.
+   * atrasado (la misma regla que decide la sesión de hoy). El día libre nunca: ahí se descansa aunque vayas atrasado.
+   * Sirve para saber a qué día cae una sesión recorrida.
    */
-  const trainsOn = (d: number) => sdays.includes(d) || strengthDoneCount < sdays.filter((x) => x <= d).length;
+  const trainsOn = (d: number) => d !== restDay && (sdays.includes(d) || strengthDoneCount < sdays.filter((x) => x <= d).length);
   const adjustments: string[] = [];
   let session: PrescribedSession;
   /** La sesión de hoy se recorre porque los músculos clave no se han recuperado: desde qué día y hora ya se puede. */
@@ -1391,8 +1392,8 @@ export function coachPlan(state: GameState, nowIso: string, cfg: Cfg = DEFAULT_C
       if (k) {
         kind = 'fuerza';
         key = k;
-      } else if (planned && date === today) {
-        // Hoy tocaba fuerza pero no va (se recorrió, recuperación o ya completaste la semana): lo que sí toca.
+      } else if (date === today) {
+        // Hoy no va fuerza (se recorrió, recuperación, ya completaste la semana o no tocaba): la fila dice lo que sí toca.
         kind = session.kind === 'descanso' ? 'descanso' : 'cardio';
         key = null;
         title = session.title;

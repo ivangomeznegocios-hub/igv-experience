@@ -122,19 +122,27 @@ export function markNote(noteId: string, via: 'coach' | 'local' | 'descartada'):
 // Solo se guardan las respuestas del servidor (10 min); un fallo nunca se guarda: se vuelve a preguntar.
 let coachCache: { enabled: boolean; at: number } | null = null;
 const cachedCoach = () => (coachCache && Date.now() - coachCache.at < 10 * 60_000 ? coachCache.enabled : null);
+/** La última respuesta del servidor, sin caducidad: si volver a preguntar falla, se queda la que ya se sabía. */
+const lastKnownCoach = () => coachCache?.enabled ?? null;
+/** Mientras no se sepa nada (sin conexión), se vuelve a preguntar cada tanto. */
+const COACH_RETRY_MS = 30_000;
 
 /**
  * ¿Está activo el Coach con IA en el servidor? `true` / `false` = lo que respondió el servidor; `'cargando'` mientras
- * pregunta; `'sin-conexion'` si no se pudo preguntar (sin señal, error del servidor o sesión vencida). Tras un fallo
- * vuelve a preguntar al montarse otra vez y cuando regresa la conexión.
+ * pregunta; `'sin-conexion'` si no se pudo preguntar y nunca había respondido (sin señal, error del servidor o sesión
+ * vencida). Un fallo al volver a preguntar no tapa una respuesta ya conocida. Sin respuesta, vuelve a preguntar cada
+ * 30 s, al montarse otra vez y cuando regresa la conexión.
  */
 export type CoachAvailability = boolean | 'cargando' | 'sin-conexion';
 
 export function useCoachAvailability(): CoachAvailability {
-  const [status, setStatus] = useState<CoachAvailability>(() => cachedCoach() ?? 'cargando');
+  const [status, setStatus] = useState<CoachAvailability>(() => cachedCoach() ?? lastKnownCoach() ?? 'cargando');
   useEffect(() => {
     let alive = true;
+    let retry: ReturnType<typeof setTimeout> | null = null;
     const check = () => {
+      if (retry) clearTimeout(retry);
+      retry = null;
       const known = cachedCoach();
       if (known !== null) return setStatus(known);
       api
@@ -144,7 +152,11 @@ export function useCoachAvailability(): CoachAvailability {
           if (alive) setStatus(s.enabled);
         })
         .catch(() => {
-          if (alive) setStatus('sin-conexion');
+          if (!alive) return;
+          // Un fallo no tapa lo que el servidor ya respondió; si nunca respondió, se reintenta solo.
+          const last = lastKnownCoach();
+          setStatus((s) => (typeof s === 'boolean' ? s : last ?? 'sin-conexion'));
+          if (last === null) retry = setTimeout(check, COACH_RETRY_MS);
         });
     };
     check();
@@ -152,6 +164,7 @@ export function useCoachAvailability(): CoachAvailability {
     w?.addEventListener('online', check);
     return () => {
       alive = false;
+      if (retry) clearTimeout(retry);
       w?.removeEventListener('online', check);
     };
   }, []);

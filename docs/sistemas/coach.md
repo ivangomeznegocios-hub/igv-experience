@@ -40,7 +40,8 @@ Se usan también `settings.heightCm`, `settings.birthDate`, `body.logged` (peso,
 - **Días**: los que elijas (`days`); si eliges más de los que permite la fase, se elige la combinación con más descanso
   entre días de fuerza (contando domingo → lunes; si empatan, la de menos días seguidos): Lun–Vie con máx. 3 = Lun/Mié/Vie;
   los demás son de cardio. Siempre queda al menos un día libre (domingo si no es de fuerza), que nunca se vuelve cardio
-  aunque falte (la caminata ahí es opcional). Sesiones: 1–3 días = cuerpo completo A/B
+  ni recibe la sesión pendiente aunque vayas atrasado (la caminata ahí es opcional). La fila de hoy en la semana
+  siempre dice lo que receta la sesión de hoy. Sesiones: 1–3 días = cuerpo completo A/B
   alternando entre semanas; 4 = torso/pierna ×2; 5 = torso, pierna, empuje, jalón, pierna; 6 = empuje/jalón/pierna ×2.
   Si entrenas otro día, la siguiente sesión es la que sigue en orden; la vista de la semana muestra hoy y lo que sigue
   en ese orden real (los días pasados quedan fijos).
@@ -96,8 +97,11 @@ Se usan también `settings.heightCm`, `settings.birthDate`, `body.logged` (peso,
   escriben calculan su respuesta ANTES de guardar (si el Worker se corta no queda nada sin bitácora) y proyectan sin
   series los entrenos de antes de las 2 últimas semanas. `ajustar_entrenador` solo arma el plan con objetivo, nivel,
   días, minutos o `activar: true` ({} es error); `cambiar_ejercicio` reconoce el patrón por clave o nombre y solo acepta
-  opciones del patrón que quepan en el lugar (el guardado o el de tus entrenos) y tus molestias.
-  `registrar_checkin_semanal` acepta hasta un año atrás y no antes de la semana en que empezó el plan.
+  opciones del patrón que quepan en el lugar (el guardado o el de tus entrenos) y tus molestias, y además lo prueba
+  contra la sesión de hoy como "Cambiar ejercicio" en la app: si hoy ese patrón quedaría con otro ejercicio (ya va en
+  otro patrón de la sesión, o carga una zona que te molesta hoy o en el último check-in) no lo guarda y dice por qué.
+  `registrar_checkin_semanal` acepta hasta un año atrás y no antes de la semana en que empezó el plan, y solo lee el
+  registro diario de esa semana (y los días del promedio de pasos).
   Revisión del día: `comida` en `DAY_CHECKS` (solo con el coach activo y desde `coach.startDate`; no entra al puntaje
   del día). Los 5 eventos del coach van en el área "Cuerpo y sueño" (`EVENT_AREAS`) y el agua del día sale en un solo
   renglón.
@@ -107,7 +111,8 @@ Se usan también `settings.heightCm`, `settings.birthDate`, `body.logged` (peso,
   serían 3 por request, hasta 27). El bucle reanuda los turnos pausados (`pause_turn`) reenviando el turno tal cual y
   el `container`, conserva el texto de los tramos pausados, une los bloques de texto citados sin saltos a media frase
   (`replyFromBlocks`), usa caché automática del historial entre rondas y devuelve `sources: [{ title, url }]` con las
-  fuentes citadas, que `CoachChat` muestra como "Fuentes".
+  fuentes citadas, que `CoachChat` muestra como "Fuentes". Si se acaban las rondas a media búsqueda o con herramientas
+  pendientes, la respuesta agrega "Me quedé a medias…" (lo escrito era preámbulo, no la respuesta completa).
 - Web: `lib/coach.ts` (`useCoachPlan`, `draftFromCoach`, registros de un toque, `openCoachSheet`), `ui/coach/`
   (`CoachFace` carita SVG con 5 ánimos, `CoachCard` para Hoy y Entrenamiento, `CoachTab`, `CoachSheets` hoja global:
   armar plan, cómo te sientes, check-in, comida, pasos, sueño, medidas y chat; `CoachChat`; `RestTimer`),
@@ -118,7 +123,8 @@ Se usan también `settings.heightCm`, `settings.birthDate`, `body.logged` (peso,
   el toque de su título al primer botón). "Quitar un vaso" quita UN vaso (si el último registro trae varios, lo anula y
   registra uno con un vaso menos) y su "Deshacer" regresa exactamente ese vaso. Las medidas empiezan vacías ("Último: X")
   y solo se guarda lo que escribes. Los textos se recortan al límite del evento y se validan antes de guardar. Si el
-  Coach con IA no responde se muestra "Sin conexión" y se vuelve a preguntar (`useCoachAvailability` en `lib/voz.ts`).
+  Coach con IA no responde se muestra "Sin conexión" y se vuelve a preguntar cada 30 s (`useCoachAvailability` en
+  `lib/voz.ts`); un fallo al volver a preguntar no tapa lo que el servidor ya había respondido.
   `/entreno?tab=coach` abre la pestaña Coach (la usan el aviso de check-in de "Más" y "Ver tu plan").
 
 ## Pruebas

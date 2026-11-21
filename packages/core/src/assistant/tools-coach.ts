@@ -76,6 +76,8 @@ export interface CoachStateOptions {
   daily?: string[];
   /** Desde cuándo leer el registro diario (por defecto, `DAILY_DAYS` atrás). */
   dailyFrom?: string;
+  /** Hasta cuándo leer el registro diario (por defecto, hoy). */
+  dailyTo?: string;
   /** Registros que aún no se guardan: las herramientas calculan su respuesta ANTES de escribir. */
   extra?: GameEvent[];
   /**
@@ -99,7 +101,7 @@ export async function coachStateFor(store: AssistantStore, opts: CoachStateOptio
   const [cat, history, recent] = await Promise.all([
     o.catalog ?? store.catalog(),
     store.events({ types: COACH_HISTORY_TYPES, to: today, order: 'asc' }),
-    daily.length ? store.events({ types: daily, from: o.dailyFrom ?? addDays(today, -DAILY_DAYS), to: today, order: 'asc' }) : Promise.resolve([]),
+    daily.length ? store.events({ types: daily, from: o.dailyFrom ?? addDays(today, -DAILY_DAYS), to: o.dailyTo && o.dailyTo < today ? o.dailyTo : today, order: 'asc' }) : Promise.resolve([]),
   ]);
   const from = o.detailFrom;
   const plan = from ? history.map((e) => (e.type === 'workout.logged' && e.localDate < from ? { ...e, payload: { ...(e.payload as object), exercises: [] } } : e)) : history;
@@ -358,7 +360,9 @@ const ajustar = tool({
             catalog: [...catalog.filter((e) => e.id !== TRAINING_SETTINGS_ID), entityOf({ ...coach })],
             daily: SESSION_DAILY_TYPES,
             dailyFrom: store.today,
-            detailFrom: sessionDetailFrom(store.today),
+            // Para validar un cambio de ejercicio contra la sesión de hoy hacen falta todas las series (los favoritos
+            // deciden qué ejercicios van); si no, basta con las de las últimas dos semanas.
+            detailFrom: swap ? undefined : sessionDetailFrom(store.today),
           })
         : null;
     if (swap && state) {
@@ -376,6 +380,24 @@ const ajustar = tool({
         throw new ToolError(valid.length ? `${why}. Opciones: ${valid.map((o) => o.name).join(', ')}.` : `El patrón "${label}" no tiene opciones${place}.`);
       }
       coach.swaps = { ...(coach.swaps ?? {}), [swap.key]: swap.ex.id };
+      // Lo que de verdad receta hoy el motor con el cambio (como "Cambiar ejercicio" en la app): si la sesión de hoy
+      // trae ese patrón con otro ejercicio (ya lo usa otro patrón, o te molesta una zona que carga), no se guarda.
+      const cs = coachSettingsOf(state);
+      const preview: GameState = { ...state, training: { ...state.training, settings: { ...state.training.settings, coach: { ...cs, swaps: coach.swaps } } } };
+      const todayEx = coachPlan(preview, store.now().toISOString()).today.session.exercises;
+      const got = todayEx.find((x) => x.slot === swap!.key);
+      if (got && got.exerciseId !== swap.ex.id) {
+        const other = todayEx.find((x) => x.exerciseId === swap!.ex.id);
+        const pain = [...(preview.coach.readiness[store.today]?.pain ?? []), ...(preview.coach.checkins[addDays(weekStart(store.today), -7)]?.pain ?? [])];
+        const hurts = [...new Set(pain)].filter((a) => JOINT_STRESS[a]?.includes(swap!.ex.id));
+        const why = other
+          ? `${swap.ex.name} ya va en la sesión de hoy (en ${other.slotLabel.toLowerCase()})`
+          : hurts.length
+            ? `${swap.ex.name} carga ${hurts.map(areaName).join(', ')} y esta semana te molesta`
+            : `${swap.ex.name} no entra en la sesión de hoy`;
+        const opts = got.alternatives.map((a) => a.name);
+        throw new ToolError(`${why}: no lo cambié. Hoy va ${got.name}${opts.length ? `; opciones para hoy: ${opts.join(', ')}` : ''}.`);
+      }
     }
     const next = entityOf(coach);
     let text: string;
@@ -438,8 +460,10 @@ const registrarAgua = tool({
   async run(i, store) {
     const date = pastDate(store, i.fecha);
     const e = makeEvent(store, 'water.logged', { glasses: i.vasos }, date);
+    // El total se lee ANTES de guardar (como las demás): si la lectura falla no queda un vaso guardado sin bitácora.
+    const before = (await store.events({ types: ['water.logged'], from: date, to: date })).reduce((s, x) => s + ((x.payload as { glasses: number }).glasses ?? 0), 0);
+    const total = before + i.vasos;
     await store.addEvents([e]);
-    const total = (await store.events({ types: ['water.logged'], from: date, to: date })).reduce((s, x) => s + ((x.payload as { glasses: number }).glasses ?? 0), 0);
     return ok(`Agua: +${i.vasos} ${i.vasos === 1 ? 'vaso' : 'vasos'} (llevas ${total} ese día). [${e.id}]`, `Agua: +${i.vasos} vasos`, { events: [e.id] });
   },
 });
@@ -526,7 +550,7 @@ const registrarCheckin = tool({
     // El resumen de esa semana se calcula ANTES de guardar (con el check-in en memoria) y solo con el registro diario
     // de esa semana y los días del promedio de pasos.
     const detailFrom = ws < sessionDetailFrom(today) ? ws : sessionDetailFrom(today);
-    const state = await coachStateFor(store, { catalog, daily: CHECKIN_DAILY_TYPES, dailyFrom: addDays(ws, -GAME_CONFIG.coach.steps.averageDays), detailFrom, extra: [e] });
+    const state = await coachStateFor(store, { catalog, daily: CHECKIN_DAILY_TYPES, dailyFrom: addDays(ws, -GAME_CONFIG.coach.steps.averageDays), dailyTo: addDays(ws, 6), detailFrom, extra: [e] });
     const r = weekReview(state, ws);
     await store.addEvents([e]);
     return ok(

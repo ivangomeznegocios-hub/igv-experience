@@ -141,6 +141,7 @@ export function CoachChat({ coachName, initial, suggestions = COACH_CHAT_SUGGEST
           </div>
         ))}
         {busy && <div className="bubble gm muted">{coachName} está revisando tu plan…</div>}
+        {status === 'sin-conexion' && !busy && <div className="bubble gm muted">Sin conexión con {coachName} por ahora; lo vuelvo a intentar solo.</div>}
         {err && <div className="bubble gm red">{err}</div>}
         <div ref={end} />
       </div>

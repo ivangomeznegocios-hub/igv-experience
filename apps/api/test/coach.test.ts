@@ -365,6 +365,34 @@ describe('Coach en modo entrenador', () => {
     }
   });
 
+  it('si se acaban las rondas con texto (preámbulo), también avisa que quedó a medias', async () => {
+    calls.length = 0;
+    const toolRound = (i: number) => ({ stop_reason: 'tool_use', content: [{ type: 'tool_use', id: `tu_p${i}`, name: 'herramienta_inexistente', input: {} }] });
+    mode.script = [
+      ...Array.from({ length: 8 }, (_, i) => toolRound(i)),
+      { stop_reason: 'pause_turn', content: [{ type: 'text', text: 'Déjame revisar la evidencia sobre la creatina.' }, { type: 'server_tool_use', id: 'srvtoolu_6', name: 'web_search', input: { query: 'creatina' } }] },
+    ];
+    try {
+      const body = await askCoach('¿Sirve la creatina?');
+      expect(body.answer).toContain('Déjame revisar la evidencia sobre la creatina.');
+      expect(body.answer).toContain('a medias');
+    } finally {
+      mode.script = null;
+    }
+    // Lo mismo si la última ronda pide herramientas que ya no corren: no se presenta el preámbulo como respuesta completa.
+    calls.length = 0;
+    mode.script = [
+      ...Array.from({ length: 8 }, (_, i) => toolRound(i + 10)),
+      { stop_reason: 'tool_use', content: [{ type: 'text', text: 'Ahora registro tu comida.' }, { type: 'tool_use', id: 'tu_last', name: 'herramienta_inexistente', input: {} }] },
+    ];
+    try {
+      const body = await askCoach('Registra todo');
+      expect(body.answer).toContain('a medias');
+    } finally {
+      mode.script = null;
+    }
+  });
+
   it('reenvía el contenedor de la respuesta en cada continuación (pausa y ronda de herramientas)', async () => {
     calls.length = 0;
     const box = (id: string) => ({ id, expires_at: '2026-11-21T20:00:00Z', skills: null });
