@@ -20,6 +20,7 @@ código los nombres internos se conservan (módulos, tipos de evento, ids, rutas
 | `bosses/recurring` | Reto recurrente |
 | `npcs/npc`, `npcs/guild`, `/npcs` | Mi gente: Personas (con `circle` = círculo: familia, pareja, amigos…) y **Grupos** (`npcs/guild`); "persona clave"; niveles de cercanía |
 | `map` (`inexplorado`/`descubierto`/`dominado`) | Mapa: por conocer / conocido / habitual; "primera visita" |
+| `PlaceData.goal`, `state.map.goals` | Objetivo del mapa ("a dónde quieres ir", con quién y para cuándo; "Objetivo cumplido") |
 | `habits/vice`, `/enemigos` | Hábitos a dejar ("recaída") |
 | `/personaje` | Perfil ("Tu fuerte" = atributo más alto) |
 | `character/`, `settings.character`, `CharacterCard` | Tu personaje (3D): Evolución · Medidas · Apariencia · Ropa (`copete` = Copete; `sombra` = barba de 1–2 días) |
@@ -223,7 +224,9 @@ Para usar la app desde Claude (web, escritorio, móvil, Claude Code), ChatGPT, C
 - Habilidades: rangos Aprendiz → Experto → Maestro, en orden y solo con evidencia escrita.
 - NPC clave sin contacto ≥ 30 días → misión generada "Escribirle a X" (chica, Relaciones). Completarla
   cuenta como interacción.
-- Mapa: inexplorado → descubierto → dominado. El primer descubrimiento de cada lugar da XP (una vez).
+- Mapa: inexplorado → descubierto → dominado. El primer descubrimiento de cada lugar da XP (una vez). Objetivos
+  (`PlaceData.goal { with?, by?, since }`): se cumplen con la primera visita desde `since` (con esa compañía si la piden);
+  solo visuales, sin XP extra.
 - Temporadas de 13 semanas. Diario semanal de 3 líneas (`journal.weekly`, la última versión de la semana
   gana). Revisión de inicio/fin (`season.review`); la de fin desbloquea "Temporada completa".
 - Mi vida en semanas, dos vistas: **por año calendario** (por defecto; filas = años enero–diciembre, columnas =
@@ -294,7 +297,12 @@ Ninguno rompe las reglas de oro: cada uno tiene una prueba de propiedades "agreg
   `place.visited { placeId, company, npcIds?, note?, rating? }`: 1 visita = conocido, 5 = habitual (o a mano con el evento
   viejo). Primera visita: 30 XP una vez (Creatividad; capa empresa → Finanzas). 35 lugares de Guadalajara/Jalisco y 6
   colecciones (`engine/map-catalog.ts`); completar una da la XP de una misión de su tamaño, una vez. Mapa propio con
-  teselas de OpenStreetMap (sin librería). Reductor en `engine/modules/map.ts`.
+  teselas de OpenStreetMap (sin librería). Reductor en `engine/modules/map.ts`. **Las sugerencias de Jalisco están
+  APAGADAS** salvo que él las prenda (`settings.map.suggestions`; a Iván no le sirven): sin ellas no salen ni los puntos,
+  ni las colecciones, ni los resultados "emblemáticos" al buscar. **Objetivos** (`PlaceData.goal`, `mapGoals` → `state.map.goals`):
+  lugares a donde quiere ir, en naranja con bandera. Lugares en cualquier parte del mundo: búsqueda por nombre y nombre
+  del punto marcado con Nominatim de OSM (`apps/web/src/lib/geocode.ts`: solo al tocar "Buscar", máx. 1/s, con caché) y
+  mantener presionado el mapa (o el botón de la mira) para marcar un punto.
 - **Habilidades, tiempo y biblioteca** (`habilidades`, `/habilidades`, `/tiempo`, `/biblioteca`): `SkillData.category`,
   `livelihood` ("De esto vivo"); `time.logged { minutes, area, skillId?, note?, start? }` con áreas fijas (trabajo
   incluye la oficina); cronómetro en `localStorage` que sobrevive cerrar la app y se parte a medianoche. **El tiempo

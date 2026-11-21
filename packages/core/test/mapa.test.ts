@@ -10,6 +10,7 @@ import {
   buildSnapshot,
   catalogIdOfPlace,
   catalogPlaceEntityId,
+  goalDeadline,
   googleMapsUrl,
   memoryAssistantStore,
   parseMapCoords,
@@ -263,6 +264,54 @@ describe('mapa: catálogo de Jalisco y colecciones', () => {
   });
 });
 
+describe('mapa: objetivos', () => {
+  it('plazo: año, mes o día', () => {
+    expect(goalDeadline('2027')).toBe('2027-12-31');
+    expect(goalDeadline('2027-02')).toBe('2027-02-28');
+    expect(goalDeadline('2028-02')).toBe('2028-02-29');
+    expect(goalDeadline('2027-12')).toBe('2027-12-31');
+    expect(goalDeadline('2027-06-15')).toBe('2027-06-15');
+    expect(goalDeadline('2027-13')).toBeNull();
+    expect(goalDeadline('mañana')).toBeNull();
+    expect(goalDeadline(null)).toBeNull();
+  });
+
+  it('se cumple con la primera visita desde que se marcó y con la compañía que pide; no da XP extra', () => {
+    const disney = place('p-disney', { name: 'Disneyland', city: 'Anaheim', lat: 33.81, lng: -117.92, goal: { with: 'familia', by: '2027', since: '2026-11-10' } });
+    const cafe = place('p-cafe', { name: 'Café', goal: { since: '2026-09-01', by: '2026-10' } });
+    const plain = place('p-plain');
+    // Antes de marcarlo (aunque sea en familia) y solo: no lo cumplen.
+    const before = [visit('2026-11-05', 'p-disney', 'familia'), visit('2026-11-12', 'p-disney', 'solo')];
+    const entities = [...seed, disney, cafe, plain];
+    const s1 = run(before, TODAY, { entities });
+    expect(s1.map.goals.map((g) => g.placeId)).toEqual(['p-cafe', 'p-disney']); // el plazo más cercano primero
+    expect(s1.map.goals[1]).toMatchObject({ name: 'Disneyland', city: 'Anaheim', with: 'familia', by: '2027', deadline: '2027-12-31', doneOn: null, late: false });
+    expect(s1.map.goals[0]).toMatchObject({ doneOn: null, late: true });
+    expect(s1.map.summary.goals).toMatchObject({ open: 2, done: 0 });
+    expect(s1.map.summary.goals?.next[0]).toMatchObject({ placeId: 'p-cafe', late: true });
+
+    const s2 = run([...before, visit('2026-11-15', 'p-disney', 'familia'), visit('2026-11-16', 'p-cafe', 'amigos')], TODAY, { entities });
+    expect(s2.map.goals.find((g) => g.placeId === 'p-disney')?.doneOn).toBe('2026-11-15');
+    // Sin compañía: cualquier visita lo cumple (aunque sea después del plazo).
+    expect(s2.map.goals.find((g) => g.placeId === 'p-cafe')).toMatchObject({ doneOn: '2026-11-16', late: false });
+    expect(s2.map.summary.goals).toMatchObject({ open: 0, done: 2, next: [] });
+    // Cumplidos: el más reciente primero.
+    expect(s2.map.goals.map((g) => g.placeId)).toEqual(['p-cafe', 'p-disney']);
+    // La XP es solo la de primera visita de cada lugar (la de Disney ya se había dado el día 5).
+    expect(bySource(s2, 'discovery')).toBe(discovery * 2);
+    expect(s2.xp.total - s1.xp.total).toBe(discovery);
+  });
+
+  it('un lugar borrado no cuenta como objetivo y las fotos viejas sin objetivos no rompen el panorama', () => {
+    const gone = { ...place('p-x', { goal: { since: '2026-11-01' } }), deletedAt: 1 };
+    const s = run([], TODAY, { entities: [...seed, gone] });
+    expect(s.map.goals).toEqual([]);
+    const snap = buildSnapshot(run([visit('2026-11-01', 'p1')], TODAY, { entities: [...seed, place('p1')] }), [...seed, place('p1')], { version: 1, computedBy: 'app' });
+    delete snap.mapa!.goals;
+    expect(renderOverview(snap)).toContain('## Mapa');
+  });
+});
+
 describe('mapa: utilidades', () => {
   it('lee coordenadas de texto y de ligas de Google Maps', () => {
     expect(parseMapCoords('20.6767, -103.3475')).toEqual({ lat: 20.6767, lng: -103.3475 });
@@ -461,6 +510,40 @@ describe('mapa: herramientas de IA', () => {
     expect(ren.isError).toBeFalsy();
     expect(store.allEntities().find((x) => x.id === old.id)!.data).toMatchObject({ name: 'Colomos', catalogId: 'gdl-colomos' });
     expect(stateOf(store).map.collections.naturaleza.knownIds).toEqual(['gdl-colomos']);
+  });
+
+  it('guardar_lugar marca objetivos (en cualquier parte del mundo), ver_mapa los lista y una visita los cumple', async () => {
+    const store = mk();
+    const a = await call(store, 'guardar_lugar', { nombre: 'Disneyland California', tipo: 'experiencia', ciudad: 'Anaheim', lat: 33.8121, lng: -117.919, objetivo: { con: 'familia', para: '2027' } });
+    expect(a.isError).toBeFalsy();
+    expect(a.text).toContain('Objetivo: en familia, para 2027');
+    const ent = store.allEntities().find((x) => x.module === 'map')!;
+    expect(ent.data).toMatchObject({ name: 'Disneyland California', layer: 'vida', lat: 33.8121, goal: { with: 'familia', by: '2027', since: TODAY } });
+    const bad = await call(store, 'guardar_lugar', { id: ent.id, objetivo: { para: '2027-13' } });
+    expect(bad.isError).toBe(true);
+
+    const v = await call(store, 'ver_mapa', {});
+    expect(v.text).toContain(`[${ent.id}] Disneyland California (Anaheim) · en familia, para 2027: pendiente`);
+    expect(v.text).not.toContain('Colecciones'); // sin sugerencias ni avance, no se mencionan
+    expect(renderOverview(await store.snapshot())).toContain('Objetivos pendientes (1): Disneyland California (en familia, para 2027)');
+
+    const solo = await call(store, 'registrar_visita', { lugar: ent.id, compania: 'solo' });
+    expect(solo.text).not.toContain('Objetivo cumplido');
+    const fam = await call(store, 'registrar_visita', { lugar: 'Disneyland California', compania: 'familia' });
+    expect(fam.text).toContain('¡Objetivo cumplido (en familia, para 2027)!');
+    expect(stateOf(store).map.goals[0].doneOn).toBe(TODAY);
+
+    // Uno cumplido vuelto a marcar empieza de nuevo; uno pendiente editado conserva desde cuándo; null lo quita.
+    await call(store, 'guardar_lugar', { id: ent.id, objetivo: { con: 'pareja', para: '2028' } });
+    expect(store.allEntities().find((x) => x.id === ent.id)!.data.goal).toEqual({ with: 'pareja', by: '2028', since: TODAY });
+    expect(stateOf(store).map.goals[0].doneOn).toBeNull(); // la visita en familia de hoy no es en pareja
+    const old = place('p-old', { name: 'Tokio', goal: { since: '2026-01-01', with: 'pareja' } });
+    const store2 = mk([], [...seed, ...people, old]);
+    await call(store2, 'guardar_lugar', { id: 'p-old', objetivo: { para: '2030' } });
+    expect(store2.allEntities().find((x) => x.id === 'p-old')!.data.goal).toEqual({ with: null, by: '2030', since: '2026-01-01' });
+    const off = await call(store, 'guardar_lugar', { id: ent.id, objetivo: null });
+    expect(off.text).toContain('Ya no es objetivo');
+    expect(stateOf(store).map.goals).toEqual([]);
   });
 
   it('en solo lectura registrar_visita y guardar_lugar se niegan', async () => {
