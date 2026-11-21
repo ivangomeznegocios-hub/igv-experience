@@ -73,6 +73,7 @@ import { VOZ_TOOLS } from './tools-voz';
 
 // [[entreno]]
 import { ENTRENO_GUIDE, ENTRENO_TOOLS, renderTrainingOverview } from './tools-entreno';
+import { COACH_GUIDE, COACH_TOOLS, renderCoachOverview } from './tools-coach';
 
 // [[gente]]
 import { GENTE_GUIDE, GENTE_TOOLS, guardarPersonaTool, registrarContactoTool, renderPeopleOverview } from './tools-gente';
@@ -168,6 +169,8 @@ export function renderOverview(s: AssistantSnapshot, nowIso: string = s.computed
 
   // [[entreno]]
   L.push(...renderTrainingOverview(s, nowIso));
+  // [[coach]]
+  L.push(...renderCoachOverview(s));
 
   // [[gente]]
   L.push(...renderPeopleOverview(s));
@@ -433,7 +436,7 @@ const HISTORY_CATEGORIES: Record<string, string[]> = {
   lecciones: ['lesson.written'],
   personas: ['npc.interaction', 'place.visited'],
   metas: ['goal.progress'],
-  cuerpo: ['body.logged', 'checkin.morning', 'workout.logged', 'health.metric'],
+  cuerpo: ['body.logged', 'checkin.morning', 'workout.logged', 'health.metric', 'steps.logged', 'coach.readiness'],
   descansos: ['rest_day.marked'],
   retos: ['challenge.started', 'challenge.checked', 'boss.phase_completed', 'boss.recurring_defeated', 'pledge.made', 'pledge.resolved'],
   cierres: ['day.closed', 'journal.weekly', 'plan.set'],
@@ -444,7 +447,8 @@ const HISTORY_CATEGORIES: Record<string, string[]> = {
   lectura: ['library.finished', 'library.progress', 'library.note'],
   aprendizaje: ['learning.test_taken', 'learning.reviewed'],
   salud: ['health.checkup_done', 'health.metric'],
-  entrenamiento: ['workout.logged'],
+  entrenamiento: ['workout.logged', 'coach.readiness', 'coach.checkin', 'steps.logged'],
+  nutricion: ['meal.logged', 'water.logged'],
   notas: ['note.captured'],
   ciudad: ['city.build_started', 'city.inaugurated', 'city.collected'],
 };
@@ -532,6 +536,8 @@ const GUIDE_SYSTEMS: string[] = [
 
   // [[entreno]]
   ENTRENO_GUIDE,
+  // [[coach]]
+  COACH_GUIDE,
 
   // [[gente]]
   GENTE_GUIDE,
@@ -1511,6 +1517,8 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
 
   // [[entreno]]
   ...ENTRENO_TOOLS,
+  // [[coach]]
+  ...COACH_TOOLS,
 
   // [[gente]]
   ...GENTE_TOOLS,

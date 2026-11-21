@@ -44,6 +44,8 @@ import {
   type WorkoutDraft,
 } from '../../lib/entreno';
 import { fmtDate } from '../../lib/time';
+import { draftFromCoach, restText, useCoachPlan } from '../../lib/coach';
+import { RestTimer } from '../coach/RestTimer';
 import { Chips, DateChips, Field, toast, useAutoFocus, TextInput } from '../kit';
 import { Icon } from '../icons';
 import '../../styles/entreno.css';
@@ -114,6 +116,28 @@ export function Stepper({
       <button type="button" onClick={() => bump(step)} aria-label={`Más ${label}`}>
         +
       </button>
+    </div>
+  );
+}
+
+/** Lo que pide tu coach en el ejercicio: series × reps, peso, reserva, la nota de progresión y el descanso. */
+function CoachHint({ hint }: { hint: NonNullable<DraftExercise['coach']> }) {
+  const [cue, setCue] = useState(false);
+  return (
+    <div className="wk-coach">
+      <span className="small">
+        <b>Meta:</b> {hint.target}
+      </span>
+      {hint.note && <div className="tiny muted">{hint.note}</div>}
+      {cue && hint.cue && <div className="tiny">{hint.cue}</div>}
+      <div className="row wrap" style={{ gap: 8, alignItems: 'center' }}>
+        {hint.restSec ? <RestTimer seconds={hint.restSec} label={`Descanso ${restText(hint.restSec)}`} /> : null}
+        {hint.cue && (
+          <button type="button" className="linkish tiny" onClick={() => setCue((v) => !v)}>
+            {cue ? 'Ocultar técnica' : 'Ver técnica'}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -192,6 +216,7 @@ export function WorkoutForm({ date, setDate, today, onDone, initial }: WorkoutQu
   const suggestion = useMemo(() => trainingAnalysis(tr.summary, new Date().toISOString(), { custom: Object.values(tr.custom) }).suggestion, [tr.summary, tr.custom]);
   const { mission, done } = missionFor(state, entities, date);
   const empty = draft.exercises.length === 0;
+  const coach = useCoachPlan();
 
   if (picking)
     return (
@@ -236,12 +261,20 @@ export function WorkoutForm({ date, setDate, today, onDone, initial }: WorkoutQu
         </div>
       )}
 
-      {empty && (lastWorkout || routines.length > 0 || suggestion.exercises.length > 0) && (
+      {empty && (
         <>
           <div className="eyebrow" style={{ marginBottom: 6 }}>
             Empieza con un toque
           </div>
           <div className="wk-start">
+            {coach.today.session.kind !== 'descanso' && (coach.today.session.exercises.length > 0 || coach.today.session.cardio) && (
+              <button type="button" className="coach-start" onClick={() => setDraft(draftFromCoach(coach.today.session, state))}>
+                <b>
+                  <Icon name="whistle" /> Tu coach: {coach.today.session.title}
+                </b>
+                <small>{coach.today.session.exercises.length ? coach.today.session.exercises.map((e) => e.name).join(', ') : coach.today.session.focus}</small>
+              </button>
+            )}
             {lastWorkout && (
               <button type="button" onClick={() => setDraft(draftFromWorkout(lastWorkout))}>
                 <b>
@@ -290,6 +323,7 @@ export function WorkoutForm({ date, setDate, today, onDone, initial }: WorkoutQu
                 <Icon name="trash" width={15} />
               </button>
             </div>
+            {x.coach && <CoachHint hint={x.coach} />}
             {x.sets.map((s, i) => (
               <SetRow
                 key={i}

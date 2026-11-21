@@ -52,6 +52,9 @@ import { Hablar } from './ui/Cuentame';
 // [[entreno]]
 const Entreno = lazyScreen(() => import('./screens/Entreno'));
 const WorkoutSheetHost = lazyScreen(() => import('./ui/WorkoutSheet'));
+// [[coach]]
+const Nutricion = lazyScreen(() => import('./screens/Nutricion'));
+const CoachSheetHost = lazyScreen(() => import('./ui/coach/CoachSheets'));
 
 // [[gente]]
 const Persona = lazyScreen(() => import('./screens/Persona'));
@@ -79,7 +82,7 @@ const Dia = lazyScreen(() => import('./screens/Dia'));
 const PROGRESS = ['/progreso', '/jefes', '/logros', '/temporadas', '/metas', '/estadisticas', '/reporte', '/anual', '/tienda', '/historial', '/retos', '/records'];
 const WORLD = [
   '/mas', '/inventario', '/npcs', '/mapa', '/vida', '/ajustes', '/game-master', '/conectar-ia', '/enemigos', '/biblioteca', '/cuerpo', '/buscar',
-  '/habilidades', '/tiempo', '/aprendizaje', '/salud', '/habitos', '/entreno', '/ciudad',
+  '/habilidades', '/tiempo', '/aprendizaje', '/salud', '/habitos', '/entreno', '/ciudad', '/nutricion',
 ];
 const TODAY = ['/dia'];
 
@@ -289,6 +292,7 @@ export default function App() {
 
                   {/* [[entreno]] */}
                   <Route path="/entreno" element={<Entreno />} />
+                  <Route path="/nutricion" element={<Nutricion />} />
 
                   {/* [[gente]] */}
                   <Route path="/npcs/:id" element={<Persona />} />
@@ -372,6 +376,14 @@ export default function App() {
         <Guard>
           <Suspense fallback={null}>
             <WorkoutSheetHost />
+          </Suspense>
+        </Guard>
+      )}
+      {/* [[coach]] */}
+      {store.ready && (
+        <Guard>
+          <Suspense fallback={null}>
+            <CoachSheetHost />
           </Suspense>
         </Guard>
       )}

@@ -371,6 +371,18 @@ export const DAY_CHECKS: DayCheck[] = [
     skipLabel: 'No quiero anotar detalles',
     tool: 'registrar_entrenamiento',
   }),
+  // [[coach]] Con tu entrenador activo: qué comiste (para que te diga qué te falta). No entra al puntaje del día.
+  eventCheck({
+    id: 'comida',
+    area: 'cuerpo',
+    label: 'Comida',
+    short: 'qué comiste',
+    question: '¿Qué comiste hoy? Tu coach te dice qué te faltó.',
+    types: ['meal.logged'],
+    applies: (c) => !!c.list<TrainingSettingsData>('training', 'settings')[0]?.data.coach?.on,
+    skipLabel: 'Hoy no lo anoto',
+    tool: 'registrar_comida',
+  }),
 ];
 
 export function getDayCheck(id: string): DayCheck | undefined {

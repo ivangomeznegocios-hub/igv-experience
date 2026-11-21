@@ -25,6 +25,8 @@ import {
   type ViceData,
 } from '../types';
 import { addDays, weekStart, weekday } from '../util/dates';
+import { coachPlan } from '../engine/coach';
+import { coachPlanLines } from './tools-coach';
 
 /**
  * "Foto" compacta del estado del juego para asistentes de IA (servidor MCP y Coach).
@@ -32,7 +34,7 @@ import { addDays, weekStart, weekday } from '../util/dates';
  * calcula el estado) o el servidor cuando la que tiene quedó vieja.
  * Si cambias su forma, sube SNAPSHOT_SCHEMA para que se descarten las fotos guardadas.
  */
-export const SNAPSHOT_SCHEMA = 4;
+export const SNAPSHOT_SCHEMA = 5;
 
 /**
  * Huella de los números del juego (config/game.ts). Si se despliega otra configuración, las fotos viejas
@@ -180,6 +182,9 @@ export interface AssistantSnapshot {
   // [[entreno]]
   /** Entrenamiento: agregados por músculo y de la semana (el análisis sale de engine/training.ts). */
   training: import('../engine/modules/training').TrainingSummary;
+  // [[coach]]
+  /** Entrenador personal: el plan ya en texto (fase, sesión de hoy, metas, nutrición). Opcional en fotos viejas. */
+  coach?: { lines: string[] };
 
   // [[gente]]
 
@@ -609,6 +614,8 @@ export function buildSnapshot(
 
     // [[entreno]]
     training: state.training.summary,
+    // [[coach]]
+    coach: { lines: coachPlanLines(coachPlan(state, (meta.now ?? new Date()).toISOString()), false) },
 
     // [[gente]]
 

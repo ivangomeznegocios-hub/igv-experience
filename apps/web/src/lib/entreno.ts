@@ -39,6 +39,8 @@ export interface DraftExercise {
   primary?: MuscleId[];
   secondary?: MuscleId[];
   sets: WorkoutSet[];
+  /** Lo que pide tu entrenador en este ejercicio (solo en pantalla; no se guarda en el registro). */
+  coach?: { target: string; note?: string; cue?: string; restSec?: number };
 }
 
 export interface WorkoutDraft {

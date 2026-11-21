@@ -1,0 +1,115 @@
+/* ---------- Entrenador personal (ui/coach/*, screens/Nutricion.tsx) ---------- */
+
+/* Cara del coach */
+.coach-face { flex: none; display: block; }
+.coach-face .cf-head { fill: color-mix(in srgb, var(--mood, var(--teal)) 14%, var(--card-2)); stroke: var(--mood, var(--teal)); stroke-width: 2.5; }
+.coach-face .cf-band { fill: var(--mood, var(--teal)); opacity: 0.9; }
+.coach-face .cf-line { fill: none; stroke: var(--text); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.coach-face .cf-fill { fill: var(--text); stroke: none; }
+.coach-face .cf-eye { transform-box: fill-box; transform-origin: center; animation: cf-blink 5.5s infinite; }
+.cf-feliz { --mood: var(--gold); }
+.cf-animo { --mood: var(--teal); }
+.cf-calma { --mood: var(--violet-2); }
+.cf-atento { --mood: var(--flame); }
+.cf-serio { --mood: var(--red); }
+@keyframes cf-blink { 0%, 94%, 100% { transform: scaleY(1); } 96% { transform: scaleY(0.1); } }
+@media (prefers-reduced-motion: reduce) { .coach-face .cf-eye { animation: none; } }
+
+/* Tarjeta del coach */
+.coach-card { border-left: 3px solid var(--mood, var(--teal)); }
+.coach-card.mood-feliz { --mood: var(--gold); }
+.coach-card.mood-animo { --mood: var(--teal); }
+.coach-card.mood-calma { --mood: var(--violet-2); }
+.coach-card.mood-atento { --mood: var(--flame); }
+.coach-card.mood-serio { --mood: var(--red); }
+.coach-head { display: flex; gap: 12px; align-items: flex-start; }
+.coach-msg-main { font-size: 15px; line-height: 1.45; margin-top: 2px; }
+.coach-card.compact .coach-msg-main { font-size: 14px; }
+.coach-extra { margin: 10px 0 0; padding-left: 18px; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.coach-extra li + li { margin-top: 4px; }
+.coach-actions-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; align-items: center; }
+.coach-actions-row .btn.primary { flex: 1 1 100%; justify-content: center; }
+.coach-primary { flex-direction: column; gap: 0; }
+.coach-primary > span { display: inline-flex; align-items: center; gap: 6px; }
+.coach-act-detail { opacity: 0.75; font-weight: 500; font-size: 12px; }
+.coach-intro { display: flex; gap: 10px; align-items: center; background: var(--card-2); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 12px; }
+.linkish { background: none; border: 0; padding: 0; color: var(--teal); font: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; text-decoration: none; }
+.linkish:hover { text-decoration: underline; }
+
+/* Sesión de hoy */
+.coach-ex { display: flex; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+.coach-ex:first-of-type { border-top: 0; }
+.coach-ex-n { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--card-2); color: var(--muted); font-size: 12px; font-weight: 700; }
+.coach-ex-name { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.coach-ex-target { font-size: 14px; color: var(--text); margin: 2px 0; }
+.coach-ex-more { margin-top: 8px; padding: 8px 10px; background: var(--card-2); border-radius: var(--radius-sm); }
+.rest-timer { white-space: nowrap; }
+.rest-timer.on { border-color: var(--teal); color: var(--teal); font-variant-numeric: tabular-nums; }
+.coach-why { margin: 6px 0 10px; padding-left: 18px; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.coach-why li + li { margin-top: 4px; }
+.coach-details { margin-top: 12px; }
+.coach-details summary { cursor: pointer; color: var(--teal); font-size: 13px; }
+
+/* En el registro del entrenamiento */
+.wk-coach { background: color-mix(in srgb, var(--teal) 8%, var(--card-2)); border-radius: var(--radius-sm); padding: 8px 10px; margin: 6px 0 8px; display: grid; gap: 4px; }
+.wk-start .coach-start { border-color: color-mix(in srgb, var(--teal) 50%, var(--line)); }
+
+/* Semana */
+.coach-week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cw-day { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 2px; border-radius: var(--radius-sm); background: var(--card-2); border: 1px solid transparent; min-width: 0; }
+.cw-day.today { border-color: var(--teal); }
+.cw-short { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.cw-dot { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--card); color: var(--faint); }
+.cw-day.k-fuerza .cw-dot { color: var(--text); }
+.cw-day.done .cw-dot { background: var(--teal); color: var(--bg); }
+.cw-day.missed .cw-dot { background: color-mix(in srgb, var(--red) 25%, var(--card)); color: var(--red); }
+.cw-title { font-size: 10px; color: var(--muted); text-align: center; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; max-width: 100%; white-space: nowrap; }
+
+/* Metas */
+.coach-target { display: flex; gap: 10px; align-items: center; padding: 8px 0; }
+.coach-target + .coach-target { border-top: 1px solid var(--line); }
+.coach-target .bar { margin-top: 5px; }
+
+/* Fases */
+.coach-phases { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-bottom: 8px; }
+.cp-step { padding: 8px; border-radius: var(--radius-sm); background: var(--card-2); display: flex; flex-direction: column; gap: 2px; opacity: 0.6; }
+.cp-step.past { opacity: 0.85; }
+.cp-step.on { opacity: 1; outline: 1.5px solid var(--teal); }
+.cp-step b { font-size: 13px; }
+.cp-step small { font-size: 11px; color: var(--muted); }
+
+/* Escala 1–5 */
+.scale5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.scale5 .chip { justify-content: center; }
+.chip.good.on { background: color-mix(in srgb, var(--teal) 22%, var(--card-2)); border-color: var(--teal); }
+.chip.limit.on { background: color-mix(in srgb, var(--flame) 22%, var(--card-2)); border-color: var(--flame); }
+
+/* Chat */
+.coach-chat .chat { max-height: 420px; overflow-y: auto; }
+.coach-msg { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 8px; }
+.coach-msg.user { flex-direction: row-reverse; }
+.coach-msg .bubble { white-space: pre-wrap; }
+
+/* Nutrición */
+.nutri-checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; margin-top: 12px; }
+.nutri-check { display: flex; gap: 6px; align-items: center; padding: 6px 8px; border-radius: var(--radius-sm); background: var(--card-2); color: var(--muted); font-size: 13px; }
+.nutri-check b { color: var(--text); font-weight: 600; }
+.nutri-check small { color: var(--muted); }
+.nutri-check.done { background: color-mix(in srgb, var(--teal) 14%, var(--card-2)); }
+.nutri-check.done svg { color: var(--teal); }
+.water-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; color: var(--blue); }
+.water-glasses { display: flex; flex-wrap: wrap; gap: 3px; flex: 1; min-width: 0; }
+.water-glasses i { width: 12px; height: 18px; border-radius: 2px 2px 4px 4px; border: 1.5px solid color-mix(in srgb, var(--blue) 60%, var(--line)); }
+.water-glasses i.on { background: var(--blue); border-color: var(--blue); }
+.portions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-top: 6px; }
+.portions > div { background: var(--card-2); border-radius: var(--radius-sm); padding: 8px 10px; display: flex; flex-direction: column; }
+.portions b { font-size: 15px; }
+.portions span { font-size: 12px; color: var(--muted); }
+.food-row { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-top: 1px solid var(--line); }
+.food-row:first-of-type { border-top: 0; }
+.block-btn { width: 100%; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+
+@media (max-width: 380px) {
+  .cw-title { display: none; }
+  .portions { grid-template-columns: 1fr; }
+}

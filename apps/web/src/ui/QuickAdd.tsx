@@ -32,6 +32,7 @@ import '../styles/voz.css';
 // ---- Registro rápido de los sistemas nuevos: cada uno importa aquí su `ui/quick/<X>Quick.tsx` ----
 // [[entreno]]
 import { WorkoutQuick } from './quick/WorkoutQuick';
+import MealQuick from './quick/MealQuick';
 
 // [[gente]]
 import { PeopleQuick } from './quick/PeopleQuick';
@@ -59,7 +60,7 @@ export function openQuickAdd(o: Opts = {}) {
   bus.forEach((f) => f(o));
 }
 
-const ACTION_MODES: Record<string, QuickMode> = { mision: 'did', ingreso: 'income', gasto: 'expense', leccion: 'lesson', npc: 'npc', plan: 'todo', menu: 'menu', entreno: 'workout', tiempo: 'time', visita: 'visit' };
+const ACTION_MODES: Record<string, QuickMode> = { mision: 'did', ingreso: 'income', gasto: 'expense', leccion: 'lesson', npc: 'npc', plan: 'todo', menu: 'menu', entreno: 'workout', tiempo: 'time', visita: 'visit', comida: 'meal' };
 
 /** Botón flotante "+" y hoja de registro rápido. */
 export function QuickAdd() {
@@ -128,6 +129,8 @@ const QUICK_ENTRIES: QuickEntry[] = [
   // Mi gente: varias personas a la vez, canal (en persona, llamada, mensaje…) y lugar.
   { mode: 'npc', icon: 'chat', label: 'Hablé con…', Form: PeopleQuick },
   { mode: 'workout', icon: 'bolt', label: 'Entreno', title: 'Entrenamiento', Form: WorkoutQuick },
+  // [[coach]]
+  { mode: 'meal', icon: 'apple', label: 'Comida', title: '¿Qué comiste?', Form: MealQuick },
   { mode: 'time', icon: 'clock', label: 'Tiempo', title: 'Tu tiempo', Form: TimeQuick },
   { mode: 'visit', icon: 'pin', label: 'Fui a…', Form: VisitQuick },
   { mode: 'todo', icon: 'calendar', label: 'Por hacer', Form: TodoForm, ownDate: true },

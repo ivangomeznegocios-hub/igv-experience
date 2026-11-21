@@ -49,10 +49,12 @@ import { MuscleBody } from '../ui/MuscleBody';
 import { Icon } from '../ui/icons';
 import { Badge, Bar, Chips, Empty, Field, PageHeader, Sheet, Tabs, confirmAction, toast, TextInput } from '../ui/kit';
 import { ExercisePicker, Stepper } from '../ui/quick/WorkoutQuick';
+import { CoachTab } from '../ui/coach/CoachTab';
 import '../styles/entreno.css';
 
-type Tab = 'semana' | 'historial' | 'records' | 'rutinas';
-const TAB_KEY = 'igv-entreno-tab';
+type Tab = 'coach' | 'semana' | 'historial' | 'records' | 'rutinas';
+// Clave nueva para que todos abran primero la pestaña de tu coach (luego recuerda la última).
+const TAB_KEY = 'igv-entreno-tab2';
 const PAINT_KEY = 'igv-entreno-pintar';
 
 function useNow() {
@@ -83,9 +85,9 @@ export function muscleStateText(m: MuscleStatus): string {
 export default function Entreno() {
   const [tab, setTabState] = useState<Tab>(() => {
     try {
-      return (localStorage.getItem(TAB_KEY) as Tab) || 'semana';
+      return (localStorage.getItem(TAB_KEY) as Tab) || 'coach';
     } catch {
-      return 'semana';
+      return 'coach';
     }
   });
   const setTab = (t: Tab) => {
@@ -111,12 +113,14 @@ export default function Entreno() {
         value={tab}
         onChange={setTab}
         options={[
-          { value: 'semana', label: 'Semana' },
+          { value: 'coach', label: 'Coach' },
+          { value: 'semana', label: 'Músculos' },
           { value: 'historial', label: 'Historial' },
           { value: 'records', label: 'Récords' },
           { value: 'rutinas', label: 'Rutinas' },
         ]}
       />
+      {tab === 'coach' && <CoachTab />}
       {tab === 'semana' && <WeekTab />}
       {tab === 'historial' && <HistoryTab />}
       {tab === 'records' && <RecordsTab />}

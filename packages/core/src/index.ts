@@ -54,6 +54,10 @@ export * from './engine/muscle-map';
 export { TRAINING_SETTINGS_ID, RECORD_METRIC, epley1rm, resolveExercise, muscleSetsOf, exerciseDefFromEntity, guessWorkoutKind, measureFromSets } from './engine/modules/training';
 export type { TrainingState, TrainingSummary, Workout, ResolvedExercise, ExerciseRecord, ExerciseTop, MuscleAggregate, RecordMark } from './engine/modules/training';
 export * from './assistant/tools-entreno';
+// [[coach]]
+export * from './engine/coach';
+export * from './assistant/tools-coach';
+export type { CoachLogs, MealEntry, Readiness, WeeklyCheckin } from './engine/modules/coach';
 
 // [[gente]]
 export * from './engine/modules/gente';

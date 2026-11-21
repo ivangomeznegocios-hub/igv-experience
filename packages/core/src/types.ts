@@ -794,7 +794,100 @@ export interface TrainingSettingsData {
   missionId?: string | null;
   /** Dónde entrenas normalmente. */
   where?: WorkoutPlace | null;
+  /** Tu entrenador personal (plan semanal, sesión del día, nutrición). Ver engine/coach.ts. */
+  coach?: CoachSettings;
 }
+
+// [[coach]]
+// ---------- Entrenador personal y nutrición (ver engine/coach.ts y docs/sistemas/coach.md) ----------
+
+/** Objetivo principal del plan. */
+export const COACH_GOALS = ['salud', 'perder_grasa', 'ganar_musculo', 'fuerza', 'condicion'] as const;
+export type CoachGoal = (typeof COACH_GOALS)[number];
+export const COACH_GOAL_NAMES: Record<CoachGoal, string> = {
+  salud: 'Salud y energía',
+  perder_grasa: 'Bajar grasa',
+  ganar_musculo: 'Ganar músculo',
+  fuerza: 'Más fuerza',
+  condicion: 'Más condición',
+};
+
+/** De dónde arrancas (lo dices tú; el plan avanza solo con las semanas que entrenas). */
+export const COACH_LEVELS = ['sedentario', 'principiante', 'intermedio', 'avanzado'] as const;
+export type CoachLevel = (typeof COACH_LEVELS)[number];
+export const COACH_LEVEL_NAMES: Record<CoachLevel, string> = {
+  sedentario: 'Sedentario (casi no me muevo)',
+  principiante: 'Principiante (menos de 6 meses)',
+  intermedio: 'Intermedio (1–3 años)',
+  avanzado: 'Avanzado (3+ años)',
+};
+
+/** Zonas del cuerpo con molestias o lesiones: el plan evita los ejercicios que las cargan. */
+export const BODY_AREAS = ['rodilla', 'espalda_baja', 'hombro', 'cuello', 'codo', 'muneca', 'cadera', 'tobillo'] as const;
+export type BodyArea = (typeof BODY_AREAS)[number];
+export const BODY_AREA_NAMES: Record<BodyArea, string> = {
+  rodilla: 'Rodilla',
+  espalda_baja: 'Espalda baja',
+  hombro: 'Hombro',
+  cuello: 'Cuello',
+  codo: 'Codo',
+  muneca: 'Muñeca',
+  cadera: 'Cadera',
+  tobillo: 'Tobillo',
+};
+
+/** Ajustes del entrenador (`training-settings.coach`). Cambiarlos recalcula el plan; nunca toca el historial. */
+export interface CoachSettings {
+  /** Ya pasó por "Arma tu plan". */
+  on?: boolean;
+  /** Nombre de tu entrenador (por defecto "Coach"). */
+  name?: string;
+  goal?: CoachGoal;
+  level?: CoachLevel;
+  /** Días de fuerza (0 = lunes … 6 = domingo). Vacío = los elige el plan. */
+  days?: number[];
+  /** Minutos por sesión de fuerza (20–120). */
+  sessionMinutes?: number;
+  limitations?: BodyArea[];
+  /** Semana 1 del plan (YYYY-MM-DD). */
+  startDate?: string;
+  /** Meta de pasos fija (si no, la calcula el plan con tu historial). */
+  stepsGoal?: number | null;
+  /** Peso al que quieres llegar (kg). */
+  targetWeightKg?: number | null;
+  /** Para el gasto calórico (fórmula de Mifflin-St Jeor). Por defecto hombre. */
+  sex?: 'hombre' | 'mujer';
+  /** Ejercicio que elegiste para un patrón del plan (`sentadilla` → `prensa`…). */
+  swaps?: Record<string, string>;
+}
+
+/** Comida del día. */
+export const MEAL_KINDS = ['desayuno', 'comida', 'cena', 'colacion'] as const;
+export type MealKind = (typeof MEAL_KINDS)[number];
+export const MEAL_KIND_NAMES: Record<MealKind, string> = { desayuno: 'Desayuno', comida: 'Comida', cena: 'Cena', colacion: 'Colación' };
+
+/**
+ * Qué llevaba la comida (hábitos, no calorías): las de arriba suman, las de `limit` restan. La lista se repite en
+ * events.ts (`meal.logged`); hay prueba de que coinciden.
+ */
+export const MEAL_TAGS = ['proteina', 'verduras', 'fruta', 'integrales', 'legumbres', 'grasas_buenas', 'lacteos', 'ultraprocesado', 'frito', 'azucar', 'refresco', 'alcohol'] as const;
+export type MealTag = (typeof MEAL_TAGS)[number];
+export const MEAL_TAG_NAMES: Record<MealTag, string> = {
+  proteina: 'Proteína',
+  verduras: 'Verduras',
+  fruta: 'Fruta',
+  integrales: 'Integrales / maíz',
+  legumbres: 'Frijol / lenteja',
+  grasas_buenas: 'Grasas buenas',
+  lacteos: 'Lácteos',
+  ultraprocesado: 'Ultraprocesado',
+  frito: 'Frito',
+  azucar: 'Postre / pan dulce',
+  refresco: 'Refresco / jugo',
+  alcohol: 'Alcohol',
+};
+/** Etiquetas que conviene limitar. */
+export const MEAL_LIMIT_TAGS: readonly MealTag[] = ['ultraprocesado', 'frito', 'azucar', 'refresco', 'alcohol'];
 
 // [[gente]]
 

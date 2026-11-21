@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { learningDueCount, type Entity, type LearningTopicData } from '@igv/core';
+import { addDays, learningDueCount, weekStart, weekday, type Entity, type LearningTopicData } from '@igv/core';
 import { useGame } from '../data/store';
 import { PageHeader } from '../ui/kit';
 import { Icon } from '../ui/icons';
@@ -65,6 +65,14 @@ function attentionItems(state: ReturnType<typeof useGame>['state'], name: (id: s
   if (npcMission) out.push({ to: `/npcs/${npcMission.npcId}`, icon: 'chat', text: npcMission.title });
   const weak = state.habits.routine.filter((h) => h.dueToday && !h.doneToday && h.verdict === 'flojo');
   if (weak.length) out.push({ to: '/habitos', icon: 'checklist', text: weak.length === 1 ? `Hábito flojo hoy: ${weak[0].title}` : `${weak.length} hábitos flojos te tocan hoy` });
+  // [[coach]] check-in semanal con tu entrenador (fin de semana, o lunes y martes por la semana pasada).
+  const cs = state.training.settings.coach;
+  if (cs?.on) {
+    const wd = weekday(state.today);
+    const ws = weekStart(state.today);
+    const due = wd >= 5 ? ws : wd <= 1 ? addDays(ws, -7) : null;
+    if (due && !state.coach.checkins[due] && (!cs.startDate || due >= weekStart(cs.startDate))) out.push({ to: '/entreno', icon: 'whistle', text: '¿Cómo estuvo tu semana? Check-in con tu coach' });
+  }
   const dueCards = learningDueCount(state.learning, learningTopics);
   if (dueCards) out.push({ to: '/aprendizaje', icon: 'translate', text: `${dueCards} ${dueCards === 1 ? 'tarjeta' : 'tarjetas'} por repasar` });
   return out.slice(0, 4);
@@ -87,7 +95,15 @@ export function Mas() {
   const ms = state.map.summary;
   const weight = state.body.lastWeight;
   const ts = state.training.summary;
-  const trainingSub = ts.sessionsThisWeek ? `${ts.sessionsThisWeek} ${ts.sessionsThisWeek === 1 ? 'sesión' : 'sesiones'} esta semana` : 'Músculos, récords y qué te falta';
+  const coachOn = !!state.training.settings.coach?.on;
+  const trainingSub = coachOn
+    ? `Tu coach${ts.sessionsThisWeek ? ` · ${ts.sessionsThisWeek} ${ts.sessionsThisWeek === 1 ? 'sesión' : 'sesiones'} esta semana` : ' · plan y sesión de hoy'}`
+    : ts.sessionsThisWeek
+      ? `${ts.sessionsThisWeek} ${ts.sessionsThisWeek === 1 ? 'sesión' : 'sesiones'} esta semana`
+      : 'Tu coach personal, músculos y récords';
+  const mealsToday = state.coach.meals.filter((m) => m.date === state.today).length;
+  const waterToday = state.coach.water[state.today] ?? 0;
+  const nutriSub = mealsToday || waterToday ? `Hoy: ${mealsToday} ${mealsToday === 1 ? 'comida' : 'comidas'} · ${waterToday} vasos de agua` : 'Qué comiste, agua y proteína';
   const habitParts = [hs.bien && `${hs.bien} bien`, hs.medias && `${hs.medias} a medias`, hs.flojo && `${hs.flojo} ${hs.flojo === 1 ? 'flojo' : 'flojos'}`].filter(Boolean);
   const habitsSub = habitParts.length ? habitParts.join(' · ') : state.habits.routine.length ? `${state.habits.routine.length} en tu rutina` : 'Se arman con lo que registras';
   return (
@@ -120,7 +136,8 @@ export function Mas() {
         <Tile to="/npcs" icon="users" title="Mi gente" sub={today ? `${today} contacto${today === 1 ? '' : 's'} hoy${toAttend ? ` · ${toAttend} por atender` : ''}` : toAttend ? `${toAttend} por atender` : 'Familia, amigos y trabajo'} alert={toAttend > 0} />
         <Tile to="/salud" icon="salud-cross" title="Salud" sub={h.score === null ? 'Chequeos y ficha médica' : `${h.score}% al día${h.due.length ? ` · ${h.due.length} te toca${h.due.length === 1 ? '' : 'n'}` : ''}`} alert={h.due.some((d) => d.status === 'atrasado')} />
         <Tile to="/cuerpo" icon="heart" title="Cuerpo" sub={weight ? `${weight.kg} kg · sueño y medidas` : 'Peso, medidas y sueño'} />
-        <Tile to="/entreno" icon="bolt" title="Entrenamiento" sub={trainingSub} alert={false} />
+        <Tile to="/entreno" icon="whistle" title="Entrenamiento" sub={trainingSub} alert={false} />
+        <Tile to="/nutricion" icon="apple" title="Nutrición" sub={nutriSub} />
         <Tile to="/habitos" icon="checklist" title="Hábitos" sub={habitsSub} alert={hs.flojo > 0} />
         <Tile to="/enemigos" icon="shield" title="Hábitos a dejar" sub={vices.length ? `${vices.length} bajo control` : 'Lo que quieres dejar'} />
         <Tile to="/mapa" icon="map" title="Mapa" sub={ms.known ? `${ms.known} ${ms.known === 1 ? 'lugar conocido' : 'lugares conocidos'}` : 'Lugares por conocer y tu empresa'} />

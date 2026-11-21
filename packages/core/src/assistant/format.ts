@@ -1,4 +1,4 @@
-import { ATTRIBUTE_NAMES, MISSION_SIZE_NAMES, type AttributeId, type Entity, type GameEvent, type MissionSize } from '../types';
+import { ATTRIBUTE_NAMES, BODY_AREA_NAMES, MEAL_TAG_NAMES, MISSION_SIZE_NAMES, type AttributeId, type BodyArea, type Entity, type GameEvent, type MealTag, type MissionSize } from '../types';
 import { cityDistrict } from '../engine/city-catalog';
 
 const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -72,6 +72,12 @@ export const EVENT_TEXT: Record<string, string> = {
 
   // [[entreno]]
   'workout.logged': 'Entrenamiento',
+  // [[coach]]
+  'meal.logged': 'Comida',
+  'water.logged': 'Agua',
+  'steps.logged': 'Pasos',
+  'coach.readiness': 'Cómo te sentías',
+  'coach.checkin': 'Check-in semanal',
 
   // [[gente]]
 
@@ -205,6 +211,27 @@ export function describeEvent(e: GameEvent, byId: Map<string, Entity>, currency 
       detail = [p.title ?? p.kind, p.where ?? '', p.minutes ? `${p.minutes} min` : '', ex.length ? ex.map((x) => `${x.name} ${(x.sets ?? []).length}×`).join(', ') : ''].filter(Boolean).join(' · ');
       break;
     }
+    // [[coach]]
+    case 'meal.logged': {
+      const meals: Record<string, string> = { desayuno: 'desayuno', comida: 'comida', cena: 'cena', colacion: 'colación' };
+      const tags = Array.isArray(p.tags) ? (p.tags as string[]).map((t) => MEAL_TAG_NAMES[t as MealTag] ?? t).join(', ') : '';
+      detail = [meals[p.meal] ?? p.meal, p.text ? String(p.text).slice(0, 120) : '', tags, p.proteinG ? `${p.proteinG} g de proteína` : '', p.kcal ? `${p.kcal} kcal` : ''].filter(Boolean).join(' · ');
+      break;
+    }
+    case 'water.logged':
+      detail = `${p.glasses} ${p.glasses === 1 ? 'vaso' : 'vasos'}`;
+      break;
+    case 'steps.logged':
+      detail = `${fmtNum(Number(p.steps) || 0)} pasos`;
+      break;
+    case 'coach.readiness': {
+      const pain = Array.isArray(p.pain) && p.pain.length ? ` · molestia en ${(p.pain as string[]).map((a) => (BODY_AREA_NAMES[a as BodyArea] ?? a).toLowerCase()).join(', ')}` : '';
+      detail = `energía ${p.energy}/5${p.soreness ? ` · adolorido ${p.soreness}/3` : ''}${pain}${p.note ? ` · ${String(p.note).slice(0, 100)}` : ''}`;
+      break;
+    }
+    case 'coach.checkin':
+      detail = `semana del ${fmtDay(String(p.weekStart))} · pesado ${p.effort}/5 · energía ${p.energy}/5 · ánimo ${p.mood}/5${Array.isArray(p.pain) && p.pain.length ? ` · molestias: ${(p.pain as string[]).map((a) => (BODY_AREA_NAMES[a as BodyArea] ?? a).toLowerCase()).join(', ')}` : ''}`;
+      break;
 
     // [[gente]]
 

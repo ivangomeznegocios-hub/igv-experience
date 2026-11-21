@@ -194,6 +194,49 @@ export const EVENT_SCHEMAS = {
     })
     .refine((p) => p.exercises.length > 0 || (p.minutes ?? 0) > 0, 'Agrega al menos un ejercicio o la duración'),
 
+  // [[coach]]
+  /**
+   * Una comida: qué tipo, qué llevaba (etiquetas de hábito, igual que MEAL_TAGS de types.ts) y, si lo sabes o lo
+   * estimó la IA, gramos de proteína y calorías. Solo registro: no da XP.
+   */
+  'meal.logged': z
+    .object({
+      meal: z.enum(['desayuno', 'comida', 'cena', 'colacion']),
+      text: z.string().trim().max(500).optional(),
+      tags: z
+        .array(z.enum(['proteina', 'verduras', 'fruta', 'integrales', 'legumbres', 'grasas_buenas', 'lacteos', 'ultraprocesado', 'frito', 'azucar', 'refresco', 'alcohol']))
+        .max(12)
+        .default([]),
+      proteinG: z.number().min(0).max(400).optional(),
+      kcal: z.number().min(0).max(6000).optional(),
+    })
+    .refine((p) => p.tags.length > 0 || !!p.text?.trim() || (p.proteinG ?? 0) > 0 || (p.kcal ?? 0) > 0, 'Di qué comiste'),
+  /** Vasos de agua (se suman en el día; un vaso = config.coach.nutrition.glassMl). Solo registro. */
+  'water.logged': z.object({ glasses: z.number().int().min(1).max(20) }),
+  /** Pasos del día (lo que diga tu teléfono; el último registro del día gana). Solo registro. */
+  'steps.logged': z.object({ steps: z.number().int().min(0).max(150000) }),
+  /** "¿Cómo te sientes hoy?": energía 1–5, qué tan adolorido 0–3 y dónde te duele. El último del día gana. Solo registro. */
+  'coach.readiness': z.object({
+    energy: z.number().int().min(1).max(5),
+    soreness: z.number().int().min(0).max(3).default(0),
+    pain: z.array(z.enum(['rodilla', 'espalda_baja', 'hombro', 'cuello', 'codo', 'muneca', 'cadera', 'tobillo'])).max(8).default([]),
+    note: z.string().trim().max(500).optional(),
+  }),
+  /**
+   * "¿Cómo estuvo tu semana?" (check-in semanal con tu entrenador): qué tan pesado se sintió el plan (1 muy ligero …
+   * 5 demasiado), energía y ánimo 1–5, molestias y notas. El último de esa semana gana. Ajusta el plan de la semana
+   * siguiente. Solo registro.
+   */
+  'coach.checkin': z.object({
+    weekStart: date,
+    effort: z.number().int().min(1).max(5),
+    energy: z.number().int().min(1).max(5),
+    mood: z.number().int().min(1).max(5),
+    pain: z.array(z.enum(['rodilla', 'espalda_baja', 'hombro', 'cuello', 'codo', 'muneca', 'cadera', 'tobillo'])).max(8).default([]),
+    wins: z.string().trim().max(1000).optional(),
+    struggles: z.string().trim().max(1000).optional(),
+  }),
+
   // [[gente]]
 
   // [[mapa]]
@@ -343,6 +386,13 @@ export const EVENT_LABELS: Record<EventType, string> = {
 
   // [[entreno]]
   'workout.logged': 'Entrenamiento',
+
+  // [[coach]]
+  'meal.logged': 'Comida',
+  'water.logged': 'Agua',
+  'steps.logged': 'Pasos',
+  'coach.readiness': 'Cómo te sientes hoy',
+  'coach.checkin': 'Check-in semanal con tu coach',
 
   // [[gente]]
 

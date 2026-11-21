@@ -33,6 +33,8 @@ código los nombres internos se conservan (módulos, tipos de evento, ids, rutas
 | `/conectar-ia`, `ai/*`, `mcp-worker.ts` | Conectar IA (servidor MCP, llaves, apps conectadas, actividad) |
 | `note.captured`, `ui/Cuentame.tsx` | Cuéntame (botón de micrófono "Hablar"), notas por procesar |
 | `training/*`, `workout.logged`, `/entreno` | Entrenamiento (series, músculos, recuperación, récords) |
+| `engine/coach.ts`, `training-settings.coach`, `ui/coach/*` | Tu coach / entrenador personal (plan, sesión de hoy, "¿Cómo estuvo tu semana?") |
+| `meal.logged`, `water.logged`, `/nutricion` | Nutrición (comidas por hábitos, agua, proteína) |
 | `health/*`, `/salud` | Salud (chequeos "ya te toca", mediciones, ficha médica) |
 | `learning/*`, `/aprendizaje` | Aprendizaje (temas como Inglés, frases, tarjetas, tests con IA) |
 | `time.logged`, `/tiempo` | Tu tiempo ("¿a qué te dedicas?", cronómetro) |
@@ -72,8 +74,8 @@ apps/web        React + Vite + PWA. Calcula el estado en el dispositivo con @igv
   src/character/       Personaje 3D (three.js, se descarga solo al abrir Perfil): geom.ts (tubos por
                        secciones), figure.ts (cuerpo, rostro, cabello, ropa), stage.ts (cámara, luces, giro),
                        CharacterView.tsx (lienzo). La tarjeta y sus formularios: ui/CharacterCard.tsx.
-docs/sistemas   Notas completas de cada sistema de la fase 10 (voz, entreno, gente, mapa, habilidades,
-                aprendizaje, salud, habitos). Léelas antes de tocar ese sistema.
+docs/sistemas   Notas completas de cada sistema (voz, entreno, coach, gente, mapa, habilidades, aprendizaje, salud,
+                habitos, marcador, ciudad). Léelas antes de tocar ese sistema.
 ```
 
 ### Event sourcing (decisión central)
@@ -258,7 +260,8 @@ Para usar la app desde Claude (web, escritorio, móvil, Claude Code), ChatGPT, C
   la estimación, y se marca como estimada (≈). La línea de tiempo son las fechas en que alguna medida cambió
   (`measureDates`); se anima con `lerpPhysique`; los cambios solo se muestran entre valores medidos.
   Apariencia y ropa sí son ajustes: `settings.character` (`look` + `outfit`, ver "Personaje 3D"). No da XP.
-- Sin XP (solo registro): enemigos (`habits/vice`, `vice.relapse`; cuenta días sin caer), cuerpo
+- Sin XP (solo registro): comidas, agua, pasos, cómo te sientes y check-in semanal del entrenador (`meal.logged`,
+  `water.logged`, `steps.logged`, `coach.readiness`, `coach.checkin`), enemigos (`habits/vice`, `vice.relapse`; cuenta días sin caer), cuerpo
   (`body.logged`), ahorro (`finance/savings`, `savings.moved`), presupuesto (`settings.budgets`), cierre del
   día (`day.closed`), tiempo (`time.logged`), notas de voz (`note.*`), avance y notas de libros, mediciones de salud
   y la revisión del día (`day.check_skipped`).
@@ -315,6 +318,21 @@ Ninguno rompe las reglas de oro: cada uno tiene una prueba de propiedades "agreg
   cumpleaños y chequeos que ya tocan; nombres de fuentes de XP en `engine/xp-sources.ts` (Record completo: TypeScript
   pide el nombre de cada fuente nueva); el historial describe eventos nuevos con `describeEvent` de core; deshacer de la
   IA no borra lo que la IA creó si Iván ya registró algo ahí (`UNDO_GUARDS` en `apps/api/src/ai/store.ts`).
+
+## Entrenador personal y nutrición (fase 12)
+
+Detalle completo en `docs/sistemas/coach.md`. Tu coach (carita SVG con 5 ánimos, `ui/coach/CoachFace.tsx`) vive en
+Hoy (`CoachCard compact`) y en Entrenamiento → pestaña **Coach** (primera). Todo sale de `coachPlan(state, nowIso)`
+(`engine/coach.ts`, puro, sin IA): fase por **semanas entrenadas** (adaptación → base → progreso, descargas; las semanas
+vacías regresan el plan), semana con días de fuerza/cardio/libre, **sesión de hoy** con ejercicios por patrón de
+movimiento (principiante primero, lo que ya usas, en casa sin máquinas, sin lo que carga una zona con molestias),
+series × reps, **peso objetivo por doble progresión**, reserva, descanso y técnica; ajustes por sueño, cómo te sientes,
+dolor y recuperación muscular; cardio, pasos, sueño, nutrición (Mifflin-St Jeor, proteína 1.6–2.0 g/kg con peso de
+referencia si hay sobrepeso, agua, día de comida 0–100 por hábitos) y tendencia de peso; check-in semanal y medidas.
+Ajustes en `training-settings.coach` (`CoachSettings`). Hojas globales con `openCoachSheet()` (`lib/coach.ts`,
+host `ui/coach/CoachSheets.tsx`); `/nutricion`; "+" → Comida. Con IA: `mode: 'entrenador'` en `/api/gm/ask`
+(`ENTRENADOR_SYSTEM`, búsqueda web `web_search_20260209`, reanuda `pause_turn`) y 8 herramientas en
+`assistant/tools-coach.ts`. **Nunca da XP** (la del entreno sigue en la misión de entrenar y los récords).
 
 ## Plan de juego (fase 11)
 

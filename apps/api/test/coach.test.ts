@@ -197,3 +197,43 @@ describe('Coach: límite de consultas a D1', () => {
     }
   });
 });
+
+describe('Coach en modo entrenador', () => {
+  it('agrega la instrucción del entrenador, la búsqueda web y reanuda un turno pausado por la búsqueda', async () => {
+    calls.length = 0;
+    const paused = {
+      stop_reason: 'pause_turn',
+      content: [{ type: 'server_tool_use', id: 'srv_1', name: 'web_search', input: { query: 'proteína por kg hipertrofia metaanálisis' } }],
+    };
+    mode.script = [
+      paused,
+      { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'tu_9', name: 'ver_plan_entrenador', input: {} }] },
+      { stop_reason: 'end_turn', content: [{ type: 'text', text: 'Hoy toca cuerpo completo A. 1.6 g/kg de proteína (Morton 2018).' }] },
+    ];
+    const app = (await import('../src/index')).default;
+    const env = { DB: fakeD1(), DEV_BYPASS_AUTH: 'true', ANTHROPIC_API_KEY: 'sk-test' } as any;
+    const res = await app.request('/api/gm/ask', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ question: '¿Qué hago hoy y cuánta proteína como?', history: [], mode: 'entrenador' }) }, env);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { answer: string };
+    expect(body.answer).toContain('cuerpo completo');
+    expect(calls[0].system.map((b: { text: string }) => b.text).join('\n')).toContain('MODO ENTRENADOR');
+    expect(calls[0].tools.find((t: { name: string }) => t.name === 'web_search')).toMatchObject({ type: 'web_search_20260209' });
+    expect(calls[0].tools.some((t: { name: string }) => t.name === 'ver_plan_entrenador')).toBe(true);
+    // Tras la pausa se reenvía el turno del asistente tal cual, sin un mensaje "continúa".
+    expect(calls[1].messages.at(-1)).toMatchObject({ role: 'assistant', content: paused.content });
+    // La herramienta del entrenador corre y su resultado vuelve al modelo.
+    expect(calls[2].messages.at(-1).content[0]).toMatchObject({ type: 'tool_result', tool_use_id: 'tu_9', is_error: false });
+    expect(calls[2].messages.at(-1).content[0].content).toContain('Plan del entrenador');
+    mode.script = null;
+  });
+
+  it('fuera del modo entrenador no hay búsqueda web', async () => {
+    calls.length = 0;
+    mode.script = [{ stop_reason: 'end_turn', content: [{ type: 'text', text: 'Hola.' }] }];
+    const app = (await import('../src/index')).default;
+    const env = { DB: fakeD1(), DEV_BYPASS_AUTH: 'true', ANTHROPIC_API_KEY: 'sk-test' } as any;
+    await app.request('/api/gm/ask', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ question: 'Hola', history: [] }) }, env);
+    expect(calls[0].tools.some((t: { name: string }) => t.name === 'web_search')).toBe(false);
+    mode.script = null;
+  });
+});

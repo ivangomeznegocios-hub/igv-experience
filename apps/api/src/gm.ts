@@ -70,14 +70,41 @@ Registré:
 No entendí:
 • (lo que no pudiste registrar; omite esta sección si todo quedó)`;
 
+/**
+ * Modo entrenador (pantalla Entrenamiento → "Tu coach"): un entrenador personal y de nutrición basado en evidencia,
+ * con el plan del entrenador de la app a la vista y búsqueda web para revisar la evidencia cuando hace falta.
+ * Va como segundo bloque de sistema para no romper la caché del primero.
+ */
+export const ENTRENADOR_SYSTEM = `MODO ENTRENADOR PERSONAL. Ahora eres el entrenador personal y de nutrición de Iván dentro de la app. Lo acompañas para que, poco a poco, gane condición, fuerza y un cuerpo sano, sin lesionarse.
+
+Cómo trabajas:
+- Antes de recomendar qué entrenar o comer, revisa ver_plan_entrenador (fase, sesión de hoy con pesos objetivo, molestias, sueño, metas) y, si hablan de comida, ver_nutricion. El plan de la app ya aplica la evidencia: respétalo y explícalo; si propones cambiarlo, hazlo con ajustar_entrenador.
+- Si te cuenta lo que entrenó ("hoy hice 3 series de 10 sentadillas con 20 kg…"), regístralo con registrar_entrenamiento (ejercicios y series tal cual; no inventes pesos). Si te dice lo que comió, usa registrar_comida (estima proteína y calorías de forma conservadora). Pasos, agua, cómo se siente hoy y el check-in semanal también tienen herramienta.
+- Si nunca ha armado su plan, hazle 4 preguntas cortas (objetivo, días que puede, minutos por sesión, si algo le duele o tiene alguna lesión) y guárdalo con ajustar_entrenador.
+- "¿Cómo estuvo tu semana?": pregunta qué tan pesado se sintió el plan (1–5), energía, ánimo y molestias; regístralo con registrar_checkin_semanal y dile qué cambia la próxima semana.
+- Si no tiene peso, estatura o fecha de nacimiento, pídelos (peso con registrar_cuerpo; estatura y fecha se ponen en Ajustes).
+
+Principios (basados en evidencia):
+- Progresión gradual: Iván viene de ser sedentario. Nada de "sin dolor no hay ganancia". Cerca del fallo pero no al fallo (2–4 repeticiones en reserva al inicio), técnica primero, sobrecarga progresiva (doble progresión), 10+ series por músculo a la semana a mediano plazo, cada músculo 2 veces por semana, 48–72 h de recuperación.
+- Cardio 150–300 min a la semana (OMS), pasos 7,000–10,000 al día, sueño 7–9 h, proteína 1.6–2.2 g/kg, verdura y fruta diario, agua, limitar ultraprocesados y bebidas azucaradas. Comida mexicana real, sin dietas extremas ni suplementos milagro (creatina monohidratada 3–5 g y proteína en polvo son opciones con buena evidencia si las pide).
+- Seguridad: no eres médico. Con dolor de pecho, falta de aire anormal, mareo, desmayo, dolor articular punzante o que dura más de 1–2 semanas, dile que pare y vea a un médico o fisioterapeuta. No diagnostiques.
+
+Investigar:
+- Tienes búsqueda web. Úsala cuando te pregunte por evidencia, técnica, un ejercicio, un suplemento o algo que no sepas con certeza, o para revisar si una recomendación sigue vigente. Prefiere fuentes serias (revisiones y metaanálisis en PubMed, ACSM, NSCA, OMS, Examine) y menciona la fuente en una línea. No busques para cosas que ya sabes bien.
+
+Cómo hablas:
+- Como un buen entrenador que lo conoce: cercano, directo, motivador sin exagerar, en español de México, de tú. Cero lenguaje de fantasía.
+- Corto y accionable: lo que hay que hacer hoy, con números (series × repeticiones, peso, descanso, minutos, gramos). Máximo ~200 palabras salvo que pida más detalle.
+- Cuando le des la sesión, usa una lista: "• Ejercicio: 3×8–12 @ 20 kg · descanso 90 s" y al final una frase de ánimo.`;
+
 const askSchema = z.object({
   question: z.string().min(1).max(4000),
   /** Datos extra que manda una pantalla (p. ej. el reporte de una semana). El estado general se lee en el servidor. */
   context: z.string().max(30000).optional(),
   /** Solo consultar (p. ej. para escribir un resumen): no se le dan herramientas que escriben. */
   readOnly: z.boolean().optional(),
-  /** `dictado`: registrar lo dictado sin conversar (ver DICTADO_SYSTEM). */
-  mode: z.enum(['chat', 'dictado']).optional(),
+  /** `dictado`: registrar lo dictado sin conversar (ver DICTADO_SYSTEM). `entrenador`: tu entrenador personal (ENTRENADOR_SYSTEM). */
+  mode: z.enum(['chat', 'dictado', 'entrenador']).optional(),
   history: z
     .array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().max(8000) }))
     .max(20)
@@ -107,6 +134,8 @@ function writeQueryCost(input: unknown): number {
   if (input && typeof input === 'object') for (const v of Object.values(input)) if (Array.isArray(v)) n += v.length;
   return n;
 }
+/** Búsquedas web por mensaje del entrenador. */
+const WEB_SEARCH_MAX_USES = 3;
 const WRITE_TOOLS = new Set(ASSISTANT_TOOLS.filter((t) => t.writes).map((t) => t.name));
 
 gmRoute.post('/ask', async (c) => {
@@ -115,6 +144,7 @@ gmRoute.post('/ask', async (c) => {
   if (!parsed.success) return c.json({ error: 'Solicitud inválida' }, 400);
   const { question, history, context, readOnly, mode } = parsed.data;
   const dictado = mode === 'dictado';
+  const entrenador = mode === 'entrenador';
   if (dictado && readOnly) return c.json({ error: 'El modo dictado necesita poder registrar.' }, 400);
 
   const queries: QueryCounter = { count: 0 };
@@ -131,11 +161,13 @@ gmRoute.post('/ask', async (c) => {
     readOnly && context
       ? `Estos son los datos de la pantalla donde estoy:\n\n${context}\n\n(Solo consulta: no registres ni cambies nada.)`
       : `Este es mi estado actual en la app:\n\n${renderOverview(await store.snapshot(), store.now().toISOString())}${context ? `\n\nDatos de la pantalla donde estoy:\n${context}` : ''}${allowWrites ? '' : '\n\n(En esta conversación solo puedes consultar; no registres ni cambies nada.)'}`;
-  const tools: Anthropic.Beta.BetaTool[] = ASSISTANT_TOOLS.filter((t) => allowWrites || !t.writes).map((t) => ({
+  const tools: Anthropic.Beta.BetaToolUnion[] = ASSISTANT_TOOLS.filter((t) => allowWrites || !t.writes).map((t) => ({
     name: t.name,
     description: t.description,
     input_schema: toolInputSchema(t) as Anthropic.Beta.BetaTool['input_schema'],
   }));
+  // El entrenador puede investigar en la web (herramienta del servidor de Anthropic: no gasta consultas a D1).
+  if (entrenador) tools.push({ type: 'web_search_20260209', name: 'web_search', max_uses: WEB_SEARCH_MAX_USES, user_location: { type: 'approximate', country: 'MX', timezone: 'America/Mexico_City' } });
 
   const client = new Anthropic({ apiKey: c.env.ANTHROPIC_API_KEY });
   const messages: Anthropic.Beta.BetaMessageParam[] = [
@@ -184,7 +216,11 @@ gmRoute.post('/ask', async (c) => {
       const response = await client.beta.messages.create({
         model: c.env.ANTHROPIC_MODEL || DEFAULT_MODEL,
         max_tokens: 16000,
-        system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }, ...(dictado ? [{ type: 'text' as const, text: DICTADO_SYSTEM }] : [])],
+        system: [
+          { type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } },
+          ...(dictado ? [{ type: 'text' as const, text: DICTADO_SYSTEM }] : []),
+          ...(entrenador ? [{ type: 'text' as const, text: ENTRENADOR_SYSTEM }] : []),
+        ],
         tools,
         output_config: { effort: 'medium' },
         // Si un filtro de seguridad rechaza la solicitud, la API reintenta con un modelo de respaldo.
@@ -201,6 +237,11 @@ gmRoute.post('/ask', async (c) => {
         .map((b) => b.text)
         .join('\n')
         .trim();
+      // La búsqueda web (herramienta del servidor) pudo pausar el turno: se reenvía tal cual y el servidor sigue solo.
+      if (response.stop_reason === 'pause_turn' && round < MAX_TOOL_ROUNDS) {
+        messages.push({ role: 'assistant', content: response.content as Anthropic.Beta.BetaContentBlockParam[] });
+        continue;
+      }
       const uses = response.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use');
       if (response.stop_reason !== 'tool_use' || !uses.length || round === MAX_TOOL_ROUNDS) break;
 

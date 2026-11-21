@@ -188,6 +188,85 @@ export const GAME_CONFIG = {
     record: { size: 'chica', attribute: 'fuerza', maxPerDay: 3 },
   },
 
+  // [[coach]]
+  /**
+   * Entrenador personal (engine/coach.ts): plan progresivo, sesión del día, cardio, pasos, sueño y nutrición. Solo
+   * planea y aconseja: nunca da ni quita XP (la XP sigue saliendo de la misión de entrenar y de los récords).
+   * Evidencia: ACSM (progresión para principiantes: 2–3 días de cuerpo completo, 8–15 reps, cerca pero no al fallo),
+   * Schoenfeld 2017 (10+ series por músculo a la semana), OMS 2020 (150–300 min de actividad moderada), Paluch 2022
+   * (beneficio de los pasos hasta ~8,000–10,000 al día), Morton 2018 (proteína 1.6 g/kg, hasta 2.2), Mifflin-St Jeor
+   * (gasto en reposo), Watson 2015 (7+ h de sueño).
+   */
+  coach: {
+    /**
+     * Fases por "semanas entrenadas" (semanas con al menos `advanceMinSessions` sesiones; las semanas sin entrenar
+     * no avanzan y, después de `detrainAfterWeeks` vacías, cada una regresa una semana). `from` = semana entrenada
+     * (0 = la primera) en que empieza la fase. `rir` = repeticiones que te dejas en reserva.
+     */
+    phases: {
+      adaptacion: { from: 0, name: 'Adaptación', sets: 2, accessorySets: 2, compoundReps: [10, 12], reps: [12, 15], rir: [3, 4], restSec: 75, accessoryRestSec: 60, maxStrengthDays: 3, cardioMinutes: 90, maxExercises: 5 },
+      base: { from: 2, name: 'Base', sets: 3, accessorySets: 2, compoundReps: [8, 12], reps: [10, 15], rir: [2, 3], restSec: 105, accessoryRestSec: 75, maxStrengthDays: 4, cardioMinutes: 150, maxExercises: 6 },
+      progreso: { from: 6, name: 'Progreso', sets: 3, accessorySets: 3, compoundReps: [6, 10], reps: [10, 15], rir: [1, 2], restSec: 150, accessoryRestSec: 75, maxStrengthDays: 5, cardioMinutes: 150, maxExercises: 7 },
+      descarga: { from: -1, name: 'Descarga', sets: 2, accessorySets: 1, compoundReps: [8, 10], reps: [10, 12], rir: [4, 5], restSec: 90, accessoryRestSec: 60, maxStrengthDays: 3, cardioMinutes: 120, maxExercises: 5 },
+    },
+    /** De dónde arranca cada nivel (semanas entrenadas que ya "trae"). */
+    levelStartWeeks: { sedentario: 0, principiante: 2, intermedio: 6, avanzado: 6 },
+    /** Una semana cuenta como entrenada con estas sesiones. */
+    advanceMinSessions: 2,
+    /** Semanas vacías seguidas que se toleran; desde ahí cada semana sin entrenar resta una semana entrenada. */
+    detrainAfterWeeks: 1,
+    /** En la fase de progreso, una semana de descarga cada tantas semanas entrenadas. */
+    deloadEvery: 6,
+    /** Días de fuerza por defecto según el nivel (0 = lunes). */
+    defaultDays: { sedentario: [0, 2, 4], principiante: [0, 2, 4], intermedio: [0, 1, 3, 4], avanzado: [0, 1, 3, 4] },
+    defaultSessionMinutes: 45,
+    /** Segundos que dura una serie (sin el descanso) y minutos de calentamiento + estiramiento: para ajustar la sesión a tu tiempo. */
+    setSeconds: 45,
+    warmupMinutes: 8,
+    /** Ajustes por objetivo: cardio extra a la semana y pasos extra al día. */
+    goalCardioBonus: { salud: 0, perder_grasa: 60, ganar_musculo: 0, fuerza: 0, condicion: 90 },
+    goalStepsBonus: { salud: 0, perder_grasa: 1000, ganar_musculo: 0, fuerza: 0, condicion: 1000 },
+    /** Fuerza: en la fase de progreso, los multiarticulares van más pesados y con más descanso. */
+    strengthCompoundReps: [4, 6],
+    strengthRestSec: 180,
+    /** Sobrecarga progresiva (doble progresión): cuánto subir cuando llegas al tope del rango en todas las series. */
+    increments: { torso: 2.5, pierna: 5, mancuerna: 2, aislado: 1, aisladoMaquina: 2.5 },
+    /** Segundos por serie de los isométricos (plancha) según la fase. */
+    holdSeconds: { adaptacion: [20, 30], base: [30, 45], progreso: [40, 60], descarga: [20, 30] },
+    /** Si no has hecho un ejercicio en estos días, el plan baja el peso un poco. */
+    staleDays: 21,
+    stalePct: 0.9,
+    /** Pasos al día: tu promedio + `stepsStep`, entre `stepsMin` y `stepsMax`; sin datos, `stepsDefault`. */
+    steps: { min: 5000, max: 10000, step: 1000, default: 7000, averageDays: 7 },
+    /** Sueño: meta y lo que se considera dormir mal (afecta la sesión del día). */
+    sleep: { target: 7, low: 6, veryLow: 5 },
+    /** ¿Cómo te sientes? (1–5): con esto o menos, la sesión se aligera; con `restEnergy` o menos, mejor caminar. */
+    readiness: { lightEnergy: 2, restEnergy: 1 },
+    /** Medidas: cada cuántos días toca pesarte y medirte la cintura. */
+    measureEveryDays: 7,
+    /** Ritmo sano de cambio de peso por semana (% del peso). */
+    weightRatePct: { perder: [0.5, 1], ganar: [0.25, 0.5] },
+    nutrition: {
+      /** Proteína (g por kg): base, al bajar grasa y al ganar músculo. Con sobrepeso (IMC ≥ 25) se usa tu peso meta o el de IMC 25. */
+      proteinPerKg: { base: 1.6, perder_grasa: 2.0, ganar_musculo: 1.8, fuerza: 1.8 },
+      /** Factor de actividad por días de entrenamiento a la semana (0–1, 2–3, 4–5, 6+). */
+      activity: [1.2, 1.375, 1.55, 1.725],
+      /** Ajuste de calorías: bajar grasa −20% (máximo −500), ganar músculo +10% (máximo +300). */
+      deficitPct: 0.2,
+      maxDeficit: 500,
+      surplusPct: 0.1,
+      maxSurplus: 300,
+      /** Agua para beber: ml por kg de peso (la comida aporta el resto); un vaso son `glassMl`. */
+      waterMlPerKg: 30,
+      glassMl: 250,
+      fiberG: 30,
+      /** Un día de comida bien llevado: proteína en N comidas, verdura en N, fruta 1 vez, sin lo que conviene limitar. */
+      proteinMeals: 3,
+      veggieMeals: 2,
+      fruitMeals: 1,
+    },
+  },
+
   // [[gente]]
   /**
    * Mi gente: niveles de cercanía (1–5), temperatura y frecuencia esperada. Ver docs/sistemas/gente.md.

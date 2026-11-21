@@ -46,6 +46,8 @@ export const DAY_CHECK_UI: Record<string, DayCheckUi> = {
   // Sistemas integrados después: su entrada aquí (ver docs/sistemas/habitos.md).
   entreno: { icon: 'bolt', action: { label: 'Anotar entreno', run: ({ date }) => openWorkout({ date }) } },
   tiempo: { icon: 'clock', action: { label: 'Registrar tiempo', run: ({ date }) => openQuickAdd({ mode: 'time', date }) } },
+  // [[coach]]
+  comida: { icon: 'apple', action: { label: 'Anotar comida', run: ({ date }) => openQuickAdd({ mode: 'meal', date }) } },
 };
 
 // ---------------------------------------------------------------------------------------------

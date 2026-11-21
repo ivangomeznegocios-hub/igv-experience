@@ -46,6 +46,7 @@ import { WeekPaceCard } from '../ui/WeekPace';
 import { WeekShareCard } from '../ui/WeekShare';
 import { DayReviewRow } from '../ui/DayReview';
 import { HabitsHighlight } from '../ui/HabitBits';
+import { CoachCard } from '../ui/coach/CoachCard';
 
 type MesaTab = 'hoy' | 'ciudad' | 'semana' | 'todo';
 
@@ -145,6 +146,7 @@ export default function Hoy() {
           <div className="mesa-col left">
             <DayCard />
             <NextPlayCard />
+            <CoachCard compact />
             {dayExtras}
           </div>
           <div className="mesa-col">
@@ -161,6 +163,7 @@ export default function Hoy() {
         <>
           <DayCard />
           <NextPlayCard />
+          <CoachCard compact />
           <TodayTiles />
           <div className="mesa-tabs">
             <Tabs

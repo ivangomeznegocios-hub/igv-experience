@@ -29,6 +29,7 @@ import { reduceNotes, type NotesState } from './modules/notes';
 
 // [[entreno]]
 import { reduceTraining, type TrainingState } from './modules/training';
+import { reduceCoach, type CoachLogs } from './modules/coach';
 
 // [[gente]]
 
@@ -104,6 +105,9 @@ export interface GameState {
   // [[entreno]]
   /** Entrenamiento: registros, récords y agregados por músculo (el análisis con la hora está en engine/training.ts). */
   training: TrainingState;
+  // [[coach]]
+  /** Entrenador personal: comidas, agua, pasos, cómo te sientes y check-ins (solo registro; el plan está en engine/coach.ts). */
+  coach: CoachLogs;
 
   // [[gente]]
 
@@ -209,6 +213,8 @@ export function project(input: ProjectInput): GameState {
 
   // [[entreno]]
   const training = reduceTraining(ctx);
+  // [[coach]]
+  const coach = reduceCoach(ctx);
 
   // [[gente]]
 
@@ -277,6 +283,8 @@ export function project(input: ProjectInput): GameState {
 
     // [[entreno]]
     training,
+    // [[coach]]
+    coach,
 
     // [[gente]]
 

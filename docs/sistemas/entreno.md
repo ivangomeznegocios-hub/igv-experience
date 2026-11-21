@@ -1,5 +1,8 @@
 # Entrenamiento (`entreno`)
 
+> Tu **entrenador personal** (plan progresivo, sesión del día con peso objetivo, nutrición, check-in semanal) está en
+> `coach.md`; vive en la pestaña **Coach** de esta misma pantalla.
+
 Registro de entrenamientos estilo app de fitness, con análisis basado en evidencia: qué hiciste, dónde, qué
 músculos trabajaste, cuáles te faltan esta semana, cuándo está recuperado cada uno y cuál es la siguiente sesión.
 Pantalla `/entreno` (Entrenamiento). Los músculos se pintan sobre **tu cuerpo 3D** (el mismo personaje de Perfil, con
