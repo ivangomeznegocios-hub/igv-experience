@@ -89,3 +89,82 @@
 .salud-card-grid dd.alert { color: var(--red); }
 .salud-card-grid a { color: var(--gold); text-decoration: none; font-weight: 650; }
 .salud-plain { display: block; background: none; border: 0; padding: 0; margin: 0; color: inherit; font: inherit; font-weight: 650; text-align: left; cursor: pointer; }
+
+/* ---------- Pestañas ---------- */
+.salud-tabs .tabs { margin-bottom: 12px; }
+.salud-tabs .tabs button { flex: 0 0 auto; }
+
+/* ---------- Recomendaciones (siempre visibles, con su estado) ---------- */
+.salud-row.is-on .salud-name { color: var(--text); }
+.salud-state { flex: none; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: var(--green); white-space: nowrap; }
+.salud-state.atrasado { color: var(--red); }
+.salud-state.pronto { color: var(--flame); }
+.salud-state.sin_registro { color: var(--muted); }
+.salud-later { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 8px; }
+.salud-later summary { cursor: pointer; padding: 4px 0; }
+
+/* ---------- Tu médico ---------- */
+.salud-doctor-teaser { display: flex; align-items: center; gap: 12px; width: 100%; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+.salud-doctor-teaser.unseen { border-color: color-mix(in srgb, var(--gold) 55%, var(--line)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 25%, transparent), var(--bevel); }
+.salud-doctor-teaser.unseen .eyebrow { color: var(--gold); }
+.salud-doctor-teaser.importante .salud-doctor-ico { color: var(--red); border-color: color-mix(in srgb, var(--red) 45%, var(--line)); }
+.salud-doctor-ico { width: 42px; height: 42px; flex: none; border-radius: 12px; display: grid; place-items: center; background: color-mix(in srgb, var(--teal) 12%, var(--card-2)); border: 1px solid color-mix(in srgb, var(--teal) 35%, var(--line)); color: var(--teal); }
+.salud-doctor-ico svg { width: 22px; height: 22px; }
+.salud-doctor-ico.big { width: 48px; height: 48px; border-radius: 14px; }
+.salud-doctor-ico.big svg { width: 26px; height: 26px; }
+.salud-doctor-head h2 { font-size: 18px; }
+
+.salud-consult { border-left: 3px solid var(--teal); }
+.salud-consult.atencion { border-left-color: var(--flame); }
+.salud-consult.importante { border-left-color: var(--red); }
+.salud-consult.bien { border-left-color: var(--green); }
+.salud-consult-status { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--teal); }
+.salud-consult-status::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.salud-consult-status.bien { color: var(--green); }
+.salud-consult-status.atencion { color: var(--flame); }
+.salud-consult-status.importante { color: var(--red); }
+.salud-consult-title { margin: 8px 0 6px; font-size: 19px; line-height: 1.25; letter-spacing: -0.01em; }
+.salud-consult-msg p { margin: 0 0 8px; line-height: 1.55; font-size: 14px; }
+.salud-consult-msg p:last-child { margin-bottom: 0; }
+.salud-highlights { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 6px; }
+.salud-highlights li { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; padding: 7px 10px; border-radius: 10px; background: var(--card-2); border: 1px solid var(--line); }
+.salud-highlights li svg { flex: none; margin-top: 2px; }
+.salud-highlights li.bien svg { color: var(--green); }
+.salud-highlights li.atencion svg { color: var(--flame); }
+.salud-highlights li.pendiente svg { color: var(--muted); }
+.salud-action { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--line); }
+.salud-action .check { flex: none; width: 30px; height: 30px; }
+.salud-action .check svg { width: 16px; height: 16px; }
+.salud-action.done .salud-name, .salud-action.dismissed .salud-name { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--faint); font-weight: 550; }
+.salud-missing { margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: var(--card-2); border: 1px dashed var(--line); }
+.salud-missing ul { margin: 6px 0 0; padding-left: 18px; font-size: 13px; }
+.salud-missing li { margin: 3px 0; }
+.salud-past { padding: 10px 0; border-top: 1px solid var(--line); }
+.salud-past:first-of-type { border-top: 0; }
+.salud-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--teal); vertical-align: 1px; }
+.salud-dot.bien { background: var(--green); }
+.salud-dot.atencion { background: var(--flame); }
+.salud-dot.importante { background: var(--red); }
+
+/* ---------- Expediente (datos que faltan) ---------- */
+.salud-gap { display: flex; gap: 10px; align-items: flex-start; padding: 9px 0; border-top: 1px solid var(--line); color: inherit; text-decoration: none; }
+.salud-gap:first-of-type { border-top: 0; }
+.salud-gap-check { flex: none; width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--faint); display: grid; place-items: center; margin-top: 1px; }
+.salud-gap.done .salud-gap-check { background: var(--green); border-color: var(--green); color: #04130d; }
+.salud-gap.done .small { color: var(--muted); }
+
+/* ---------- Estudios y archivos ---------- */
+.salud-files { display: grid; gap: 6px; margin-bottom: 12px; }
+.salud-file { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; background: var(--card-2); border: 1px solid var(--line); width: 100%; color: inherit; }
+.salud-file > svg { width: 22px; height: 22px; flex: none; color: var(--muted); }
+.salud-file img { width: 40px; height: 40px; object-fit: cover; border-radius: 8px; flex: none; }
+.salud-values { display: grid; gap: 2px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.salud-value { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--card-2); }
+.salud-value + .salud-value { border-top: 1px solid var(--line); }
+.salud-value.flag { background: color-mix(in srgb, var(--red) 7%, var(--card-2)); }
+.salud-value input { flex: none; }
+.salud-value .grow { min-width: 0; }
+.salud-reading-head { margin-bottom: 8px; }
+.salud-pdf { width: 100%; height: 70vh; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+.salud-img { display: block; max-width: 100%; margin: 0 auto; border-radius: 12px; border: 1px solid var(--line); }
+.salud-row.salud-plain, .salud-file.salud-plain, .salud-plain.row { display: flex; }

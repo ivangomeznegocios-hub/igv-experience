@@ -20,6 +20,7 @@ código los nombres internos se conservan (módulos, tipos de evento, ids, rutas
 | `bosses/recurring` | Reto recurrente |
 | `npcs/npc`, `npcs/guild`, `/npcs` | Mi gente: Personas (con `circle` = círculo: familia, pareja, amigos…) y **Grupos** (`npcs/guild`); "persona clave"; niveles de cercanía |
 | `map` (`inexplorado`/`descubierto`/`dominado`) | Mapa: por conocer / conocido / habitual; "primera visita" |
+| `PlaceData.goal`, `state.map.goals` | Objetivo del mapa ("a dónde quieres ir", con quién y para cuándo; "Objetivo cumplido") |
 | `habits/vice`, `/enemigos` | Hábitos a dejar ("recaída") |
 | `/personaje` | Perfil ("Tu fuerte" = atributo más alto) |
 | `character/`, `settings.character`, `CharacterCard` | Tu personaje (3D): Evolución · Medidas · Apariencia · Ropa (`copete` = Copete; `sombra` = barba de 1–2 días) |
@@ -36,6 +37,8 @@ código los nombres internos se conservan (módulos, tipos de evento, ids, rutas
 | `engine/coach.ts`, `training-settings.coach`, `ui/coach/*` | Tu coach / entrenador personal (plan, sesión de hoy, "¿Cómo estuvo tu semana?") |
 | `meal.logged`, `water.logged`, `/nutricion` | Nutrición (comidas por hábitos, agua, proteína) |
 | `health/*`, `/salud` | Salud (chequeos "ya te toca", mediciones, ficha médica) |
+| `health/consult`, `health/doctor`, `/api/medico`, `lib/medico.ts` | Tu médico IA (revisión, "Tu médico te quiere decir algo", "Lo que debe saber de ti") |
+| `health/record`, `health_files` | Estudios (análisis, consultas, recetas; archivos PDF/fotos) |
 | `learning/*`, `/aprendizaje` | Aprendizaje (temas como Inglés, frases, tarjetas, tests con IA) |
 | `time.logged`, `/tiempo` | Tu tiempo ("¿a qué te dedicas?", cronómetro) |
 | `habits` (estado), `/habitos`, `/dia` | Hábitos (de la rutina) y "¿Cómo fue tu día?" |
@@ -65,7 +68,8 @@ packages/core   Reglas del juego en TypeScript puro (sin red ni DOM). Probadas c
   src/seed/            Datos iniciales (IDs fijos) y guía de atributos (30/70).
 packages/db     Esquema Drizzle (events, entities, server_meta) y migraciones SQL de D1.
 apps/api        Worker de Cloudflare con Hono: /api/* (sync, eventos, catálogo, respaldo, Coach IA en /api/gm, push,
-                Conectar IA en /api/ai y /api/oauth). Notificaciones push APAGADAS (sin cron); ver "Notificaciones push".
+                Conectar IA en /api/ai y /api/oauth, médico IA y archivos de Salud en /api/medico). Notificaciones push
+                APAGADAS (sin cron); ver "Notificaciones push".
                 El mismo Worker sirve el frontend (Workers Static Assets, SPA).
                 Segundo Worker `igv-experience-mcp` (wrangler.mcp.jsonc, src/mcp-worker.ts): servidor MCP público
                 con OAuth; misma base D1. Ver "Conectar IA (MCP)".
@@ -222,7 +226,9 @@ Para usar la app desde Claude (web, escritorio, móvil, Claude Code), ChatGPT, C
 - Habilidades: rangos Aprendiz → Experto → Maestro, en orden y solo con evidencia escrita.
 - NPC clave sin contacto ≥ 30 días → misión generada "Escribirle a X" (chica, Relaciones). Completarla
   cuenta como interacción.
-- Mapa: inexplorado → descubierto → dominado. El primer descubrimiento de cada lugar da XP (una vez).
+- Mapa: inexplorado → descubierto → dominado. El primer descubrimiento de cada lugar da XP (una vez). Objetivos
+  (`PlaceData.goal { with?, by?, since }`): se cumplen con la primera visita desde `since` (con esa compañía si la piden);
+  solo visuales, sin XP extra.
 - Temporadas de 13 semanas. Diario semanal de 3 líneas (`journal.weekly`, la última versión de la semana
   gana). Revisión de inicio/fin (`season.review`); la de fin desbloquea "Temporada completa".
 - Mi vida en semanas, dos vistas: **por año calendario** (por defecto; filas = años enero–diciembre, columnas =
@@ -294,7 +300,12 @@ Ninguno rompe las reglas de oro: cada uno tiene una prueba de propiedades "agreg
   `place.visited { placeId, company, npcIds?, note?, rating? }`: 1 visita = conocido, 5 = habitual (o a mano con el evento
   viejo). Primera visita: 30 XP una vez (Creatividad; capa empresa → Finanzas). 35 lugares de Guadalajara/Jalisco y 6
   colecciones (`engine/map-catalog.ts`); completar una da la XP de una misión de su tamaño, una vez. Mapa propio con
-  teselas de OpenStreetMap (sin librería). Reductor en `engine/modules/map.ts`.
+  teselas de OpenStreetMap (sin librería). Reductor en `engine/modules/map.ts`. **Las sugerencias de Jalisco están
+  APAGADAS** salvo que él las prenda (`settings.map.suggestions`; a Iván no le sirven): sin ellas no salen ni los puntos,
+  ni las colecciones, ni los resultados "emblemáticos" al buscar. **Objetivos** (`PlaceData.goal`, `mapGoals` → `state.map.goals`):
+  lugares a donde quiere ir, en naranja con bandera. Lugares en cualquier parte del mundo: búsqueda por nombre y nombre
+  del punto marcado con Nominatim de OSM (`apps/web/src/lib/geocode.ts`: solo al tocar "Buscar", máx. 1/s, con caché) y
+  mantener presionado el mapa (o el botón de la mira) para marcar un punto.
 - **Habilidades, tiempo y biblioteca** (`habilidades`, `/habilidades`, `/tiempo`, `/biblioteca`): `SkillData.category`,
   `livelihood` ("De esto vivo"); `time.logged { minutes, area, skillId?, note?, start? }` con áreas fijas (trabajo
   incluye la oficina); cronómetro en `localStorage` que sobrevive cerrar la app y se parte a medianoche. **El tiempo
@@ -308,7 +319,17 @@ Ninguno rompe las reglas de oro: cada uno tiene una prueba de propiedades "agreg
   `health.checkup_done` (guarda nombre y tamaño del momento) y `health.metric` (presión exige 2 valores). Estado: al día /
   pronto (≤30 días) / atrasado / sin registro, `state.health.due`. XP (`health`): la de una misión de su tamaño (media)
   a Fuerza física, máx. una por chequeo por día. 9 recomendaciones para hombre adulto (por edad si hay `birthDate`),
-  siempre con "Orientación general; no sustituye a tu médico".
+  siempre visibles con su estado (activar una no esconde las demás), con "Orientación general; no sustituye a tu médico".
+- **Tu médico IA y Estudios** (fase 12, detalle en `docs/sistemas/salud.md`): pestañas en `/salud?tab=` (resumen,
+  medico, estudios, chequeos, mediciones). `health/record` = estudio con archivos (PDF/fotos en D1: tablas
+  `health_files` + `health_file_chunks`, base64 en trozos, NUNCA se sincronizan ni van al respaldo), costo (opcional como
+  `expense.recorded` "Salud") y lo que leyó la IA (`/api/medico/read`); sus valores van a `health.metric` con `recordId`
+  (nuevos tipos de laboratorio: triglicéridos, HDL, LDL, HbA1c, ácido úrico, creatinina, TSH, vitamina D, hemoglobina,
+  saturación; `refLow`/`refHigh` del estudio). El expediente (`buildHealthDossier`, puro) junta salud, cuerpo, sueño,
+  entrenamiento y hábitos; `/api/medico/consult` regresa la revisión (`health/consult`: mensaje, acciones, datos que
+  faltan) y `/api/medico/ask` responde preguntas. La primera revisión es a mano; luego `DoctorAutoReview` la pide sola
+  según `health/doctor.cadence` (semanal por defecto). Aviso "Tu médico te quiere decir algo" arriba de Hoy
+  (`ui/DoctorCard.tsx`). Sin XP (salvo el chequeo que marques hecho). Nunca diagnostica ni receta.
 - **Hábitos y tu día** (`habitos`, `/habitos`, `/dia?fecha=`): cada diaria de la rutina se mide solo en los días que le
   tocaban, desde que existe, sin contar descansos ni hoy; veredicto ≥80 % / 40–80 % / <40 % (`config.habits`). "Hazlo
   hábito": lo que registras ≥3 días de 14 fuera de la rutina. "¿Cómo fue tu día?" (`engine/day-review.ts`): revisiones
@@ -319,7 +340,7 @@ Ninguno rompe las reglas de oro: cada uno tiene una prueba de propiedades "agreg
   pide el nombre de cada fuente nueva); el historial describe eventos nuevos con `describeEvent` de core; deshacer de la
   IA no borra lo que la IA creó si Iván ya registró algo ahí (`UNDO_GUARDS` en `apps/api/src/ai/store.ts`).
 
-## Entrenador personal y nutrición (fase 12)
+## Entrenador personal y nutrición (fase 13)
 
 Detalle completo en `docs/sistemas/coach.md`. Tu coach (carita SVG con 5 ánimos, `ui/coach/CoachFace.tsx`) vive en
 Hoy (`CoachCard compact`) y en Entrenamiento → pestaña **Coach** (primera). Todo sale de `coachPlan(state, nowIso)`

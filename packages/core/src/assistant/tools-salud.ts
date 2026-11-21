@@ -4,11 +4,20 @@ import {
   BLOOD_TYPES,
   CHECKUP_CATEGORIES,
   CHECKUP_CATEGORY_NAMES,
+  DOCTOR_CADENCES,
+  HEALTH_DOCTOR_ID,
   HEALTH_METRIC_KINDS,
   HEALTH_PROFILE_ID,
+  HEALTH_RECORD_TYPES,
+  HEALTH_RECORD_TYPE_NAMES,
   type CheckupData,
   type Entity,
+  type HealthConsultData,
+  type HealthDoctorData,
+  type HealthMetricKind,
   type HealthProfileData,
+  type HealthRecordData,
+  type HealthRecordValue,
   type MissionSize,
 } from '../types';
 import {
@@ -16,10 +25,16 @@ import {
   HEALTH_DISCLAIMER,
   HEALTH_METRIC_INFO,
   HEALTH_SUGGESTIONS,
+  DOCTOR_CADENCE_NAMES,
   addMonthsClamped,
   checkupEveryText,
+  classifyAgainstRange,
   classifyHealthMetric,
   fmtHealthMetric,
+  fmtRange,
+  metricKindFromName,
+  recordValueToMetric,
+  resolveMetricKind,
   healthSuggestionsFor,
   suggestionCheckupId,
   type HealthSuggestion,
@@ -98,7 +113,7 @@ async function resolveCheckup(
 // ---------------------------------------------------------------------------------------------
 
 export const SALUD_GUIDE =
-  'Salud: chequeos preventivos (limpieza dental, laboratorios, presión, vista, piel, vacunas…) con su frecuencia; la app calcula cuándo vuelve a tocar (al día / te toca pronto / atrasado / sin registro). Hacer uno da la XP de una misión de su tamaño (normalmente media, 30 XP) a Fuerza física, una vez por chequeo por día. Mediciones (presión, glucosa, colesterol, pulso en reposo) y ficha médica: solo registro, sin XP. Las recomendaciones son orientación general, no sustituyen al médico; nunca diagnostiques. Herramientas: ver_salud, registrar_chequeo, guardar_chequeo, registrar_medicion, guardar_ficha_medica.';
+  'Salud: chequeos preventivos (limpieza dental, laboratorios, presión, vista, piel, vacunas…) con su frecuencia; la app calcula cuándo vuelve a tocar (al día / te toca pronto / atrasado / sin registro). Hacer uno da la XP de una misión de su tamaño (normalmente media, 30 XP) a Fuerza física, una vez por chequeo por día. Mediciones (presión, glucosa, colesterol, pulso, y de laboratorio: triglicéridos, HDL, LDL, HbA1c, ácido úrico, creatinina, TSH, vitamina D, hemoglobina, saturación), estudios con sus archivos y costo, y ficha médica: solo registro, sin XP. Tiene un "médico IA" en la app que lo revisa cada semana o mes con todo su expediente; lo que él te cuente de antecedentes familiares, metas o estilo de vida se guarda con guardar_antecedentes. Las recomendaciones son orientación general, no sustituyen al médico; nunca diagnostiques. Herramientas: ver_salud, registrar_chequeo, guardar_chequeo, registrar_medicion, registrar_estudio, guardar_ficha_medica, guardar_antecedentes.';
 
 function dueText(c: { status: string; daysLeft: number | null; nextDue: string | null }): string {
   if (c.status === 'atrasado' && c.daysLeft !== null) return `ATRASADO ${-c.daysLeft} ${c.daysLeft === -1 ? 'día' : 'días'} (tocaba ${c.nextDue})`;
@@ -130,13 +145,19 @@ export function renderSaludOverview(s: AssistantSnapshot): string[] {
 // Consultar
 // ---------------------------------------------------------------------------------------------
 
+function recordValueText(v: HealthRecordValue): string {
+  const n = (x: number) => (Number.isInteger(x) ? String(x) : String(Math.round(x * 100) / 100));
+  const val = typeof v.value === 'number' ? `${n(v.value)}${typeof v.value2 === 'number' ? `/${n(v.value2)}` : ''}${v.unit ? ` ${v.unit}` : ''}` : v.text || '—';
+  return `${v.name} ${val}${v.ref ? ` (ref. ${v.ref})` : ''}${v.flag ? ` ${v.flag}` : ''}`;
+}
+
 const verSalud = tool({
   name: 'ver_salud',
   title: 'Ver salud',
   group: 'consultar',
   writes: false,
   description:
-    'Salud: qué chequeos preventivos ya le tocan (atrasados, pronto, sin registro), los que están al día con su siguiente fecha, recomendaciones sin activar según su edad, últimas mediciones (presión, glucosa, colesterol, pulso) con su rango de referencia y la ficha médica (tipo de sangre, alergias, medicamentos, médico). Úsala antes de registrar_chequeo.',
+    'Salud: qué chequeos preventivos ya le tocan (atrasados, pronto, sin registro), los que están al día con su siguiente fecha, recomendaciones sin activar según su edad, últimas mediciones (presión, glucosa, colesterol, pulso y valores de laboratorio) con su rango de referencia, estudios recientes (con lo que leyó la IA y valores fuera de rango), la última revisión de su médico IA con lo pendiente, sus antecedentes y la ficha médica. Úsala antes de registrar_chequeo o registrar_estudio.',
   input: z.object({}),
   async run(_i, store) {
     const [s, catalog] = await Promise.all([store.snapshot(), store.catalog()]);
@@ -165,6 +186,36 @@ const verSalud = tool({
       L.push('', '## Mediciones (última de cada una)');
       for (const m of metrics)
         L.push(`- ${m.label}: ${m.last.text} (${m.last.date})${m.last.levelText ? ` · ${m.last.levelText}` : ''}${m.prev ? ` · antes ${m.prev.text} (${m.prev.date})` : ''} · ${m.count} ${m.count === 1 ? 'registro' : 'registros'}`);
+    }
+    const records = list<HealthRecordData>(catalog, 'health', 'record')
+      .filter((r) => r.data?.title && r.data.date)
+      .sort((a, b) => (a.data.date < b.data.date ? 1 : -1));
+    if (records.length) {
+      L.push('', `## Estudios y consultas (${records.length}, los más recientes)`);
+      for (const r of records.slice(0, 8)) {
+        const d = r.data;
+        const flagged = (d.ai?.values ?? []).filter((v) => v.flag);
+        L.push(
+          `- ${d.date} · ${d.title} (${HEALTH_RECORD_TYPE_NAMES[d.type] ?? d.type})${d.place ? ` · ${d.place}` : ''}${typeof d.cost === 'number' && d.cost > 0 ? ` · costó ${d.cost}` : ''}${d.files?.length ? ` · ${d.files.length} archivo(s)` : ''}${d.ai?.summary ? `\n  ${d.ai.summary.slice(0, 400)}` : ''}${flagged.length ? `\n  Fuera de rango: ${flagged.map(recordValueText).join('; ')}` : ''}`,
+        );
+      }
+    }
+    const consult = list<HealthConsultData>(catalog, 'health', 'consult')
+      .filter((x) => x.data?.date && x.data.title)
+      .sort((a, b) => (a.data.date < b.data.date ? 1 : -1))[0];
+    const doctor = (catalog.find((e) => e.id === HEALTH_DOCTOR_ID)?.data ?? {}) as HealthDoctorData;
+    if (consult || Object.values(doctor).some((v) => typeof v === 'string' && v.trim())) {
+      L.push('', '## Su médico IA (en la app)');
+      if (consult) {
+        L.push(`Última revisión ${consult.data.date}: ${consult.data.title}.`);
+        const pending = (consult.data.actions ?? []).filter((a) => !a.doneAt && !a.dismissedAt);
+        if (pending.length) L.push(`Le pidió: ${pending.map((a) => `${a.text}${a.priority === 'alta' ? ' (prioridad alta)' : ''}`).join('; ')}.`);
+      }
+      if (doctor.goals) L.push(`Lo que quiere lograr: ${doctor.goals}`);
+      if (doctor.familyHistory) L.push(`Antecedentes familiares: ${doctor.familyHistory}`);
+      if (doctor.pastHistory) L.push(`Antecedentes personales: ${doctor.pastHistory}`);
+      if (doctor.lifestyle) L.push(`Estilo de vida: ${doctor.lifestyle}`);
+      if (doctor.cadence) L.push(`Revisión: ${DOCTOR_CADENCE_NAMES[doctor.cadence]}.`);
     }
     const c = h.card;
     L.push('', '## Ficha médica');
@@ -245,7 +296,7 @@ const registrarMedicion = tool({
   group: 'registrar',
   writes: true,
   description:
-    'Registra una medición de salud: presión (valor = sistólica, valor2 = diastólica, mmHg), glucosa en ayunas (mg/dL), colesterol total (mg/dL), frecuencia_reposo (pulso en reposo, lpm) u otro (con "nombre" y "unidad", p. ej. triglicéridos). Responde con el rango de referencia general como contexto (no es diagnóstico). Solo registro: no da XP.',
+    'Registra una medición de salud: presion (valor = sistólica, valor2 = diastólica, mmHg), glucosa en ayunas (mg/dL), colesterol total, trigliceridos, hdl, ldl (mg/dL), hba1c (%), acido_urico (mg/dL), creatinina (mg/dL), tsh (mUI/L), vitamina_d (ng/mL), hemoglobina (g/dL), saturacion (%), frecuencia_reposo (pulso en reposo, lpm) u otro (con "nombre" y "unidad"). Si el valor viene en otra unidad, usa "otro" con su unidad. Responde con el rango de referencia general como contexto (no es diagnóstico). Solo registro: no da XP.',
   input: z.object({
     tipo: z.enum(HEALTH_METRIC_KINDS),
     valor: z.number().positive().max(100000),
@@ -253,28 +304,35 @@ const registrarMedicion = tool({
     unidad: z.string().trim().max(20).optional().describe('Solo "otro" (las demás usan su unidad estándar).'),
     nombre: z.string().trim().min(1).max(80).optional().describe('Solo "otro": qué se midió ("Triglicéridos").'),
     nota: zLong(2000).optional(),
+    ref_min: z.number().min(0).max(100000).optional().describe('Límite inferior del rango de referencia del estudio (si lo trae).'),
+    ref_max: z.number().positive().max(100000).optional().describe('Límite superior del rango de referencia del estudio (si lo trae).'),
     fecha: zFecha,
   }),
   async run(i, store) {
     const date = pastDate(store, i.fecha);
     if (i.tipo === 'presion' && (i.valor2 === undefined || i.valor2 >= i.valor)) throw new ToolError('Para la presión manda valor (sistólica) y valor2 (diastólica, menor), p. ej. 120 y 80.');
     if (i.tipo === 'otro' && !i.nombre) throw new ToolError('Para "otro" manda "nombre" (qué se midió) y de preferencia "unidad".');
+    if (i.ref_min !== undefined && i.ref_max !== undefined && i.ref_min >= i.ref_max) throw new ToolError('El rango de referencia está al revés (ref_min debe ser menor que ref_max).');
+    // "otro" con un nombre conocido en su unidad ("Triglicéridos", mg/dL) se guarda como la medición conocida.
+    const kind = resolveMetricKind(i.tipo, i.nombre, i.unidad);
     const payload = {
-      kind: i.tipo,
+      kind,
       value: i.valor,
-      value2: i.tipo === 'presion' ? i.valor2 : undefined,
-      unit: i.tipo === 'otro' ? i.unidad || undefined : undefined,
-      label: i.tipo === 'otro' ? i.nombre : undefined,
+      value2: kind === 'presion' ? i.valor2 : undefined,
+      unit: kind === 'otro' ? i.unidad || undefined : undefined,
+      label: kind === 'otro' ? i.nombre : undefined,
       note: i.nota || undefined,
+      refLow: i.ref_min,
+      refHigh: i.ref_max,
     };
     const ev = makeEvent(store, 'health.metric', payload, date);
     const ids = await addEvents(store, [ev]);
-    const info = HEALTH_METRIC_INFO[i.tipo];
-    const label = i.tipo === 'otro' ? i.nombre! : info.name;
+    const info = HEALTH_METRIC_INFO[kind];
+    const label = kind === 'otro' ? i.nombre! : info.name;
     const text = fmtHealthMetric(payload);
-    const reading = classifyHealthMetric(i.tipo, i.valor, payload.value2);
+    const reading = kind === 'otro' ? classifyAgainstRange(i.valor, i.ref_min, i.ref_max) : classifyHealthMetric(kind, i.valor, payload.value2);
     return ok(
-      `Registrado: ${label} ${text} (${fmtDay(date)})${reading ? ` · ${reading.text}` : ''}. ${info.reference} ${HEALTH_DISCLAIMER}`,
+      `Registrado: ${label} ${text} (${fmtDay(date)})${reading ? ` · ${reading.text}` : ''}. ${kind === 'otro' ? '' : `${info.reference} `}${HEALTH_DISCLAIMER}`,
       `Registró ${label.toLowerCase()} ${text}`,
       { events: ids },
     );
@@ -411,4 +469,120 @@ const guardarFichaMedica = tool({
   },
 });
 
-export const SALUD_TOOLS = [verSalud, registrarChequeo, registrarMedicion, guardarChequeo, guardarFichaMedica];
+const zValor = z.object({
+  nombre: zText(80).describe('Nombre como viene en el estudio ("Glucosa", "Colesterol HDL").'),
+  valor: z.number().positive().max(100000).optional().describe('Valor numérico (si lo es).'),
+  valor2: z.number().positive().max(100000).optional().describe('Solo presión: la diastólica.'),
+  texto: zLong(200).optional().describe('Resultado que no es número ("Negativo", "Normal").'),
+  unidad: zLong(20).optional(),
+  ref_min: z.number().min(0).max(100000).optional(),
+  ref_max: z.number().positive().max(100000).optional(),
+  referencia: zLong(80).optional().describe('Rango de referencia tal como viene ("70–99").'),
+  fuera_de_rango: z.enum(['alto', 'bajo', 'anormal']).optional(),
+});
+
+const registrarEstudio = tool({
+  name: 'registrar_estudio',
+  title: 'Registrar estudio médico',
+  group: 'registrar',
+  writes: true,
+  description:
+    'Guarda un estudio, análisis, consulta o documento médico en su expediente (Salud → Estudios): título, tipo, fecha, lugar, médico, costo y notas, con los valores que traiga (p. ej. si te compartió un PDF de laboratorio, mándale cada valor con su unidad y rango). Los valores numéricos se guardan además como mediciones para ver su evolución (guardar_mediciones: false lo evita). No adjunta archivos (eso se sube desde la app). Solo registro: no da XP (si es de un chequeo preventivo, usa también registrar_chequeo). Registra solo lo que viene en el documento o lo que él te dijo.',
+  input: z.object({
+    titulo: zText(200),
+    tipo: z.enum(HEALTH_RECORD_TYPES),
+    fecha: zFecha,
+    lugar: zLong(200).optional(),
+    medico: zLong(200).optional(),
+    costo: z.number().min(0).max(10000000).optional().describe('Lo que costó (dinero real, en su moneda).'),
+    notas: zLong(4000).optional(),
+    resumen: zLong(2000).optional().describe('Qué es y qué encontró, en 2–4 frases claras.'),
+    hallazgos: z.array(zLong(300)).max(15).optional(),
+    valores: z.array(zValor).max(40).optional(),
+    guardar_mediciones: z.boolean().optional().describe('Guardar los valores numéricos como mediciones (por defecto sí).'),
+  }),
+  async run(i, store) {
+    const date = pastDate(store, i.fecha);
+    const id = `hrec-${store.newId().replace(/-/g, '').slice(0, 10)}`;
+    const values: HealthRecordValue[] = (i.valores ?? []).map((v) => {
+      const kind = metricKindFromName(v.nombre);
+      return {
+        name: v.nombre,
+        kind: kind ?? null,
+        value: v.valor ?? null,
+        value2: v.valor2 ?? null,
+        text: v.texto || null,
+        unit: v.unidad || null,
+        ref: v.referencia || fmtRange(v.ref_min, v.ref_max) || null,
+        low: v.ref_min ?? null,
+        high: v.ref_max ?? null,
+        flag: v.fuera_de_rango ?? null,
+      };
+    });
+    const metrics = i.guardar_mediciones === false ? [] : values.map(recordValueToMetric).filter((m): m is NonNullable<typeof m> => !!m);
+    const events = metrics.map((m) => makeEvent(store, 'health.metric', { ...m, recordId: id }, date));
+    const ids = events.length ? await addEvents(store, events) : [];
+    const data: HealthRecordData = {
+      title: i.titulo,
+      type: i.tipo,
+      date,
+      place: i.lugar || undefined,
+      doctor: i.medico || undefined,
+      cost: i.costo ?? null,
+      notes: i.notas || undefined,
+      files: [],
+      ai:
+        i.resumen || values.length || i.hallazgos?.length
+          ? { readAt: store.now().toISOString(), summary: i.resumen ?? '', findings: i.hallazgos ?? [], values, recommendations: [] }
+          : null,
+      metricEventIds: ids,
+    };
+    const { ref } = await upsert(store, null, { id, module: 'health', kind: 'record', data });
+    const flagged = values.filter((v) => v.flag);
+    return ok(
+      `Estudio guardado: "${i.titulo}" (${fmtDay(date)})${values.length ? ` con ${values.length} valores` : ''}${ids.length ? `; ${ids.length} quedaron en sus mediciones` : ''}${flagged.length ? `. Fuera de rango: ${flagged.map(recordValueText).join('; ')}` : ''}. Id [${id}]. ${HEALTH_DISCLAIMER}`,
+      `Guardó el estudio "${i.titulo}"`,
+      { events: ids, entities: [ref] },
+    );
+  },
+});
+
+const guardarAntecedentes = tool({
+  name: 'guardar_antecedentes',
+  title: 'Guardar antecedentes para su médico IA',
+  group: 'organizar',
+  writes: true,
+  description:
+    'Guarda lo que su médico IA debe saber de él: metas de salud, antecedentes familiares (diabetes, infartos, cáncer…), antecedentes personales (cirugías, lesiones, enfermedades pasadas), estilo de vida (alimentación, alcohol, tabaco, estrés) y cada cuándo quiere su revisión. Solo cambia los campos que mandes ("" borra uno). Registra solo lo que él te dijo, con sus palabras.',
+  input: z.object({
+    metas: zLong(1500).optional(),
+    antecedentes_familiares: zLong(1500).optional(),
+    antecedentes_personales: zLong(1500).optional(),
+    estilo_de_vida: zLong(1500).optional(),
+    frecuencia_revision: z.enum(DOCTOR_CADENCES).optional(),
+  }),
+  async run(i, store) {
+    const map: [keyof typeof i, keyof HealthDoctorData, string][] = [
+      ['metas', 'goals', 'metas'],
+      ['antecedentes_familiares', 'familyHistory', 'antecedentes familiares'],
+      ['antecedentes_personales', 'pastHistory', 'antecedentes personales'],
+      ['estilo_de_vida', 'lifestyle', 'estilo de vida'],
+      ['frecuencia_revision', 'cadence', 'frecuencia de revisión'],
+    ];
+    const changed = map.filter(([k]) => i[k] !== undefined);
+    if (!changed.length) throw new ToolError('Manda al menos un dato.');
+    const catalog = await store.catalog();
+    const prev = catalog.find((e) => e.id === HEALTH_DOCTOR_ID) ?? null;
+    const data: Record<string, string> = { ...((prev?.data as Record<string, string>) ?? {}) };
+    for (const [k, field] of changed) {
+      const v = String(i[k] ?? '').trim();
+      if (v) data[field] = v;
+      else delete data[field];
+    }
+    const { ref } = await upsert(store, prev, { id: HEALTH_DOCTOR_ID, module: 'health', kind: 'doctor', data, sort: 0 });
+    const names = changed.map(([, , label]) => label);
+    return ok(`Guardado para su médico IA: ${names.join(', ')}.`, `Actualizó sus antecedentes de salud (${names.join(', ')})`, { entities: [ref] });
+  },
+});
+
+export const SALUD_TOOLS = [verSalud, registrarChequeo, registrarMedicion, registrarEstudio, guardarChequeo, guardarFichaMedica, guardarAntecedentes];

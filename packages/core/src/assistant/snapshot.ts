@@ -34,7 +34,7 @@ import { coachPlanLines } from './tools-coach';
  * calcula el estado) o el servidor cuando la que tiene quedó vieja.
  * Si cambias su forma, sube SNAPSHOT_SCHEMA para que se descarten las fotos guardadas.
  */
-export const SNAPSHOT_SCHEMA = 5;
+export const SNAPSHOT_SCHEMA = 6;
 
 /**
  * Huella de los números del juego (config/game.ts). Si se despliega otra configuración, las fotos viejas

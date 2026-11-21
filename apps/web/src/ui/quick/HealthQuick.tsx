@@ -185,10 +185,23 @@ export function CheckupDoneForm({ checkup, today, onDone }: { checkup: Entity<Ch
 const KIND_LABEL: Record<HealthMetricKind, string> = {
   presion: 'Presión',
   glucosa: 'Glucosa',
-  colesterol: 'Colesterol',
+  colesterol: 'Colesterol total',
   frecuencia_reposo: 'Pulso en reposo',
+  saturacion: 'Saturación',
+  trigliceridos: 'Triglicéridos',
+  hdl: 'HDL',
+  ldl: 'LDL',
+  hba1c: 'HbA1c',
+  acido_urico: 'Ácido úrico',
+  creatinina: 'Creatinina',
+  tsh: 'TSH',
+  vitamina_d: 'Vitamina D',
+  hemoglobina: 'Hemoglobina',
   otro: 'Otra',
 };
+/** En casa o farmacia / de laboratorio (las dos filas de opciones). */
+const HOME_KINDS: HealthMetricKind[] = ['presion', 'glucosa', 'frecuencia_reposo', 'saturacion', 'otro'];
+const LAB_KINDS: HealthMetricKind[] = ['colesterol', 'trigliceridos', 'hdl', 'ldl', 'hba1c', 'acido_urico', 'creatinina', 'tsh', 'vitamina_d', 'hemoglobina'];
 
 const num = (s: string) => {
   const n = Number(s.replace(',', '.'));
@@ -228,13 +241,25 @@ export function MetricForm({ date, setDate, today, onDone, initialKind }: DatePr
     <>
       <Field label="¿Qué mediste?">
         <Chips
-          value={kind}
+          value={HOME_KINDS.includes(kind) ? kind : null}
           onChange={(k) => {
             setKind(k);
             setV1('');
             setV2('');
           }}
-          options={(Object.keys(KIND_LABEL) as HealthMetricKind[]).map((k) => ({ value: k, label: KIND_LABEL[k] }))}
+          options={HOME_KINDS.map((k) => ({ value: k, label: KIND_LABEL[k] }))}
+        />
+        <div className="tiny muted" style={{ margin: '8px 0 4px' }}>
+          De tus análisis de laboratorio
+        </div>
+        <Chips
+          value={LAB_KINDS.includes(kind) ? kind : null}
+          onChange={(k) => {
+            setKind(k);
+            setV1('');
+            setV2('');
+          }}
+          options={LAB_KINDS.map((k) => ({ value: k, label: KIND_LABEL[k] }))}
         />
       </Field>
       {kind === 'otro' && (

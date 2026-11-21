@@ -29,6 +29,7 @@ import { getPrefs, setPrefs } from '../lib/prefs';
 import { BossArt, BossHpBar } from '../ui/BossArt';
 import { Hero } from '../ui/Hero';
 import { Icon } from '../ui/icons';
+import { DoctorCard } from '../ui/DoctorCard';
 import { AttrBadge, Badge, Bar, Chips, Collapse, Empty, Field, Sheet, SizeBadge, SwipeRow, Tabs, confirmAction, toast, undoToast, useAutoFocus, TextInput, TextArea } from '../ui/kit';
 import { LessonForm } from '../ui/MissionForm';
 import { PeopleTodayCard } from '../ui/people';
@@ -76,6 +77,7 @@ export default function Hoy() {
   const dayExtras = (
     <>
       {!state.days.start && <MorningRitualCard />}
+      <DoctorCard only="pendiente" />
       <HeadsUpCard />
       <BountyCard />
       <AgendaCard />
@@ -140,6 +142,8 @@ export default function Hoy() {
           </Link>
         </div>
       )}
+
+      <DoctorCard only="nueva" />
 
       {wide ? (
         <div className="mesa">

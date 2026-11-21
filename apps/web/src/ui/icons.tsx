@@ -57,6 +57,7 @@ const P: Record<string, string> = {
   volume: 'M11 5 6 9H3v6h3l5 4zM15.5 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12',
   chest: 'M3 10h18v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-9zM3 10V8a5 5 0 0 1 5-5h8a5 5 0 0 1 5 5v2M10 10v4h4v-4',
   pin: 'M12 21s-6-5.3-6-10a6 6 0 1 1 12 0c0 4.7-6 10-6 10zM12 13a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
+  'pin-plus': 'M12 21s-6-5.3-6-10a6 6 0 1 1 12 0c0 4.7-6 10-6 10zM12 8.5v5M9.5 11h5',
   campfire: 'M12 15c2.2 0 4-1.8 4-4 0-2.5-2-4-2-6.5-1.5 1.2-2.5 2.7-2.5 4.2-.6-.6-1-1.3-1-2.2C9 7.8 8 9.2 8 11c0 2.2 1.8 4 4 4zM4 20l16-4M4 16l16 4',
 
   // ---- Sistemas nuevos (íconos) ----
@@ -102,6 +103,9 @@ const P: Record<string, string> = {
   'salud-cross': 'M9 3h6v6h6v6h-6v6H9v-6H3V9h6z',
   'salud-pulse': 'M3 12h4l2.5-6 4 12 2.5-6h5',
   'salud-card': 'M3 6h18v13H3zM3 10h18M7 15h4M15 14v3M13.5 15.5h3',
+  'salud-doc': 'M14 3H6v18h12V7zM14 3v4h4M9 12h6M9 16h6M9 8h2',
+  paperclip: 'M21 11.5l-8.6 8.6a5 5 0 0 1-7.1-7.1l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9',
+  camera: 'M3 8h4l2-3h6l2 3h4v12H3zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
 
   // [[habitos]]
   repeat: 'M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3',

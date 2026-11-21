@@ -60,6 +60,7 @@ interface Attention {
 /** Lo que hoy pide tu atención en cada área (máx. 4, lo más urgente primero). Solo lectura. */
 export function attentionItems(state: ReturnType<typeof useGame>['state'], name: (id: string) => string, learningTopics: Entity<LearningTopicData>[]): Attention[] {
   const out: Attention[] = [];
+  if (state.health.unseenConsultId) out.push({ to: '/salud?tab=medico', icon: 'salud-stethoscope', text: 'Tu médico te quiere decir algo' });
   for (const d of state.health.due.filter((x) => x.status === 'atrasado').slice(0, 1)) out.push({ to: '/salud', icon: 'salud-cross', text: `Ya te toca: ${d.name}` });
   for (const b of state.npcs.birthdays.filter((x) => x.inDays <= 3).slice(0, 1))
     out.push({ to: `/npcs/${b.npcId}`, icon: 'cake', text: b.inDays === 0 ? `Hoy cumple ${name(b.npcId)}` : `${name(b.npcId)} cumple en ${b.inDays} ${b.inDays === 1 ? 'día' : 'días'}` });
@@ -139,7 +140,7 @@ export function Mas() {
           />
         )}
         <Tile to="/npcs" icon="users" title="Mi gente" sub={today ? `${today} contacto${today === 1 ? '' : 's'} hoy${toAttend ? ` · ${toAttend} por atender` : ''}` : toAttend ? `${toAttend} por atender` : 'Familia, amigos y trabajo'} alert={toAttend > 0} />
-        <Tile to="/salud" icon="salud-cross" title="Salud" sub={h.score === null ? 'Chequeos y ficha médica' : `${h.score}% al día${h.due.length ? ` · ${h.due.length} te toca${h.due.length === 1 ? '' : 'n'}` : ''}`} alert={h.due.some((d) => d.status === 'atrasado')} />
+        <Tile to="/salud" icon="salud-cross" title="Salud" sub={h.unseenConsultId ? 'Tu médico te quiere decir algo' : h.score === null ? 'Tu médico IA, estudios y chequeos' : `${h.score}% al día${h.due.length ? ` · ${h.due.length} te toca${h.due.length === 1 ? '' : 'n'}` : ''}`} alert={!!h.unseenConsultId || h.due.some((d) => d.status === 'atrasado')} />
         <Tile to="/cuerpo" icon="heart" title="Cuerpo" sub={weight ? `${weight.kg} kg · sueño y medidas` : 'Peso, medidas y sueño'} />
         <Tile to="/entreno" icon="whistle" title="Entrenamiento" sub={trainingSub} alert={false} />
         <Tile to="/nutricion" icon="apple" title="Nutrición" sub={nutriSub} />

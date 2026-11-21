@@ -91,7 +91,7 @@ Se usan también `settings.heightCm`, `settings.birthDate`, `body.logged` (peso,
   `weekReview`, `coachPlan` → todo junto con `brief`: ánimo, saludo, mensaje, extras y acciones).
 - IA: `assistant/tools-coach.ts` → `ver_plan_entrenador`, `ver_nutricion`, `ajustar_entrenador`, `registrar_comida`,
   `registrar_agua`, `registrar_pasos`, `registrar_como_me_siento`, `registrar_checkin_semanal`; `coachPlanLines` para la
-  foto (`snapshot.coach.lines`, SNAPSHOT_SCHEMA 5) y la sección "## Entrenador personal" del panorama.
+  foto (`snapshot.coach.lines`; SNAPSHOT_SCHEMA 6, al unirse con los objetivos del mapa, que también subieron a 5) y la sección "## Entrenador personal" del panorama.
   Las herramientas leen el historial de entrenos, medidas y check-ins completo (como la app y la foto: misma fase,
   descargas, lugar habitual y "retoma con X kg"); comidas, agua, pasos, sueño y cómo te sientes, solo ~35 días. Las que
   escriben calculan su respuesta ANTES de guardar (si el Worker se corta no queda nada sin bitácora) y proyectan sin
